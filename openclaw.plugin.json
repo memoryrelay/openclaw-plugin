@@ -1,0 +1,67 @@
+{
+  "id": "memory-memoryrelay",
+  "kind": "memory",
+  "name": "MemoryRelay",
+  "description": "AI memory service using MemoryRelay API (api.memoryrelay.net)",
+  "version": "0.1.0",
+  "uiHints": {
+    "apiKey": {
+      "label": "MemoryRelay API Key",
+      "sensitive": true,
+      "placeholder": "mem_prod_...",
+      "help": "API key from memoryrelay.io (or use ${MEMORYRELAY_API_KEY})"
+    },
+    "agentId": {
+      "label": "Agent ID",
+      "placeholder": "iris",
+      "help": "Unique identifier for this agent in MemoryRelay"
+    },
+    "apiUrl": {
+      "label": "API URL",
+      "placeholder": "https://api.memoryrelay.net",
+      "advanced": true,
+      "help": "MemoryRelay API endpoint"
+    },
+    "autoCapture": {
+      "label": "Auto-Capture",
+      "help": "Automatically capture important information from conversations"
+    },
+    "autoRecall": {
+      "label": "Auto-Recall",
+      "help": "Automatically inject relevant memories into context"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": {
+        "type": "string"
+      },
+      "agentId": {
+        "type": "string"
+      },
+      "apiUrl": {
+        "type": "string",
+        "default": "https://api.memoryrelay.net"
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "default": false
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "default": true
+      },
+      "recallLimit": {
+        "type": "number",
+        "default": 5
+      },
+      "recallThreshold": {
+        "type": "number",
+        "default": 0.3
+      }
+    },
+    "required": ["apiKey", "agentId"]
+  }
+}
