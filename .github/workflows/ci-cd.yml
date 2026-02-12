@@ -1,0 +1,96 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+    
+    - name: Validate plugin manifest
+      run: |
+        if [ ! -f "openclaw.plugin.json" ]; then
+          echo "Error: openclaw.plugin.json not found"
+          exit 1
+        fi
+        echo "✓ Plugin manifest exists"
+    
+    - name: Validate package.json
+      run: |
+        node -e "require('./package.json')" && echo "✓ package.json is valid JSON"
+    
+    - name: Check required files
+      run: |
+        for file in index.ts openclaw.plugin.json package.json LICENSE README.md; do
+          if [ ! -f "$file" ]; then
+            echo "Error: Required file $file not found"
+            exit 1
+          fi
+        done
+        echo "✓ All required files present"
+    
+    - name: Dry run npm pack
+      run: npm pack --dry-run
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        registry-url: 'https://registry.npmjs.org'
+    
+    - name: Extract version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Verify version matches package.json
+      run: |
+        PKG_VERSION=$(node -p "require('./package.json').version")
+        if [ "$PKG_VERSION" != "${{ steps.version.outputs.VERSION }}" ]; then
+          echo "Error: Tag version (${{ steps.version.outputs.VERSION }}) doesn't match package.json ($PKG_VERSION)"
+          exit 1
+        fi
+    
+    - name: Publish to npm
+      run: npm publish --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          ## OpenClaw Plugin for MemoryRelay
+          
+          ### Installation
+          ```bash
+          openclaw plugins install @memoryrelay/openclaw-plugin@${{ steps.version.outputs.VERSION }}
+          ```
+          
+          ### What's New
+          See [CHANGELOG.md](CHANGELOG.md) for details.
+        draft: false
+        prerelease: false
