@@ -124,6 +124,14 @@ class MemoryRelayClient {
   async health(): Promise<{ status: string }> {
     return this.request<{ status: string }>("GET", "/v1/health");
   }
+
+  async stats(): Promise<{ total_memories: number; last_updated?: string }> {
+    const response = await this.request<{ data: { total_memories: number; last_updated?: string } }>(
+      "GET",
+      `/v1/stats?agent_id=${encodeURIComponent(this.agentId)}`,
+    );
+    return response.data || { total_memories: 0 };
+  }
 }
 
 // ============================================================================
@@ -190,6 +198,36 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.logger.error(`memory-memoryrelay: health check failed: ${String(err)}`);
     return;
   }
+
+  // ========================================================================
+  // Status Reporting (for openclaw status command)
+  // ========================================================================
+
+  // Register gateway RPC method for status probing
+  // This allows OpenClaw's status command to query plugin availability
+  api.registerGatewayMethod?.("memory.status", async ({ respond }) => {
+    try {
+      const health = await client.health();
+      const stats = await client.stats();
+      
+      respond(true, {
+        available: true,
+        connected: health.status === "ok" || health.status === "healthy",
+        endpoint: cfg?.apiUrl || "api.memoryrelay.net",
+        memoryCount: stats.total_memories || 0,
+        agentId: agentId,
+        vectorEnabled: true, // MemoryRelay uses vector search
+      });
+    } catch (err) {
+      respond(true, {
+        available: false,
+        connected: false,
+        error: String(err),
+        endpoint: cfg?.apiUrl || "api.memoryrelay.net",
+        agentId: agentId,
+      });
+    }
+  });
 
   // ========================================================================
   // Tools (using JSON Schema directly)
