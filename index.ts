@@ -152,9 +152,25 @@ function shouldCapture(text: string): boolean {
 // ============================================================================
 
 export default async function plugin(api: OpenClawPluginApi): Promise<void> {
+  // Debug: log what config we're receiving
+  api.logger.info(`memory-memoryrelay: plugin loaded, checking config...`);
+  api.logger.info(`memory-memoryrelay: pluginConfig type: ${typeof api.pluginConfig}`);
+  api.logger.info(`memory-memoryrelay: pluginConfig keys: ${api.pluginConfig ? Object.keys(api.pluginConfig).join(', ') : 'null'}`);
+  
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
-  if (!cfg?.apiKey || !cfg?.agentId) {
-    api.logger.warn("memory-memoryrelay: missing apiKey or agentId, plugin disabled");
+  
+  if (!cfg) {
+    api.logger.error("memory-memoryrelay: pluginConfig is null or undefined");
+    return;
+  }
+  
+  if (!cfg.apiKey) {
+    api.logger.error(`memory-memoryrelay: missing apiKey in config. Config keys: ${Object.keys(cfg).join(', ')}`);
+    return;
+  }
+  
+  if (!cfg.agentId) {
+    api.logger.error(`memory-memoryrelay: missing agentId in config. Config keys: ${Object.keys(cfg).join(', ')}`);
     return;
   }
 

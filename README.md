@@ -396,6 +396,14 @@ MIT © 2026 MemoryRelay
 
 ## Changelog
 
+### v0.2.4 (2026-02-13)
+
+**Debug Logging:**
+- Added detailed logging to diagnose config loading issues
+- Logs pluginConfig type, keys, and specific missing fields
+- Helps identify why apiKey/agentId aren't being read
+- Better error messages for troubleshooting
+
 ### v0.2.3 (2026-02-13)
 
 **Critical Fix:**
