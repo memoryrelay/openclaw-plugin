@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-02-13
+
+### Fixed
+- Added `safety` declaration to plugin manifest to resolve false-positive security warning
+- Whitelisted environment variables: `MEMORYRELAY_API_KEY`, `MEMORYRELAY_AGENT_ID`, `MEMORYRELAY_BASE_URL`
+- Whitelisted network access: `api.memoryrelay.net`
+- Plugin installation no longer shows "dangerous code patterns" warning
+
+### Impact
+- Clarifies that environment variable access is legitimate configuration fallback
+- Removes confusing security warning during installation
+- Plugin is now explicitly approved for env var usage
+
 ## [0.4.0] - 2026-02-13
 
 ### Added
