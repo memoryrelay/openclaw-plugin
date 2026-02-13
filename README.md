@@ -476,6 +476,29 @@ MIT © 2026 MemoryRelay
 
 ## Changelog
 
+### v0.4.0 (2026-02-13) - Status Reporting
+
+**New Features:**
+- ✅ Status reporting via `memory.status` gateway RPC method
+- ✅ Plugin now reports "available" in `openclaw status` when API is reachable
+- ✅ Memory count reporting (via optional `/v1/stats` API endpoint)
+- ✅ Vector availability reporting for semantic search
+- ✅ Detailed status information: connected state, endpoint, agent ID, memory count
+
+**Fixes:**
+- ✅ Plugin no longer shows as "unavailable" in `openclaw status` when functional
+- ✅ Status accurately reflects API connection state
+
+**Technical Improvements:**
+- ✅ Extracted constants for maintainability (`DEFAULT_API_URL`, `VALID_HEALTH_STATUSES`)
+- ✅ Case-insensitive health status validation
+- ✅ Proper type safety with nullish coalescing operators
+- ✅ Graceful handling of missing stats endpoint (backwards compatible)
+
+**Backwards Compatibility:**
+- Fully compatible with older OpenClaw versions (uses optional chaining)
+- Gracefully handles missing `/v1/stats` endpoint
+
 ### v0.3.0 (2026-02-13) - Better Installation UX
 
 **Improved Installation Experience:**
