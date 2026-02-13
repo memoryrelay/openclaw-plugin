@@ -396,6 +396,14 @@ MIT © 2026 MemoryRelay
 
 ## Changelog
 
+### v0.2.1 (2026-02-13)
+
+**Bug Fix:**
+- Made `apiKey` and `agentId` optional in config schema
+- Allows installation without pre-configuring credentials
+- Plugin auto-detects agentId and supports MEMORYRELAY_API_KEY env var
+- Fixes "must have required property" errors during installation
+
 ### v0.2.0 (2026-02-13) - BREAKING CHANGE
 
 **Package Renamed to Fix Warnings:**
