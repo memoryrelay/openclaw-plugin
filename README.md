@@ -396,6 +396,13 @@ MIT © 2026 MemoryRelay
 
 ## Changelog
 
+### v0.1.2 (2026-02-13)
+
+**Bug Fix:**
+- Fixed installation directory mismatch by adding `openclaw.id` to package.json
+- Plugin now correctly installs to `plugin-memoryrelay-ai` directory
+- Resolves "plugin not found" error during `openclaw plugins install`
+
 ### v0.1.1 (2026-02-13)
 
 **Breaking Changes:**
