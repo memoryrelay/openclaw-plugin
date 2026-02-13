@@ -208,15 +208,30 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   api.registerGatewayMethod?.("memory.status", async ({ respond }) => {
     try {
       const health = await client.health();
-      const stats = await client.stats();
+      let memoryCount = 0;
+      
+      // Try to get stats if the endpoint exists
+      try {
+        const stats = await client.stats();
+        memoryCount = stats.total_memories || 0;
+      } catch (statsErr) {
+        // Stats endpoint may not exist yet - that's okay, just report 0
+        api.logger.debug?.(`memory-memoryrelay: stats endpoint unavailable: ${String(statsErr)}`);
+      }
+      
+      const isConnected = health.status === "ok" || health.status === "healthy";
       
       respond(true, {
         available: true,
-        connected: health.status === "ok" || health.status === "healthy",
+        connected: isConnected,
         endpoint: cfg?.apiUrl || "api.memoryrelay.net",
-        memoryCount: stats.total_memories || 0,
+        memoryCount: memoryCount,
         agentId: agentId,
-        vectorEnabled: true, // MemoryRelay uses vector search
+        // OpenClaw checks status.vector.available for memory plugins
+        vector: {
+          available: true,
+          enabled: true,
+        },
       });
     } catch (err) {
       respond(true, {
@@ -225,6 +240,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         error: String(err),
         endpoint: cfg?.apiUrl || "api.memoryrelay.net",
         agentId: agentId,
+        // Report vector as unavailable when API fails
+        vector: {
+          available: false,
+          enabled: true,
+        },
       });
     }
   });

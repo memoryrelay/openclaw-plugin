@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Status reporting via `memory.status` gateway RPC method
+- Plugin now reports availability and connection status to `openclaw status`
+- Memory count reporting (via new `/v1/stats` API endpoint)
+- Vector availability reporting for semantic search
+- Graceful handling of missing stats endpoint (backwards compatible)
+- Status shows "available" when API is reachable, "unavailable" when down
+- Detailed status information: connected state, endpoint, agent ID, memory count
+
+### Fixed
+- Plugin no longer shows as "unavailable" in `openclaw status` when functional
+- Status accurately reflects API connection state
+
 ## [0.1.0] - 2026-02-12
 
 ### Added

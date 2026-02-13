@@ -13,6 +13,7 @@ Long-term memory plugin for OpenClaw agents using [MemoryRelay API](https://api.
 - 🤖 **Multi-Agent** — Isolated memory namespaces per agent
 - 🛠️ **CLI Tools** — Manage memories via `openclaw memoryrelay` commands
 - 🔌 **Tool Integration** — Three memory tools for AI agents
+- ✅ **Status Reporting** — Real-time availability and connection status in `openclaw status`
 
 ## Installation
 
@@ -64,7 +65,11 @@ openclaw gateway restart
 
 ```bash
 openclaw status
-# Should show: Memory | enabled (plugin plugin-memoryrelay-ai)
+# Should show: Memory | enabled (plugin plugin-memoryrelay-ai) · available
+
+# Or with detailed status:
+openclaw memory status --deep
+# Shows: connected, memory count, vector availability
 
 # Check logs
 journalctl -u openclaw-gateway --since '1 minute ago' | grep memory-memoryrelay
@@ -196,6 +201,34 @@ memory_forget({ query: "outdated preference" })
 ```
 
 **Returns:** Success confirmation
+
+### Status Monitoring
+
+The plugin reports its availability and connection status to OpenClaw:
+
+```bash
+# Check overall status
+openclaw status
+# Shows: Memory | enabled (plugin plugin-memoryrelay-ai) · available
+
+# Check detailed memory status
+openclaw memory status --deep
+# Shows: connection state, memory count, vector availability, endpoint
+
+# Check plugin-specific status
+openclaw memoryrelay status
+# Shows: API connection, agent ID, endpoint
+```
+
+**Status Information Reported:**
+- **Available/Unavailable** — Whether the plugin can be used
+- **Connected** — Whether the MemoryRelay API is reachable
+- **Memory Count** — Total memories stored for this agent
+- **Vector Enabled** — Semantic search capability (always true)
+- **Endpoint** — API URL being used
+- **Agent ID** — Current agent identifier
+
+When the API is unreachable, status shows "unavailable" with error details.
 
 ### CLI Commands
 
