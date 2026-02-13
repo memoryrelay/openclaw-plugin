@@ -207,15 +207,15 @@ memory_forget({ query: "outdated preference" })
 The plugin reports its availability and connection status to OpenClaw:
 
 ```bash
-# Check overall status
+# Check overall status (shows plugin availability)
 openclaw status
 # Shows: Memory | enabled (plugin plugin-memoryrelay-ai) · available
 
-# Check detailed memory status
+# Check OpenClaw memory system status (if OpenClaw version supports it)
 openclaw memory status --deep
-# Shows: connection state, memory count, vector availability, endpoint
+# Note: This is an OpenClaw core command that may show plugin status
 
-# Check plugin-specific status
+# Check plugin-specific status (MemoryRelay custom command)
 openclaw memoryrelay status
 # Shows: API connection, agent ID, endpoint
 ```
@@ -223,7 +223,7 @@ openclaw memoryrelay status
 **Status Information Reported:**
 - **Available/Unavailable** — Whether the plugin can be used
 - **Connected** — Whether the MemoryRelay API is reachable
-- **Memory Count** — Total memories stored for this agent
+- **Memory Count** — Total memories stored for this agent (if stats endpoint exists)
 - **Vector Enabled** — Semantic search capability (always true)
 - **Endpoint** — API URL being used
 - **Agent ID** — Current agent identifier

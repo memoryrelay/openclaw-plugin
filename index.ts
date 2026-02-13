@@ -130,7 +130,7 @@ class MemoryRelayClient {
       "GET",
       `/v1/stats?agent_id=${encodeURIComponent(this.agentId)}`,
     );
-    return response.data || { total_memories: 0 };
+    return response.data || { total_memories: 0, last_updated: undefined };
   }
 }
 
@@ -213,13 +213,15 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       // Try to get stats if the endpoint exists
       try {
         const stats = await client.stats();
-        memoryCount = stats.total_memories || 0;
+        memoryCount = stats.total_memories ?? 0;
       } catch (statsErr) {
         // Stats endpoint may not exist yet - that's okay, just report 0
         api.logger.debug?.(`memory-memoryrelay: stats endpoint unavailable: ${String(statsErr)}`);
       }
       
-      const isConnected = health.status === "ok" || health.status === "healthy";
+      // Consider API connected if health check succeeds with any recognized status
+      const healthStatus = String(health.status).toLowerCase();
+      const isConnected = healthStatus === "ok" || healthStatus === "healthy" || healthStatus === "up";
       
       respond(true, {
         available: true,
