@@ -80,7 +80,7 @@ class MemoryRelayClient {
   }
 
   async store(content: string, metadata?: Record<string, string>): Promise<Memory> {
-    return this.request<Memory>("POST", "/v1/memories/memories", {
+    return this.request<Memory>("POST", "/v1/memories", {
       content,
       metadata,
       agent_id: this.agentId,
@@ -94,7 +94,7 @@ class MemoryRelayClient {
   ): Promise<SearchResult[]> {
     const response = await this.request<{ data: SearchResult[] }>(
       "POST",
-      "/v1/memories/memories/search",
+      "/v1/memories/search",
       {
         query,
         limit,
@@ -114,11 +114,11 @@ class MemoryRelayClient {
   }
 
   async get(id: string): Promise<Memory> {
-    return this.request<Memory>("GET", `/v1/memories/memories/${id}`);
+    return this.request<Memory>("GET", `/v1/memories/${id}`);
   }
 
   async delete(id: string): Promise<void> {
-    await this.request<void>("DELETE", `/v1/memories/memories/${id}`);
+    await this.request<void>("DELETE", `/v1/memories/${id}`);
   }
 
   async health(): Promise<{ status: string }> {

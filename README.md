@@ -396,6 +396,15 @@ MIT © 2026 MemoryRelay
 
 ## Changelog
 
+### v0.2.3 (2026-02-13)
+
+**Critical Fix:**
+- Fixed API endpoint paths - removed duplicate `/memories` segment
+- Changed `/v1/memories/memories` → `/v1/memories`
+- Changed `/v1/memories/memories/{id}` → `/v1/memories/{id}`
+- Fixed 405 Method Not Allowed errors
+- All CRUD operations now work correctly
+
 ### v0.2.2 (2026-02-13)
 
 **Critical Fix:**
