@@ -78,7 +78,8 @@ openclaw memoryrelay status
 
 # Check logs
 journalctl -u openclaw-gateway --since '1 minute ago' | grep memory-memoryrelay
-# Should show: "memory-memoryrelay: connected to https://api.memoryrelay.net"
+# Example output: "memory-memoryrelay: connected to https://api.memoryrelay.net"
+# (URL will vary if you configured a custom apiUrl)
 ```
 
 Get your API key from [memoryrelay.ai](https://memoryrelay.ai).

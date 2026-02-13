@@ -15,6 +15,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 // ============================================================================
 
 const DEFAULT_API_URL = "https://api.memoryrelay.net";
+const VALID_HEALTH_STATUSES = ["ok", "healthy", "up"];
 
 // ============================================================================
 // Types
@@ -227,7 +228,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       
       // Consider API connected if health check succeeds with any recognized status
       const healthStatus = String(health.status).toLowerCase();
-      const isConnected = healthStatus === "ok" || healthStatus === "healthy" || healthStatus === "up";
+      const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
       
       respond(true, {
         available: true,
