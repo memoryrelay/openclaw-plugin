@@ -159,25 +159,27 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
   
-  if (!cfg) {
-    api.logger.error("memory-memoryrelay: pluginConfig is null or undefined");
+  // Try to get config from multiple sources
+  const apiKey = cfg?.apiKey || process.env.MEMORYRELAY_API_KEY;
+  const agentId = cfg?.agentId || process.env.MEMORYRELAY_AGENT_ID || "default";
+  
+  if (!apiKey) {
+    api.logger.error(
+      "memory-memoryrelay: missing API key. Configure in one of these ways:\n" +
+      "  1. Add to config: plugins.entries.\"plugin-memoryrelay-ai\".config.apiKey\n" +
+      "  2. Set environment variable: MEMORYRELAY_API_KEY\n" +
+      "  3. Run: cat ~/.openclaw/openclaw.json | jq '.plugins.entries.\"plugin-memoryrelay-ai\".config = {\"apiKey\": \"YOUR_KEY\", \"agentId\": \"YOUR_AGENT\"}' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json\n" +
+      "Get your API key from: https://memoryrelay.ai"
+    );
     return;
   }
   
-  if (!cfg.apiKey) {
-    api.logger.error(`memory-memoryrelay: missing apiKey in config. Config keys: ${Object.keys(cfg).join(', ')}`);
-    return;
-  }
-  
-  if (!cfg.agentId) {
-    api.logger.error(`memory-memoryrelay: missing agentId in config. Config keys: ${Object.keys(cfg).join(', ')}`);
-    return;
-  }
+  api.logger.info(`memory-memoryrelay: using agentId: ${agentId}`);
 
   const client = new MemoryRelayClient(
-    cfg.apiKey,
-    cfg.agentId,
-    cfg.apiUrl || "https://api.memoryrelay.net",
+    apiKey,
+    agentId,
+    cfg?.apiUrl || "https://api.memoryrelay.net",
   );
 
   // Verify connection on startup

@@ -28,6 +28,51 @@ npm install -g @memoryrelay/plugin-memoryrelay-ai
 
 ## Quick Start
 
+### 1. Install the plugin
+
+```bash
+openclaw plugins install @memoryrelay/plugin-memoryrelay-ai
+```
+
+### 2. Configure API credentials
+
+**Option A: Config file** (recommended)
+```bash
+cat ~/.openclaw/openclaw.json | jq '.plugins.entries."plugin-memoryrelay-ai".config = {
+  "apiKey": "YOUR_API_KEY",
+  "agentId": "YOUR_AGENT_ID",
+  "autoRecall": true,
+  "autoCapture": false
+}' > /tmp/config.json && \
+mv /tmp/config.json ~/.openclaw/openclaw.json && \
+chmod 600 ~/.openclaw/openclaw.json
+```
+
+**Option B: Environment variables**
+```bash
+export MEMORYRELAY_API_KEY="YOUR_API_KEY"
+export MEMORYRELAY_AGENT_ID="YOUR_AGENT_ID"
+```
+
+### 3. Restart the gateway
+
+```bash
+openclaw gateway restart
+```
+
+### 4. Verify it's working
+
+```bash
+openclaw status
+# Should show: Memory | enabled (plugin plugin-memoryrelay-ai)
+
+# Check logs
+journalctl -u openclaw-gateway --since '1 minute ago' | grep memory-memoryrelay
+# Should show: "connected to api.memoryrelay.net"
+```
+
+Get your API key from [memoryrelay.ai](https://memoryrelay.ai).
+
 ### 1. Get API Key
 
 Sign up at [memoryrelay.io](https://memoryrelay.io) or use the public demo API.
@@ -395,6 +440,24 @@ MIT © 2026 MemoryRelay
 ---
 
 ## Changelog
+
+### v0.3.0 (2026-02-13) - Better Installation UX
+
+**Improved Installation Experience:**
+- ✅ API key can now come from `MEMORYRELAY_API_KEY` env var
+- ✅ Agent ID can come from `MEMORYRELAY_AGENT_ID` env var or defaults to "default"
+- ✅ Clear error message with setup instructions when config is missing
+- ✅ Comprehensive installation guide in README
+- ✅ No more silent failures - helpful error messages
+
+**Breaking Change:**
+- Debug logging removed (replaced with helpful error messages)
+
+**Migration:**
+Works out of the box with env vars, or add config after install:
+```bash
+cat ~/.openclaw/openclaw.json | jq '.plugins.entries."plugin-memoryrelay-ai".config = {"apiKey": "YOUR_KEY", "agentId": "YOUR_AGENT"}' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json
+```
 
 ### v0.2.4 (2026-02-13)
 
