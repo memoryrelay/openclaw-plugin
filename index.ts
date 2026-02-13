@@ -193,16 +193,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   
   api.logger.info(`memory-memoryrelay: using agentId: ${agentId}`);
 
-  const client = new MemoryRelayClient(
-    apiKey,
-    agentId,
-    cfg?.apiUrl || DEFAULT_API_URL,
-  );
+  const apiUrl = cfg?.apiUrl || DEFAULT_API_URL;
+  const client = new MemoryRelayClient(apiKey, agentId, apiUrl);
 
   // Verify connection on startup
   try {
     await client.health();
-    api.logger.info(`memory-memoryrelay: connected to ${cfg?.apiUrl || DEFAULT_API_URL}`);
+    api.logger.info(`memory-memoryrelay: connected to ${apiUrl}`);
   } catch (err) {
     api.logger.error(`memory-memoryrelay: health check failed: ${String(err)}`);
     return;
@@ -222,7 +219,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       // Try to get stats if the endpoint exists
       try {
         const stats = await client.stats();
-        memoryCount = stats.total_memories ?? 0;
+        memoryCount = stats.total_memories;
       } catch (statsErr) {
         // Stats endpoint may not exist yet - that's okay, just report 0
         api.logger.debug?.(`memory-memoryrelay: stats endpoint unavailable: ${String(statsErr)}`);
@@ -235,7 +232,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       respond(true, {
         available: true,
         connected: isConnected,
-        endpoint: cfg?.apiUrl || DEFAULT_API_URL,
+        endpoint: apiUrl,
         memoryCount: memoryCount,
         agentId: agentId,
         // OpenClaw checks status.vector.available for memory plugins
@@ -249,7 +246,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         available: false,
         connected: false,
         error: String(err),
-        endpoint: cfg?.apiUrl || DEFAULT_API_URL,
+        endpoint: apiUrl,
         agentId: agentId,
         // Report vector as unavailable when API fails
         vector: {
@@ -472,8 +469,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           try {
             const health = await client.health();
             console.log(`Status: ${health.status}`);
-            console.log(`Agent ID: ${cfg.agentId}`);
-            console.log(`API: ${cfg.apiUrl || DEFAULT_API_URL}`);
+            console.log(`Agent ID: ${agentId}`);
+            console.log(`API: ${apiUrl}`);
           } catch (err) {
             console.error(`Connection failed: ${String(err)}`);
           }

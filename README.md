@@ -65,11 +65,12 @@ openclaw gateway restart
 
 ```bash
 openclaw status
-# When API is reachable:
+# When API is reachable (example output):
 # Memory | enabled (plugin plugin-memoryrelay-ai) · available
 #
-# When API is down:
+# When API is down (example output):
 # Memory | enabled (plugin plugin-memoryrelay-ai) · unavailable
+# (Note: Exact format depends on your OpenClaw version)
 
 # Check plugin-specific status
 openclaw memoryrelay status
@@ -77,7 +78,7 @@ openclaw memoryrelay status
 
 # Check logs
 journalctl -u openclaw-gateway --since '1 minute ago' | grep memory-memoryrelay
-# Should show: "connected to https://api.memoryrelay.net"
+# Should show: "memory-memoryrelay: connected to https://api.memoryrelay.net"
 ```
 
 Get your API key from [memoryrelay.ai](https://memoryrelay.ai).
