@@ -3,7 +3,7 @@
   "kind": "memory",
   "name": "MemoryRelay AI",
   "description": "AI memory service using MemoryRelay API (api.memoryrelay.net)",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "uiHints": {
     "apiKey": {
       "label": "MemoryRelay API Key",
@@ -37,11 +37,13 @@
     "properties": {
       "apiKey": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "description": "MemoryRelay API key (required, get from https://memoryrelay.ai)"
       },
       "agentId": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "description": "Unique agent identifier (required)"
       },
       "apiUrl": {
         "type": "string",
@@ -64,6 +66,6 @@
         "default": 0.3
       }
     },
-    "required": ["apiKey", "agentId"]
+    "required": []
   }
 }
