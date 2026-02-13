@@ -1,6 +1,6 @@
 # OpenClaw Plugin for MemoryRelay AI
 
-[![npm version](https://img.shields.io/npm/v/@memoryrelay/openclaw-plugin)](https://www.npmjs.com/package/@memoryrelay/openclaw-plugin)
+[![npm version](https://img.shields.io/npm/v/@memoryrelay/plugin-memoryrelay-ai)](https://www.npmjs.com/package/@memoryrelay/plugin-memoryrelay-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Long-term memory plugin for OpenClaw agents using [MemoryRelay API](https://api.memoryrelay.net).
@@ -17,13 +17,13 @@ Long-term memory plugin for OpenClaw agents using [MemoryRelay API](https://api.
 ## Installation
 
 ```bash
-openclaw plugins install @memoryrelay/openclaw-plugin
+openclaw plugins install @memoryrelay/plugin-memoryrelay-ai
 ```
 
 Or via npm:
 
 ```bash
-npm install -g @memoryrelay/openclaw-plugin
+npm install -g @memoryrelay/plugin-memoryrelay-ai
 ```
 
 ## Quick Start
@@ -395,6 +395,23 @@ MIT © 2026 MemoryRelay
 ---
 
 ## Changelog
+
+### v0.2.0 (2026-02-13) - BREAKING CHANGE
+
+**Package Renamed to Fix Warnings:**
+- Old: `@memoryrelay/openclaw-plugin`
+- New: `@memoryrelay/plugin-memoryrelay-ai`
+- Plugin ID remains: `plugin-memoryrelay-ai`
+- **Why**: Package name must match plugin ID to avoid config warnings
+- **Impact**: No code changes, just package name alignment
+
+**Migration**:
+```bash
+# Uninstall old package
+openclaw plugins uninstall @memoryrelay/openclaw-plugin
+# Install new package
+openclaw plugins install @memoryrelay/plugin-memoryrelay-ai
+```
 
 ### v0.1.2 (2026-02-13)
 
