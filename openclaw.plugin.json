@@ -3,17 +3,7 @@
   "kind": "memory",
   "name": "MemoryRelay AI",
   "description": "AI memory service using MemoryRelay API (api.memoryrelay.net)",
-  "version": "0.4.1",
-  "safety": {
-    "envAccess": {
-      "allowed": ["MEMORYRELAY_API_KEY", "MEMORYRELAY_AGENT_ID", "MEMORYRELAY_BASE_URL"],
-      "reason": "Configuration fallback - allows users to provide credentials via environment variables instead of config file"
-    },
-    "networkAccess": {
-      "allowed": ["api.memoryrelay.net"],
-      "reason": "Core functionality - plugin connects to MemoryRelay API for memory storage and retrieval"
-    }
-  },
+  "version": "0.5.0",
   "uiHints": {
     "apiKey": {
       "label": "MemoryRelay API Key",
@@ -46,10 +36,12 @@
     "additionalProperties": false,
     "properties": {
       "apiKey": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       },
       "agentId": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       },
       "apiUrl": {
         "type": "string",
@@ -72,6 +64,6 @@
         "default": 0.3
       }
     },
-    "required": []
+    "required": ["apiKey", "agentId"]
   }
 }

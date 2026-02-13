@@ -170,32 +170,29 @@ function shouldCapture(text: string): boolean {
 // ============================================================================
 
 export default async function plugin(api: OpenClawPluginApi): Promise<void> {
-  // Debug: log what config we're receiving
-  api.logger.info(`memory-memoryrelay: plugin loaded, checking config...`);
-  api.logger.info(`memory-memoryrelay: pluginConfig type: ${typeof api.pluginConfig}`);
-  api.logger.info(`memory-memoryrelay: pluginConfig keys: ${api.pluginConfig ? Object.keys(api.pluginConfig).join(', ') : 'null'}`);
-  
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
   
-  // Try to get config from multiple sources
-  const apiKey = cfg?.apiKey || process.env.MEMORYRELAY_API_KEY;
-  const agentId = cfg?.agentId || process.env.MEMORYRELAY_AGENT_ID || "default";
-  
-  if (!apiKey) {
+  if (!cfg?.apiKey) {
     api.logger.error(
-      "memory-memoryrelay: missing API key. Configure in one of these ways:\n" +
-      "  1. Add to config: plugins.entries.\"plugin-memoryrelay-ai\".config.apiKey\n" +
-      "  2. Set environment variable: MEMORYRELAY_API_KEY\n" +
-      "  3. Run: cat ~/.openclaw/openclaw.json | jq '.plugins.entries.\"plugin-memoryrelay-ai\".config = {\"apiKey\": \"YOUR_KEY\", \"agentId\": \"YOUR_AGENT\"}' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json\n" +
+      "memory-memoryrelay: Missing API key in config.\n\n" +
+      "REQUIRED: Add config after installation:\n\n" +
+      "cat ~/.openclaw/openclaw.json | jq '.plugins.entries.\"plugin-memoryrelay-ai\".config = {\n" +
+      "  \"apiKey\": \"YOUR_API_KEY\",\n" +
+      "  \"agentId\": \"YOUR_AGENT_ID\"\n" +
+      "}' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json\n\n" +
+      "Then restart: openclaw gateway restart\n\n" +
       "Get your API key from: https://memoryrelay.ai"
     );
     return;
   }
   
-  api.logger.info(`memory-memoryrelay: using agentId: ${agentId}`);
-
-  const apiUrl = cfg?.apiUrl || DEFAULT_API_URL;
-  const client = new MemoryRelayClient(apiKey, agentId, apiUrl);
+  if (!cfg.agentId) {
+    api.logger.error("memory-memoryrelay: Missing agentId in config");
+    return;
+  }
+  
+  const apiUrl = cfg.apiUrl || DEFAULT_API_URL;
+  const client = new MemoryRelayClient(cfg.apiKey, cfg.agentId, apiUrl);
 
   // Verify connection on startup
   try {
@@ -216,7 +213,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     try {
       const health = await client.health();
       let memoryCount = 0;
-      
+
       // Try to get stats if the endpoint exists
       try {
         const stats = await client.stats();
@@ -225,11 +222,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         // Stats endpoint may not exist yet - that's okay, just report 0
         api.logger.debug?.(`memory-memoryrelay: stats endpoint unavailable: ${String(statsErr)}`);
       }
-      
+
       // Consider API connected if health check succeeds with any recognized status
       const healthStatus = String(health.status).toLowerCase();
       const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
-      
+
       respond(true, {
         available: true,
         connected: isConnected,
