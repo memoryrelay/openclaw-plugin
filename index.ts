@@ -183,7 +183,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       name: "memory_store",
       description:
         "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations.",
-      inputSchema: {
+      parameters: {
         type: "object",
         properties: {
           content: {
@@ -198,7 +198,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         },
         required: ["content"],
       },
-      handler: async ({ content, metadata }: { content: string; metadata?: Record<string, string> }) => {
+      execute: async (_id, { content, metadata }: { content: string; metadata?: Record<string, string> }) => {
         try {
           const memory = await client.store(content, metadata);
           return {
@@ -227,7 +227,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       name: "memory_recall",
       description:
         "Search memories using natural language. Returns the most relevant memories based on semantic similarity.",
-      inputSchema: {
+      parameters: {
         type: "object",
         properties: {
           query: {
@@ -244,7 +244,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         },
         required: ["query"],
       },
-      handler: async ({ query, limit = 5 }: { query: string; limit?: number }) => {
+      execute: async (_id, { query, limit = 5 }: { query: string; limit?: number }) => {
         try {
           const results = await client.search(query, limit, cfg.recallThreshold || 0.3);
 
@@ -296,7 +296,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     {
       name: "memory_forget",
       description: "Delete a memory by ID or search for memories to forget.",
-      inputSchema: {
+      parameters: {
         type: "object",
         properties: {
           memoryId: {
@@ -309,7 +309,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           },
         },
       },
-      handler: async ({ memoryId, query }: { memoryId?: string; query?: string }) => {
+      execute: async (_id, { memoryId, query }: { memoryId?: string; query?: string }) => {
         if (memoryId) {
           try {
             await client.delete(memoryId);

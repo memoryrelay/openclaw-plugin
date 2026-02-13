@@ -396,6 +396,15 @@ MIT © 2026 MemoryRelay
 
 ## Changelog
 
+### v0.2.2 (2026-02-13)
+
+**Critical Fix:**
+- Fixed tool registration API - changed `inputSchema` to `parameters`
+- Fixed handler signature - changed `handler` to `execute` with `_id` parameter
+- Tools now register correctly with OpenClaw
+- Memory storage/recall/forget now functional
+- Plugin shows as "available" instead of "unavailable"
+
 ### v0.2.1 (2026-02-13)
 
 **Bug Fix:**
