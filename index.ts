@@ -11,6 +11,12 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+const DEFAULT_API_URL = "https://api.memoryrelay.net";
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -48,7 +54,7 @@ class MemoryRelayClient {
   constructor(
     private readonly apiKey: string,
     private readonly agentId: string,
-    private readonly apiUrl: string = "https://api.memoryrelay.net",
+    private readonly apiUrl: string = DEFAULT_API_URL,
   ) {}
 
   private async request<T>(
@@ -130,7 +136,10 @@ class MemoryRelayClient {
       "GET",
       `/v1/stats?agent_id=${encodeURIComponent(this.agentId)}`,
     );
-    return response.data || { total_memories: 0, last_updated: undefined };
+    return {
+      total_memories: response.data?.total_memories ?? 0,
+      last_updated: response.data?.last_updated,
+    };
   }
 }
 
@@ -187,13 +196,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const client = new MemoryRelayClient(
     apiKey,
     agentId,
-    cfg?.apiUrl || "https://api.memoryrelay.net",
+    cfg?.apiUrl || DEFAULT_API_URL,
   );
 
   // Verify connection on startup
   try {
     await client.health();
-    api.logger.info(`memory-memoryrelay: connected to ${cfg.apiUrl || "api.memoryrelay.net"}`);
+    api.logger.info(`memory-memoryrelay: connected to ${cfg?.apiUrl || DEFAULT_API_URL}`);
   } catch (err) {
     api.logger.error(`memory-memoryrelay: health check failed: ${String(err)}`);
     return;
@@ -226,7 +235,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       respond(true, {
         available: true,
         connected: isConnected,
-        endpoint: cfg?.apiUrl || "api.memoryrelay.net",
+        endpoint: cfg?.apiUrl || DEFAULT_API_URL,
         memoryCount: memoryCount,
         agentId: agentId,
         // OpenClaw checks status.vector.available for memory plugins
@@ -240,7 +249,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         available: false,
         connected: false,
         error: String(err),
-        endpoint: cfg?.apiUrl || "api.memoryrelay.net",
+        endpoint: cfg?.apiUrl || DEFAULT_API_URL,
         agentId: agentId,
         // Report vector as unavailable when API fails
         vector: {
@@ -464,7 +473,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             const health = await client.health();
             console.log(`Status: ${health.status}`);
             console.log(`Agent ID: ${cfg.agentId}`);
-            console.log(`API: ${cfg.apiUrl || "https://api.memoryrelay.net"}`);
+            console.log(`API: ${cfg.apiUrl || DEFAULT_API_URL}`);
           } catch (err) {
             console.error(`Connection failed: ${String(err)}`);
           }
