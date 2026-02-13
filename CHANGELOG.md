@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-13
+
+### Added
+- Status reporting via `memory.status` gateway RPC method
+- Plugin now reports availability and connection status to `openclaw status`
+- Memory count reporting (via new `/v1/stats` API endpoint)
+- Vector availability reporting for semantic search
+- Graceful handling of missing stats endpoint (backwards compatible)
+- Status shows "available" when API is reachable, "unavailable" when down
+- Detailed status information: connected state, endpoint, agent ID, memory count
+
+### Fixed
+- Plugin no longer shows as "unavailable" in `openclaw status` when functional
+- Status accurately reflects API connection state
+
+### Technical Improvements
+- Extracted `DEFAULT_API_URL` and `VALID_HEALTH_STATUSES` constants for maintainability
+- Case-insensitive health status validation using extensible array pattern
+- Proper type safety with nullish coalescing operators throughout
+- Consistent variable usage with extracted `apiUrl` for clarity
+
+## [0.3.0] - 2026-02-13
+
+### Changed
+- Better installation UX with env var support
+
 ## [0.1.0] - 2026-02-12
 
 ### Added
@@ -25,5 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auto-capture disabled by default (privacy)
 - Pattern-based filtering for sensitive data
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/memoryrelay/openclaw-plugin/releases/tag/v0.1.0
