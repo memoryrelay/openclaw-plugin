@@ -1,9 +1,12 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "OpenClaw memory plugin for MemoryRelay API - long-term memory with semantic search",
   "type": "module",
   "main": "index.ts",
+  "scripts": {
+    "postinstall": "node -e \"console.log('\\n⚠️  CONFIGURATION REQUIRED\\n\\nAdd config after installation:\\n\\ncat ~/.openclaw/openclaw.json | jq \\'.plugins.entries.\\\"plugin-memoryrelay-ai\\\".config = {\\\"apiKey\\\": \\\"YOUR_KEY\\\", \\\"agentId\\\": \\\"YOUR_AGENT\\\"}\\' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json\\n\\nThen restart: openclaw gateway restart\\n\\nGet your API key from: https://memoryrelay.ai\\n')\""
+  },
   "keywords": [
     "openclaw",
     "plugin",
