@@ -1,6 +1,6 @@
 {
   "name": "@memoryrelay/openclaw-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenClaw memory plugin for MemoryRelay API - long-term memory with semantic search",
   "type": "module",
   "main": "index.ts",

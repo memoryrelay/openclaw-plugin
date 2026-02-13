@@ -1,7 +1,7 @@
 {
-  "id": "memory-memoryrelay",
+  "id": "plugin-memoryrelay-ai",
   "kind": "memory",
-  "name": "MemoryRelay",
+  "name": "MemoryRelay AI",
   "description": "AI memory service using MemoryRelay API (api.memoryrelay.net)",
   "version": "0.1.0",
   "uiHints": {

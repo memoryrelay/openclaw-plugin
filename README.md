@@ -1,4 +1,4 @@
-# OpenClaw Plugin for MemoryRelay
+# OpenClaw Plugin for MemoryRelay AI
 
 [![npm version](https://img.shields.io/npm/v/@memoryrelay/openclaw-plugin)](https://www.npmjs.com/package/@memoryrelay/openclaw-plugin)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -40,10 +40,10 @@ Add to your `~/.openclaw/openclaw.json`:
 {
   "plugins": {
     "slots": {
-      "memory": "memory-memoryrelay"
+      "memory": "plugin-memoryrelay-ai"
     },
     "entries": {
-      "memory-memoryrelay": {
+      "plugin-memoryrelay-ai": {
         "enabled": true,
         "config": {
           "apiKey": "mem_prod_...",
@@ -77,30 +77,80 @@ openclaw memoryrelay status
 The plugin provides three tools your AI agent can use:
 
 #### `memory_store`
-Store a new memory:
+
+Store a new memory with optional metadata.
+
+> **Note**: The `agent_id` parameter is automatically injected from your config. You don't need to include it.
+
+**Parameters:**
+- `content` (string, required) - Memory content (1-50,000 characters)
+- `metadata` (object, optional) - Key-value metadata (max 10KB when serialized)
+
+**Example:**
 ```typescript
 memory_store({
   content: "User prefers concise bullet-point responses",
-  metadata: { category: "preferences" }
+  metadata: { category: "preferences", importance: "high" }
 })
 ```
 
+**Returns:** Memory object with `id`, `content`, `agent_id`, `metadata`, `created_at`, `updated_at`
+
+**Rate Limit**: 30 requests per minute
+
 #### `memory_recall`
-Search memories semantically:
+
+Search memories using semantic similarity.
+
+**Parameters:**
+- `query` (string, required) - Natural language search query
+- `limit` (number, optional, default: 10) - Maximum results (1-50)
+- `threshold` (number, optional, default: 0.5) - Minimum similarity score (0-1)
+
+**Example:**
 ```typescript
 memory_recall({
-  query: "communication preferences",
-  limit: 5
+  query: "user communication preferences",
+  limit: 5,
+  threshold: 0.7
 })
+```
+
+**Returns:** Array of search results with `memory` object and `score` (0-1):
+```json
+{
+  "results": [
+    {
+      "memory": {
+        "id": "550e8400-...",
+        "content": "User prefers concise bullet-point responses",
+        "metadata": { "category": "preferences" },
+        "created_at": 1707649200
+      },
+      "score": 0.89
+    }
+  ]
+}
 ```
 
 #### `memory_forget`
-Delete memories:
+
+Delete a memory by ID or search query.
+
+**Parameters:**
+- `memoryId` (string, optional) - Memory UUID to delete
+- `query` (string, optional) - Search query (shows candidates if multiple matches)
+
+**Examples:**
 ```typescript
+// By ID
 memory_forget({ memoryId: "550e8400-..." })
-// or by query:
+
+// By query (interactive if multiple matches)
 memory_forget({ query: "outdated preference" })
 ```
+
+**Returns:** Success confirmation
 
 ### CLI Commands
 
@@ -341,6 +391,48 @@ Contributions welcome! Please:
 ## License
 
 MIT © 2026 MemoryRelay
+
+---
+
+## Changelog
+
+### v0.1.1 (2026-02-13)
+
+**Breaking Changes:**
+- Plugin ID changed: `memory-memoryrelay` → `plugin-memoryrelay-ai`
+- Update your `openclaw.json` to use new ID in `plugins.slots.memory` and `plugins.entries`
+
+**Documentation Improvements:**
+- ✅ Added agent_id auto-injection documentation
+- ✅ Added size limits (content 1-50K chars, metadata 10KB)
+- ✅ Added rate limit info (30 req/min)
+- ✅ Enhanced tool documentation with return formats
+- ✅ Added response format examples for memory_recall
+
+**Migration Guide:**
+```json
+{
+  "plugins": {
+    "slots": {
+      "memory": "plugin-memoryrelay-ai"  // Changed
+    },
+    "entries": {
+      "plugin-memoryrelay-ai": {  // Changed
+        "enabled": true,
+        "config": { ... }
+      }
+    }
+  }
+}
+```
+
+### v0.1.0 (2026-02-12)
+
+- Initial release
+- Three tools: memory_store, memory_recall, memory_forget
+- Auto-recall and auto-capture features
+- CLI commands
+- Production deployment on 3 agents
 
 ---
 
