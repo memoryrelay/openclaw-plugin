@@ -1,0 +1,55 @@
+{
+  "name": "@memoryrelay/plugin-memoryrelay-ai",
+  "version": "0.6.2",
+  "description": "OpenClaw memory plugin for MemoryRelay API - long-term memory with semantic search (ENHANCED)",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "postinstall": "node -e \"console.log('\\n⚠️  CONFIGURATION REQUIRED\\n\\nAdd config after installation:\\n\\ncat ~/.openclaw/openclaw.json | jq \\'.plugins.entries.\\\"plugin-memoryrelay-ai\\\".config = {\\\"apiKey\\\": \\\"YOUR_KEY\\\", \\\"agentId\\\": \\\"YOUR_AGENT\\\"}\\' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json\\n\\nOr use environment variables:\\nexport MEMORYRELAY_API_KEY=\\\"mem_prod_...\\\"\\nexport MEMORYRELAY_AGENT_ID=\\\"your-agent\\\"\\n\\nThen restart: openclaw gateway restart\\n\\nGet your API key from: https://memoryrelay.ai\\n')\""
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "memory",
+    "memoryrelay",
+    "semantic-search",
+    "vector-search",
+    "ai-memory",
+    "agent-memory"
+  ],
+  "author": "MemoryRelay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/memoryrelay/openclaw-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/memoryrelay/openclaw-plugin/issues"
+  },
+  "homepage": "https://github.com/memoryrelay/openclaw-plugin#readme",
+  "peerDependencies": {
+    "openclaw": ">=2026.2.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.2.0",
+    "@vitest/coverage-v8": "^1.2.0"
+  },
+  "openclaw": {
+    "id": "plugin-memoryrelay-ai",
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "files": [
+    "index.ts",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
