@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-03-01
+
+### Fixed
+- **OpenClaw 2026.2.26 Compatibility**: Fixed plugin loading security validation error
+  - Changed `"extensions": ["./"]` to `"extensions": ["./index.ts"]`
+  - Plugin now loads correctly in OpenClaw 2026.2.26+
+  - Error fixed: "extension entry escapes package directory: ./"
+
+### Changed
+- **Installation Method**: Plugin must now be installed via `openclaw plugins install` instead of `npm install -g`
+- **Documentation**: Complete rewrite with comprehensive installation, usage, and troubleshooting guides
+
+### Added
+- **README.md** (8.9 KB): Comprehensive documentation with examples
+- **LICENSE**: MIT License
+- **CHANGELOG-v0.6.2.md**: Detailed release notes
+- **OPENCLAW-2026.2.26-MIGRATION.md**: Migration guide for existing users
+
+### Migration Required
+- Users must uninstall old version and reinstall via OpenClaw CLI
+- See OPENCLAW-2026.2.26-MIGRATION.md for step-by-step instructions
+
+### Backward Compatibility
+- ⚠️ Breaking for npm global installs (must use `openclaw plugins install`)
+- ✅ Configuration and API remain unchanged
+- ✅ No changes to plugin functionality
+
+## [0.6.1] - 2026-02-18
+
+### Fixed (FAILED)
+- Attempted to fix plugin loading by removing `extensions` field entirely
+- Did not resolve the issue (plugin discovery requires valid `extensions` field)
+- This version was not functional
+
 ## [0.6.0] - 2026-02-18
 
 ### Added
