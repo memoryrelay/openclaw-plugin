@@ -7,7 +7,7 @@
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
  *
  * API: https://api.memoryrelay.net
- * Docs: https://memoryrelay.io
+ * Docs: https://memoryrelay.ai
  *
  * ENHANCEMENTS (v0.7.0):
  * - 39 tools covering all MemoryRelay API resources
@@ -745,16 +745,49 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // ========================================================================
-  // Helper to check if a tool is enabled
+  // Helper to check if a tool is enabled (by group)
   // ========================================================================
 
-  const enabledSet = cfg?.enabledTools
-    ? new Set(cfg.enabledTools.split(",").map((s) => s.trim()))
-    : null;
+  // Tool group mapping — matches MCP server's TOOL_GROUPS
+  const TOOL_GROUPS: Record<string, string[]> = {
+    memory: [
+      "memory_store", "memory_recall", "memory_forget", "memory_list",
+      "memory_get", "memory_update", "memory_batch_store", "memory_context",
+      "memory_promote",
+    ],
+    entity: ["entity_create", "entity_link", "entity_list", "entity_graph"],
+    agent: ["agent_list", "agent_create", "agent_get"],
+    session: ["session_start", "session_end", "session_recall", "session_list"],
+    decision: ["decision_record", "decision_list", "decision_supersede", "decision_check"],
+    pattern: ["pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest"],
+    project: [
+      "project_register", "project_list", "project_info",
+      "project_add_relationship", "project_dependencies", "project_dependents",
+      "project_related", "project_impact", "project_shared_patterns", "project_context",
+    ],
+    health: ["memory_health"],
+  };
+
+  // Build a set of enabled tool names from group names
+  const enabledToolNames: Set<string> | null = (() => {
+    if (!cfg?.enabledTools) return null; // all enabled
+    const groups = cfg.enabledTools.split(",").map((s) => s.trim().toLowerCase());
+    if (groups.includes("all")) return null;
+    const enabled = new Set<string>();
+    for (const group of groups) {
+      const tools = TOOL_GROUPS[group];
+      if (tools) {
+        for (const tool of tools) {
+          enabled.add(tool);
+        }
+      }
+    }
+    return enabled;
+  })();
 
   function isToolEnabled(name: string): boolean {
-    if (!enabledSet) return true;
-    return enabledSet.has(name);
+    if (!enabledToolNames) return true;
+    return enabledToolNames.has(name);
   }
 
   // ========================================================================
@@ -1886,7 +1919,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             status: {
               type: "string",
               description: "Decision status.",
-              enum: ["active", "superseded", "deprecated"],
+              enum: ["active", "experimental"],
             },
           },
           required: ["title", "rationale"],
@@ -1952,7 +1985,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             status: {
               type: "string",
               description: "Filter by status.",
-              enum: ["active", "superseded", "deprecated"],
+              enum: ["active", "superseded", "reverted", "experimental"],
             },
             tags: {
               type: "string",
@@ -2153,8 +2186,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             },
             scope: {
               type: "string",
-              description: "Scope: global, project, or team.",
-              enum: ["global", "project", "team"],
+              description: "Scope: global (visible to all projects) or project (visible to source project only).",
+              enum: ["global", "project"],
             },
             tags: {
               type: "array",
@@ -2933,24 +2966,56 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // Lifecycle Hooks
   // ========================================================================
 
-  // Auto-recall: inject relevant memories and workflow instructions before agent starts
-  if (cfg?.autoRecall) {
-    api.on("before_agent_start", async (event) => {
-      if (!event.prompt || event.prompt.length < 10) {
+  // Workflow instructions + auto-recall: always inject workflow guidance,
+  // optionally recall relevant memories if autoRecall is enabled
+  api.on("before_agent_start", async (event) => {
+    if (!event.prompt || event.prompt.length < 10) {
+      return;
+    }
+
+    // Check if current channel is excluded
+    if (cfg?.excludeChannels && event.channel) {
+      const channelId = String(event.channel);
+      if (cfg.excludeChannels.some((excluded) => channelId.includes(excluded))) {
+        api.logger.debug?.(
+          `memory-memoryrelay: skipping for excluded channel: ${channelId}`,
+        );
         return;
       }
+    }
 
-      // Check if current channel is excluded
-      if (cfg.excludeChannels && event.channel) {
-        const channelId = String(event.channel);
-        if (cfg.excludeChannels.some((excluded) => channelId.includes(excluded))) {
-          api.logger.debug?.(
-            `memory-memoryrelay: skipping auto-recall for excluded channel: ${channelId}`,
-          );
-          return;
-        }
-      }
+    const workflowInstructions = [
+      "You have MemoryRelay tools available for persistent memory across sessions.",
+      "",
+      "## Recommended Workflow",
+      "",
+      "When starting work on a project:",
+      "1. **Load context**: Call `project_context(project)` to load hot-tier memories, active decisions, and adopted patterns",
+      "2. **Start session**: Call `session_start(title, project)` to begin tracking your work",
+      "3. **Check decisions**: Call `decision_check(query, project)` before making architectural choices to avoid contradicting past decisions",
+      "4. **Find patterns**: Call `pattern_search(query)` to find established conventions before writing code",
+      "",
+      "While working:",
+      "5. **Store findings**: Call `memory_store(content, metadata)` for important information worth remembering",
+      "6. **Record decisions**: Call `decision_record(title, rationale)` when making significant architectural choices",
+      "7. **Create patterns**: Call `pattern_create(title, description)` when establishing reusable conventions",
+      "",
+      "When done:",
+      "8. **End session**: Call `session_end(session_id, summary)` with a summary of what was accomplished",
+      "",
+      "## First-Time Setup",
+      "",
+      "If the project is not yet registered, start with:",
+      "1. `project_register(slug, name, description, stack)` to register the project",
+      "2. Then follow the workflow above",
+      "",
+      "Use `project_list()` to see existing projects before registering a new one.",
+    ].join("\n");
 
+    let prependContext = `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`;
+
+    // Auto-recall: search and inject relevant memories
+    if (cfg?.autoRecall) {
       try {
         const results = await client.search(
           event.prompt,
@@ -2958,38 +3023,23 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           cfg.recallThreshold || 0.3,
         );
 
-        const workflowInstructions = [
-          "Recommended MemoryRelay workflow:",
-          "1. Call project_context(project) to load hot-tier memories for context",
-          "2. Call session_start(project, goal) to begin tracking your work",
-          "3. Call decision_check(project, topic) before making architectural choices",
-          "4. Call pattern_search(query) to find established conventions",
-          "5. Work on the task, using memory_store for important findings",
-          "6. Call session_end(session_id, summary) when done",
-        ].join("\n");
+        if (results.length > 0) {
+          const memoryContext = results.map((r) => `- ${r.memory.content}`).join("\n");
 
-        if (results.length === 0) {
-          return {
-            prependContext: `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`,
-          };
+          api.logger.info?.(
+            `memory-memoryrelay: injecting ${results.length} memories into context`,
+          );
+
+          prependContext +=
+            `\n\n<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`;
         }
-
-        const memoryContext = results.map((r) => `- ${r.memory.content}`).join("\n");
-
-        api.logger.info?.(
-          `memory-memoryrelay: injecting ${results.length} memories into context`,
-        );
-
-        return {
-          prependContext:
-            `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>\n\n` +
-            `<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`,
-        };
       } catch (err) {
         api.logger.warn?.(`memory-memoryrelay: recall failed: ${String(err)}`);
       }
-    });
-  }
+    }
+
+    return { prependContext };
+  });
 
   // Auto-capture: analyze and store important information after agent ends
   if (cfg?.autoCapture) {
