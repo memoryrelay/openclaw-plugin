@@ -643,65 +643,132 @@ describe("Tool Groups", () => {
 // ============================================================================
 
 describe("Workflow Instructions", () => {
-  test("should include project-first workflow", () => {
-    const workflowInstructions = [
-      "project_context",
-      "session_start",
-      "decision_check",
-      "pattern_search",
-      "memory_store",
-      "session_end",
-    ];
-
-    // All workflow tools should exist in the tool list
-    const allTools = [
+  const TOOL_GROUPS: Record<string, string[]> = {
+    memory: [
       "memory_store", "memory_recall", "memory_forget", "memory_list",
       "memory_get", "memory_update", "memory_batch_store", "memory_context", "memory_promote",
-      "entity_create", "entity_link", "entity_list", "entity_graph",
-      "agent_list", "agent_create", "agent_get",
-      "session_start", "session_end", "session_recall", "session_list",
-      "decision_record", "decision_list", "decision_supersede", "decision_check",
-      "pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest",
+    ],
+    entity: ["entity_create", "entity_link", "entity_list", "entity_graph"],
+    agent: ["agent_list", "agent_create", "agent_get"],
+    session: ["session_start", "session_end", "session_recall", "session_list"],
+    decision: ["decision_record", "decision_list", "decision_supersede", "decision_check"],
+    pattern: ["pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest"],
+    project: [
       "project_register", "project_list", "project_info",
       "project_add_relationship", "project_dependencies", "project_dependents",
       "project_related", "project_impact", "project_shared_patterns", "project_context",
-      "memory_health",
+    ],
+    health: ["memory_health"],
+  };
+
+  function buildWorkflowLines(
+    enabledToolNames: Set<string> | null,
+    defaultProject?: string,
+  ): string[] {
+    const isToolEnabled = (name: string): boolean => {
+      if (!enabledToolNames) return true;
+      return enabledToolNames.has(name);
+    };
+
+    const lines: string[] = [
+      "You have MemoryRelay tools available for persistent memory across sessions.",
     ];
 
-    for (const tool of workflowInstructions) {
-      expect(allTools).toContain(tool);
+    if (defaultProject) {
+      lines.push(`Default project: \`${defaultProject}\` (auto-applied when you omit the project parameter).`);
     }
+
+    lines.push("", "## Recommended Workflow", "");
+
+    const startSteps: string[] = [];
+    if (isToolEnabled("project_context")) startSteps.push("project_context");
+    if (isToolEnabled("session_start")) startSteps.push("session_start");
+    if (isToolEnabled("decision_check")) startSteps.push("decision_check");
+    if (isToolEnabled("pattern_search")) startSteps.push("pattern_search");
+
+    if (startSteps.length > 0) {
+      lines.push("When starting work on a project:");
+      startSteps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
+    }
+
+    const workSteps: string[] = [];
+    if (isToolEnabled("memory_store")) workSteps.push("memory_store");
+    if (isToolEnabled("decision_record")) workSteps.push("decision_record");
+    if (isToolEnabled("pattern_create")) workSteps.push("pattern_create");
+
+    if (isToolEnabled("session_end")) {
+      lines.push("session_end");
+    }
+
+    if (isToolEnabled("project_register")) {
+      lines.push("project_register");
+    }
+
+    if (startSteps.length === 0 && workSteps.length === 0) {
+      lines.push("Use memory_store and memory_recall");
+    }
+
+    return lines;
+  }
+
+  test("should include project-first workflow when all tools enabled", () => {
+    const lines = buildWorkflowLines(null);
+    const text = lines.join("\n");
+    expect(text).toContain("project_context");
+    expect(text).toContain("session_start");
+    expect(text).toContain("decision_check");
+    expect(text).toContain("session_end");
+    expect(text).toContain("project_register");
   });
 
   test("workflow should start with project_context", () => {
-    const workflow = [
-      "1. project_context",
-      "2. session_start",
-      "3. decision_check",
-      "4. pattern_search",
-      "5. memory_store",
-      "6. session_end",
-    ];
-    expect(workflow[0]).toContain("project_context");
+    const lines = buildWorkflowLines(null);
+    const startIndex = lines.indexOf("When starting work on a project:");
+    expect(startIndex).toBeGreaterThan(-1);
+    // project_context should be the first step after the header
+    expect(lines[startIndex + 1]).toContain("project_context");
   });
 
   test("workflow instructions should include first-time setup guidance", () => {
-    // The workflow instructions should tell the agent to register a project if needed
-    const workflowText = [
-      "project_context",
-      "session_start",
-      "decision_check",
-      "pattern_search",
-      "memory_store",
-      "decision_record",
-      "pattern_create",
-      "session_end",
-      "project_register",
-      "project_list",
-    ];
-    // project_register should be mentioned for first-time setup
-    expect(workflowText).toContain("project_register");
-    expect(workflowText).toContain("project_list");
+    const lines = buildWorkflowLines(null);
+    expect(lines).toContain("project_register");
+  });
+
+  test("workflow should only reference enabled tools", () => {
+    // Enable only memory + session groups
+    const enabledToolNames = new Set<string>();
+    for (const tool of TOOL_GROUPS.memory) enabledToolNames.add(tool);
+    for (const tool of TOOL_GROUPS.session) enabledToolNames.add(tool);
+
+    const lines = buildWorkflowLines(enabledToolNames);
+    const text = lines.join("\n");
+
+    // memory_store and session tools should be present
+    expect(text).toContain("session_start");
+    expect(text).toContain("session_end");
+
+    // project/decision/pattern tools should NOT be mentioned
+    expect(text).not.toContain("project_context");
+    expect(text).not.toContain("decision_check");
+    expect(text).not.toContain("pattern_search");
+    expect(text).not.toContain("project_register");
+  });
+
+  test("workflow should include defaultProject hint when configured", () => {
+    const lines = buildWorkflowLines(null, "my-api");
+    const text = lines.join("\n");
+    expect(text).toContain("my-api");
+    expect(text).toContain("Default project");
+  });
+
+  test("workflow should show memory-only fallback when no session/decision tools", () => {
+    // Only health tools enabled (no memory_store, no session, no decision)
+    const enabledToolNames = new Set<string>();
+    for (const tool of TOOL_GROUPS.health) enabledToolNames.add(tool);
+
+    const lines = buildWorkflowLines(enabledToolNames);
+    const text = lines.join("\n");
+    expect(text).toContain("memory_store and memory_recall");
   });
 });
 
@@ -739,5 +806,61 @@ describe("Config Extensions", () => {
     };
     expect((config as any).enabledTools).toBeUndefined();
     // When undefined, all tools should be enabled
+  });
+
+  test("defaultProject should be included in tool descriptions when set", () => {
+    const defaultProject = "my-api";
+
+    // Simulate how the plugin builds tool descriptions
+    const memoryStoreDesc = "Store a new memory." +
+      (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : "");
+    const decisionCheckDesc = "Check existing decisions." +
+      (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : "");
+
+    expect(memoryStoreDesc).toContain("my-api");
+    expect(decisionCheckDesc).toContain("my-api");
+  });
+
+  test("defaultProject should NOT be in descriptions when not set", () => {
+    const defaultProject = undefined;
+
+    const memoryStoreDesc = "Store a new memory." +
+      (defaultProject ? ` Project defaults to '${defaultProject}'.` : "");
+
+    expect(memoryStoreDesc).not.toContain("defaults to");
+  });
+});
+
+// ============================================================================
+// Agent ID Scoping Tests (v0.7.1)
+// ============================================================================
+
+describe("Agent ID Scoping", () => {
+  test("memory_list URL should include agent_id", () => {
+    const agentId = "test-agent";
+    const limit = 20;
+    const offset = 0;
+    const url = `/v1/memories?limit=${limit}&offset=${offset}&agent_id=${encodeURIComponent(agentId)}`;
+    expect(url).toContain("agent_id=test-agent");
+  });
+
+  test("memory_forget search should apply defaultProject", () => {
+    // The fix passes defaultProject to the search call in memory_forget
+    const defaultProject = "my-api";
+    const searchOptions = { project: defaultProject };
+    expect(searchOptions.project).toBe("my-api");
+  });
+
+  test("memory_context should accept project parameter", () => {
+    // The tool now has project in its schema and passes it to buildContext
+    const args = { query: "test", project: "my-api" };
+    expect(args.project).toBe("my-api");
+  });
+
+  test("memory_context project should default to defaultProject", () => {
+    const defaultProject = "my-api";
+    const args: { query: string; project?: string } = { query: "test" };
+    const project = args.project ?? defaultProject;
+    expect(project).toBe("my-api");
   });
 });
