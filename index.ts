@@ -164,9 +164,10 @@ class MemoryRelayClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.detail || errorData.message || "";
         const error = new Error(
           `MemoryRelay API error: ${response.status} ${response.statusText}` +
-            (errorData.message ? ` - ${errorData.message}` : ""),
+            (errorMsg ? ` - ${errorMsg}` : ""),
         );
 
         // Retry on 5xx errors
@@ -321,7 +322,8 @@ class MemoryRelayClient {
     memoryId: string,
     relationship?: string,
   ): Promise<any> {
-    return this.request("POST", `/v1/entities/${entityId}/memories`, {
+    return this.request("POST", `/v1/entities/links`, {
+      entity_id: entityId,
       memory_id: memoryId,
       relationship,
     });
@@ -452,13 +454,13 @@ class MemoryRelayClient {
     threshold?: number,
     includeSuperseded?: boolean,
   ): Promise<any> {
-    return this.request("POST", "/v1/decisions/check", {
-      query,
-      project,
-      limit,
-      threshold,
-      include_superseded: includeSuperseded,
-    });
+    const params = new URLSearchParams();
+    params.set("query", query);
+    if (project) params.set("project", project);
+    if (limit !== undefined) params.set("limit", String(limit));
+    if (threshold !== undefined) params.set("threshold", String(threshold));
+    if (includeSuperseded) params.set("include_superseded", "true");
+    return this.request("GET", `/v1/decisions/check?${params.toString()}`);
   }
 
   // --------------------------------------------------------------------------
@@ -492,13 +494,13 @@ class MemoryRelayClient {
     limit?: number,
     threshold?: number,
   ): Promise<any> {
-    return this.request("POST", "/v1/patterns/search", {
-      query,
-      category,
-      project,
-      limit,
-      threshold,
-    });
+    const params = new URLSearchParams();
+    params.set("query", query);
+    if (category) params.set("category", category);
+    if (project) params.set("project", project);
+    if (limit !== undefined) params.set("limit", String(limit));
+    if (threshold !== undefined) params.set("threshold", String(threshold));
+    return this.request("GET", `/v1/patterns/search?${params.toString()}`);
   }
 
   async adoptPattern(id: string, project: string): Promise<any> {
@@ -543,13 +545,12 @@ class MemoryRelayClient {
     from: string,
     to: string,
     type: string,
-    details?: Record<string, unknown>,
+    metadata?: Record<string, unknown>,
   ): Promise<any> {
-    return this.request("POST", "/v1/projects/relationships", {
-      from_slug: from,
-      to_slug: to,
+    return this.request("POST", `/v1/projects/${encodeURIComponent(from)}/relationships`, {
+      target_project: to,
       relationship_type: type,
-      details,
+      metadata,
     });
   }
 
@@ -577,15 +578,18 @@ class MemoryRelayClient {
   async projectImpact(project: string, changeDescription: string): Promise<any> {
     return this.request(
       "POST",
-      `/v1/projects/${encodeURIComponent(project)}/impact`,
-      { change_description: changeDescription },
+      `/v1/projects/impact-analysis`,
+      { project, change_description: changeDescription },
     );
   }
 
   async getSharedPatterns(projectA: string, projectB: string): Promise<any> {
+    const params = new URLSearchParams();
+    params.set("a", projectA);
+    params.set("b", projectB);
     return this.request(
       "GET",
-      `/v1/projects/${encodeURIComponent(projectA)}/shared-patterns/${encodeURIComponent(projectB)}`,
+      `/v1/projects/shared-patterns?${params.toString()}`,
     );
   }
 
@@ -2562,7 +2566,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "project_add_relationship",
         description:
-          "Add a relationship between two projects (e.g., depends_on, extends, shares_db, deploys_with).",
+          "Add a relationship between two projects (e.g., depends_on, api_consumer, shares_schema, shares_infra, pattern_source, forked_from).",
         parameters: {
           type: "object",
           properties: {
@@ -2576,25 +2580,25 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             },
             type: {
               type: "string",
-              description: "Relationship type (e.g., depends_on, extends, shares_db, deploys_with).",
+              description: "Relationship type (e.g., depends_on, api_consumer, shares_schema, shares_infra, pattern_source, forked_from).",
             },
-            details: {
+            metadata: {
               type: "object",
-              description: "Optional details about the relationship.",
+              description: "Optional metadata about the relationship.",
             },
           },
           required: ["from", "to", "type"],
         },
         execute: async (
           _id,
-          args: { from: string; to: string; type: string; details?: Record<string, unknown> },
+          args: { from: string; to: string; type: string; metadata?: Record<string, unknown> },
         ) => {
           try {
             const result = await client.addProjectRelationship(
               args.from,
               args.to,
               args.type,
-              args.details,
+              args.metadata,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

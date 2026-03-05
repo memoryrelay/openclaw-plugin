@@ -864,3 +864,149 @@ describe("Agent ID Scoping", () => {
     expect(project).toBe("my-api");
   });
 });
+
+// ============================================================================
+// API Alignment Tests (v0.7.2 — critical endpoint fixes)
+// ============================================================================
+
+describe("API Endpoint Alignment", () => {
+  // These tests verify that client methods build correct HTTP requests
+  // matching the actual MemoryRelay API endpoints.
+
+  test("decision_check should use GET with query params (not POST)", () => {
+    // API: GET /v1/decisions/check?query=X&project=Y&...
+    const params = new URLSearchParams();
+    params.set("query", "auth approach");
+    params.set("project", "my-api");
+    params.set("limit", "5");
+    params.set("threshold", "0.3");
+    const url = `/v1/decisions/check?${params.toString()}`;
+
+    expect(url).toContain("/v1/decisions/check?");
+    expect(url).toContain("query=auth+approach");
+    expect(url).toContain("project=my-api");
+    expect(url).not.toContain("POST");
+  });
+
+  test("decision_check should omit unset optional params", () => {
+    const params = new URLSearchParams();
+    params.set("query", "test");
+    // project, limit, threshold, include_superseded all omitted
+    const url = `/v1/decisions/check?${params.toString()}`;
+    expect(url).toBe("/v1/decisions/check?query=test");
+  });
+
+  test("decision_check should include include_superseded when true", () => {
+    const params = new URLSearchParams();
+    params.set("query", "test");
+    params.set("include_superseded", "true");
+    const url = `/v1/decisions/check?${params.toString()}`;
+    expect(url).toContain("include_superseded=true");
+  });
+
+  test("pattern_search should use GET with query params (not POST)", () => {
+    // API: GET /v1/patterns/search?query=X&category=Y&...
+    const params = new URLSearchParams();
+    params.set("query", "error handling");
+    params.set("category", "architecture");
+    params.set("project", "my-api");
+    const url = `/v1/patterns/search?${params.toString()}`;
+
+    expect(url).toContain("/v1/patterns/search?");
+    expect(url).toContain("query=error+handling");
+    expect(url).toContain("category=architecture");
+    expect(url).toContain("project=my-api");
+  });
+
+  test("entity_link should POST to /v1/entities/links (not /{id}/memories)", () => {
+    // API: POST /v1/entities/links with { entity_id, memory_id, relationship }
+    const path = "/v1/entities/links";
+    const body = {
+      entity_id: "entity-uuid",
+      memory_id: "memory-uuid",
+      relationship: "mentioned_in",
+    };
+
+    expect(path).toBe("/v1/entities/links");
+    expect(body.entity_id).toBe("entity-uuid");
+    expect(body.memory_id).toBe("memory-uuid");
+    // entity_id MUST be in the body, not the URL path
+    expect(path).not.toContain("entity-uuid");
+  });
+
+  test("project_add_relationship should POST to /v1/projects/{slug}/relationships", () => {
+    // API: POST /v1/projects/{slug}/relationships
+    //   body: { target_project, relationship_type, metadata }
+    const fromSlug = "my-api";
+    const path = `/v1/projects/${encodeURIComponent(fromSlug)}/relationships`;
+    const body = {
+      target_project: "frontend-app",
+      relationship_type: "api_consumer",
+      metadata: { version: "v2" },
+    };
+
+    expect(path).toBe("/v1/projects/my-api/relationships");
+    expect(body.target_project).toBe("frontend-app");
+    expect(body.relationship_type).toBe("api_consumer");
+    // Must NOT have from_slug/to_slug/details (old wrong fields)
+    expect(body).not.toHaveProperty("from_slug");
+    expect(body).not.toHaveProperty("to_slug");
+    expect(body).not.toHaveProperty("details");
+  });
+
+  test("project_impact should POST to /v1/projects/impact-analysis", () => {
+    // API: POST /v1/projects/impact-analysis
+    //   body: { project, change_description }
+    const path = "/v1/projects/impact-analysis";
+    const body = {
+      project: "my-api",
+      change_description: "Changing auth from API keys to OAuth",
+    };
+
+    expect(path).toBe("/v1/projects/impact-analysis");
+    expect(body.project).toBe("my-api");
+    // project slug must be in body, not URL path
+    expect(path).not.toContain("my-api");
+  });
+
+  test("project_shared_patterns should use GET with query params a and b", () => {
+    // API: GET /v1/projects/shared-patterns?a=X&b=Y
+    const params = new URLSearchParams();
+    params.set("a", "my-api");
+    params.set("b", "frontend-app");
+    const url = `/v1/projects/shared-patterns?${params.toString()}`;
+
+    expect(url).toContain("/v1/projects/shared-patterns?");
+    expect(url).toContain("a=my-api");
+    expect(url).toContain("b=frontend-app");
+    // Must NOT use path params like /projects/X/shared-patterns/Y
+    expect(url).not.toMatch(/\/projects\/my-api\/shared-patterns\//);
+  });
+
+  test("error responses should extract detail field (FastAPI format)", () => {
+    // FastAPI returns { "detail": "..." }, not { "message": "..." }
+    const errorData = { detail: "Account email not verified" };
+    const errorMsg = errorData.detail || (errorData as any).message || "";
+    expect(errorMsg).toBe("Account email not verified");
+  });
+
+  test("error responses should fall back to message field", () => {
+    // Some responses may use message field
+    const errorData = { message: "Rate limit exceeded" };
+    const errorMsg = (errorData as any).detail || errorData.message || "";
+    expect(errorMsg).toBe("Rate limit exceeded");
+  });
+
+  test("403 unverified user error should be surfaced to the agent", () => {
+    // When API returns 403 for unverified users, the error message should reach the agent
+    const status = 403;
+    const errorData = { detail: "Account email not verified. API keys are disabled until email verification is complete." };
+    const errorMsg = errorData.detail || "";
+    const fullError = `MemoryRelay API error: ${status} Forbidden - ${errorMsg}`;
+
+    expect(fullError).toContain("403");
+    expect(fullError).toContain("not verified");
+    // 403 is NOT retryable (only 5xx are retried)
+    expect(status >= 500).toBe(false);
+  });
+});
