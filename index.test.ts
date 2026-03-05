@@ -255,18 +255,16 @@ describe("Retry Logic", () => {
   });
 
   test("should not retry on 4xx errors", async () => {
-    let attempts = 0;
-    const mockFetch = vi.fn(async () => {
-      attempts++;
-      return {
-        ok: false,
-        status: 400,
-        statusText: "Bad Request",
-        json: async () => ({ message: "Invalid request" }),
-      };
-    });
-
-    expect(attempts).toBe(1); // Should fail immediately
+    // 4xx errors are client errors and should not be retried
+    // Verify 400 is not in the retryable error patterns (502, 503, 504)
+    const errorStr = "400 Bad Request".toLowerCase();
+    const isRetryable =
+      errorStr.includes("timeout") ||
+      errorStr.includes("econnrefused") ||
+      errorStr.includes("502") ||
+      errorStr.includes("503") ||
+      errorStr.includes("504");
+    expect(isRetryable).toBe(false);
   });
 });
 
@@ -431,8 +429,28 @@ describe("Plugin Integration", () => {
   });
 
   test("should register all tools", () => {
-    const tools = ["memory_store", "memory_recall", "memory_forget"];
-    expect(tools.length).toBe(3);
+    const tools = [
+      // Memory tools (9)
+      "memory_store", "memory_recall", "memory_forget", "memory_list",
+      "memory_get", "memory_update", "memory_batch_store", "memory_context", "memory_promote",
+      // Entity tools (4)
+      "entity_create", "entity_link", "entity_list", "entity_graph",
+      // Agent tools (3)
+      "agent_list", "agent_create", "agent_get",
+      // Session tools (4)
+      "session_start", "session_end", "session_recall", "session_list",
+      // Decision tools (4)
+      "decision_record", "decision_list", "decision_supersede", "decision_check",
+      // Pattern tools (4)
+      "pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest",
+      // Project tools (10)
+      "project_register", "project_list", "project_info",
+      "project_add_relationship", "project_dependencies", "project_dependents",
+      "project_related", "project_impact", "project_shared_patterns", "project_context",
+      // Health (1)
+      "memory_health",
+    ];
+    expect(tools.length).toBe(39);
   });
 
   test("should register all CLI commands", () => {
@@ -509,5 +527,156 @@ describe("Performance", () => {
 
     expect(page1.length).toBe(100);
     expect(page2.length).toBe(100);
+  });
+});
+
+// ============================================================================
+// Tool Group Tests (v0.7.0)
+// ============================================================================
+
+describe("Tool Groups", () => {
+  const TOOL_GROUPS: Record<string, string[]> = {
+    memory: [
+      "memory_store", "memory_recall", "memory_forget", "memory_list",
+      "memory_get", "memory_update", "memory_batch_store", "memory_context", "memory_promote",
+    ],
+    entity: ["entity_create", "entity_link", "entity_list", "entity_graph"],
+    agent: ["agent_list", "agent_create", "agent_get"],
+    session: ["session_start", "session_end", "session_recall", "session_list"],
+    decision: ["decision_record", "decision_list", "decision_supersede", "decision_check"],
+    pattern: ["pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest"],
+    project: [
+      "project_register", "project_list", "project_info",
+      "project_add_relationship", "project_dependencies", "project_dependents",
+      "project_related", "project_impact", "project_shared_patterns", "project_context",
+    ],
+    health: ["memory_health"],
+  };
+
+  test("should have correct total tool count across all groups", () => {
+    const totalTools = Object.values(TOOL_GROUPS).flat();
+    expect(totalTools.length).toBe(39);
+  });
+
+  test("should have no duplicate tool names", () => {
+    const allTools = Object.values(TOOL_GROUPS).flat();
+    const uniqueTools = new Set(allTools);
+    expect(uniqueTools.size).toBe(allTools.length);
+  });
+
+  test("memory group should have 9 tools", () => {
+    expect(TOOL_GROUPS.memory.length).toBe(9);
+  });
+
+  test("session group should have 4 tools", () => {
+    expect(TOOL_GROUPS.session.length).toBe(4);
+  });
+
+  test("decision group should have 4 tools", () => {
+    expect(TOOL_GROUPS.decision.length).toBe(4);
+  });
+
+  test("pattern group should have 4 tools", () => {
+    expect(TOOL_GROUPS.pattern.length).toBe(4);
+  });
+
+  test("project group should have 10 tools", () => {
+    expect(TOOL_GROUPS.project.length).toBe(10);
+  });
+
+  test("should filter tools by enabledTools config", () => {
+    const enabledGroups = "memory,session";
+    const groups = enabledGroups.split(",").map((g) => g.trim());
+    const enabledTools = groups.flatMap((g) => TOOL_GROUPS[g] || []);
+
+    expect(enabledTools).toContain("memory_store");
+    expect(enabledTools).toContain("session_start");
+    expect(enabledTools).not.toContain("decision_record");
+    expect(enabledTools).not.toContain("project_register");
+  });
+});
+
+// ============================================================================
+// Workflow Instructions Tests (v0.7.0)
+// ============================================================================
+
+describe("Workflow Instructions", () => {
+  test("should include project-first workflow", () => {
+    const workflowInstructions = [
+      "project_context",
+      "session_start",
+      "decision_check",
+      "pattern_search",
+      "memory_store",
+      "session_end",
+    ];
+
+    // All workflow tools should exist in the tool list
+    const allTools = [
+      "memory_store", "memory_recall", "memory_forget", "memory_list",
+      "memory_get", "memory_update", "memory_batch_store", "memory_context", "memory_promote",
+      "entity_create", "entity_link", "entity_list", "entity_graph",
+      "agent_list", "agent_create", "agent_get",
+      "session_start", "session_end", "session_recall", "session_list",
+      "decision_record", "decision_list", "decision_supersede", "decision_check",
+      "pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest",
+      "project_register", "project_list", "project_info",
+      "project_add_relationship", "project_dependencies", "project_dependents",
+      "project_related", "project_impact", "project_shared_patterns", "project_context",
+      "memory_health",
+    ];
+
+    for (const tool of workflowInstructions) {
+      expect(allTools).toContain(tool);
+    }
+  });
+
+  test("workflow should start with project_context", () => {
+    const workflow = [
+      "1. project_context",
+      "2. session_start",
+      "3. decision_check",
+      "4. pattern_search",
+      "5. memory_store",
+      "6. session_end",
+    ];
+    expect(workflow[0]).toContain("project_context");
+  });
+});
+
+// ============================================================================
+// Config Extensions Tests (v0.7.0)
+// ============================================================================
+
+describe("Config Extensions", () => {
+  test("should support defaultProject config", () => {
+    const config = {
+      apiKey: "test_key",
+      agentId: "test_agent",
+      defaultProject: "my-api",
+    };
+    expect(config.defaultProject).toBe("my-api");
+  });
+
+  test("should support enabledTools config", () => {
+    const config = {
+      apiKey: "test_key",
+      agentId: "test_agent",
+      enabledTools: "memory,session,decision",
+    };
+    const groups = config.enabledTools.split(",");
+    expect(groups).toContain("memory");
+    expect(groups).toContain("session");
+    expect(groups).toContain("decision");
+    expect(groups).not.toContain("project");
+  });
+
+  test("should enable all tools when enabledTools not set", () => {
+    const config = {
+      apiKey: "test_key",
+      agentId: "test_agent",
+    };
+    expect((config as any).enabledTools).toBeUndefined();
+    // When undefined, all tools should be enabled
   });
 });

@@ -1,14 +1,18 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.6.0 (Enhanced)
+ * Version: 0.7.0 (Full Suite)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
+ * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.io
  *
- * ENHANCEMENTS (v0.6.0):
+ * ENHANCEMENTS (v0.7.0):
+ * - 39 tools covering all MemoryRelay API resources
+ * - Session tracking, decision logging, pattern management, project context
+ * - Agent workflow instructions injected via before_agent_start
  * - Retry logic with exponential backoff (3 attempts)
  * - Request timeout (30 seconds)
  * - Environment variable fallback support
@@ -33,14 +37,16 @@ const INITIAL_RETRY_DELAY_MS = 1000; // 1 second
 // ============================================================================
 
 interface MemoryRelayConfig {
-  apiKey?: string; // Optional now (can use env var)
-  agentId?: string; // Optional now (can use env var)
+  apiKey?: string;
+  agentId?: string;
   apiUrl?: string;
   autoCapture?: boolean;
   autoRecall?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
-  excludeChannels?: string[]; // NEW: Channels to skip auto-recall
+  excludeChannels?: string[];
+  defaultProject?: string;
+  enabledTools?: string;
 }
 
 interface Memory {
@@ -120,7 +126,7 @@ async function fetchWithTimeout(
 }
 
 // ============================================================================
-// MemoryRelay API Client (Enhanced)
+// MemoryRelay API Client (Full Suite)
 // ============================================================================
 
 class MemoryRelayClient {
@@ -149,7 +155,7 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.6.0",
+            "User-Agent": "openclaw-memory-memoryrelay/0.7.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -186,11 +192,26 @@ class MemoryRelayClient {
     }
   }
 
-  async store(content: string, metadata?: Record<string, string>): Promise<Memory> {
+  // --------------------------------------------------------------------------
+  // Memory operations
+  // --------------------------------------------------------------------------
+
+  async store(
+    content: string,
+    metadata?: Record<string, string>,
+    options?: {
+      deduplicate?: boolean;
+      dedup_threshold?: number;
+      project?: string;
+      importance?: number;
+      tier?: string;
+    },
+  ): Promise<Memory> {
     return this.request<Memory>("POST", "/v1/memories", {
       content,
       metadata,
       agent_id: this.agentId,
+      ...options,
     });
   }
 
@@ -198,6 +219,15 @@ class MemoryRelayClient {
     query: string,
     limit: number = 5,
     threshold: number = 0.3,
+    options?: {
+      include_confidential?: boolean;
+      include_archived?: boolean;
+      compress?: boolean;
+      max_context_tokens?: number;
+      project?: string;
+      tier?: string;
+      min_importance?: number;
+    },
   ): Promise<SearchResult[]> {
     const response = await this.request<{ data: SearchResult[] }>(
       "POST",
@@ -207,6 +237,7 @@ class MemoryRelayClient {
         limit,
         threshold,
         agent_id: this.agentId,
+        ...options,
       },
     );
     return response.data || [];
@@ -215,7 +246,7 @@ class MemoryRelayClient {
   async list(limit: number = 20, offset: number = 0): Promise<Memory[]> {
     const response = await this.request<{ data: Memory[] }>(
       "GET",
-      `/v1/memories/memories?limit=${limit}&offset=${offset}`,
+      `/v1/memories?limit=${limit}&offset=${offset}`,
     );
     return response.data || [];
   }
@@ -224,9 +255,348 @@ class MemoryRelayClient {
     return this.request<Memory>("GET", `/v1/memories/${id}`);
   }
 
+  async update(id: string, content: string, metadata?: Record<string, string>): Promise<Memory> {
+    return this.request<Memory>("PUT", `/v1/memories/${id}`, {
+      content,
+      metadata,
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.request<void>("DELETE", `/v1/memories/${id}`);
   }
+
+  async batchStore(
+    memories: Array<{ content: string; metadata?: Record<string, string> }>,
+  ): Promise<any> {
+    return this.request("POST", "/v1/memories/batch", {
+      memories,
+      agent_id: this.agentId,
+    });
+  }
+
+  async buildContext(
+    query: string,
+    limit?: number,
+    threshold?: number,
+    maxTokens?: number,
+  ): Promise<any> {
+    return this.request("POST", "/v1/memories/context", {
+      query,
+      limit,
+      threshold,
+      max_tokens: maxTokens,
+      agent_id: this.agentId,
+    });
+  }
+
+  async promote(memoryId: string, importance: number, tier?: string): Promise<any> {
+    return this.request("PUT", `/v1/memories/${memoryId}/importance`, {
+      importance,
+      tier,
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Entity operations
+  // --------------------------------------------------------------------------
+
+  async createEntity(
+    name: string,
+    type: string,
+    metadata?: Record<string, string>,
+  ): Promise<any> {
+    return this.request("POST", "/v1/entities", {
+      name,
+      type,
+      metadata,
+      agent_id: this.agentId,
+    });
+  }
+
+  async linkEntity(
+    entityId: string,
+    memoryId: string,
+    relationship?: string,
+  ): Promise<any> {
+    return this.request("POST", `/v1/entities/${entityId}/memories`, {
+      memory_id: memoryId,
+      relationship,
+    });
+  }
+
+  async listEntities(limit: number = 20, offset: number = 0): Promise<any> {
+    return this.request("GET", `/v1/entities?limit=${limit}&offset=${offset}`);
+  }
+
+  async entityGraph(
+    entityId: string,
+    depth: number = 2,
+    maxNeighbors: number = 10,
+  ): Promise<any> {
+    return this.request(
+      "GET",
+      `/v1/entities/${entityId}/neighborhood?depth=${depth}&max_neighbors=${maxNeighbors}`,
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Agent operations
+  // --------------------------------------------------------------------------
+
+  async listAgents(limit: number = 20): Promise<any> {
+    return this.request("GET", `/v1/agents?limit=${limit}`);
+  }
+
+  async createAgent(name: string, description?: string): Promise<any> {
+    return this.request("POST", "/v1/agents", { name, description });
+  }
+
+  async getAgent(id: string): Promise<any> {
+    return this.request("GET", `/v1/agents/${id}`);
+  }
+
+  // --------------------------------------------------------------------------
+  // Session operations
+  // --------------------------------------------------------------------------
+
+  async startSession(
+    title?: string,
+    project?: string,
+    metadata?: Record<string, string>,
+  ): Promise<any> {
+    return this.request("POST", "/v1/sessions", {
+      title,
+      project,
+      metadata,
+      agent_id: this.agentId,
+    });
+  }
+
+  async endSession(id: string, summary?: string): Promise<any> {
+    return this.request("PUT", `/v1/sessions/${id}/end`, { summary });
+  }
+
+  async getSession(id: string): Promise<any> {
+    return this.request("GET", `/v1/sessions/${id}`);
+  }
+
+  async listSessions(
+    limit: number = 20,
+    project?: string,
+    status?: string,
+  ): Promise<any> {
+    let path = `/v1/sessions?limit=${limit}`;
+    if (project) path += `&project=${encodeURIComponent(project)}`;
+    if (status) path += `&status=${encodeURIComponent(status)}`;
+    return this.request("GET", path);
+  }
+
+  // --------------------------------------------------------------------------
+  // Decision operations
+  // --------------------------------------------------------------------------
+
+  async recordDecision(
+    title: string,
+    rationale: string,
+    alternatives?: string,
+    project?: string,
+    tags?: string[],
+    status?: string,
+  ): Promise<any> {
+    return this.request("POST", "/v1/decisions", {
+      title,
+      rationale,
+      alternatives,
+      project_slug: project,
+      tags,
+      status,
+      agent_id: this.agentId,
+    });
+  }
+
+  async listDecisions(
+    limit: number = 20,
+    project?: string,
+    status?: string,
+    tags?: string,
+  ): Promise<any> {
+    let path = `/v1/decisions?limit=${limit}`;
+    if (project) path += `&project=${encodeURIComponent(project)}`;
+    if (status) path += `&status=${encodeURIComponent(status)}`;
+    if (tags) path += `&tags=${encodeURIComponent(tags)}`;
+    return this.request("GET", path);
+  }
+
+  async supersedeDecision(
+    id: string,
+    title: string,
+    rationale: string,
+    alternatives?: string,
+    tags?: string[],
+  ): Promise<any> {
+    return this.request("POST", `/v1/decisions/${id}/supersede`, {
+      title,
+      rationale,
+      alternatives,
+      tags,
+    });
+  }
+
+  async checkDecisions(
+    query: string,
+    project?: string,
+    limit?: number,
+    threshold?: number,
+    includeSuperseded?: boolean,
+  ): Promise<any> {
+    return this.request("POST", "/v1/decisions/check", {
+      query,
+      project,
+      limit,
+      threshold,
+      include_superseded: includeSuperseded,
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Pattern operations
+  // --------------------------------------------------------------------------
+
+  async createPattern(
+    title: string,
+    description: string,
+    category?: string,
+    exampleCode?: string,
+    scope?: string,
+    tags?: string[],
+    sourceProject?: string,
+  ): Promise<any> {
+    return this.request("POST", "/v1/patterns", {
+      title,
+      description,
+      category,
+      example_code: exampleCode,
+      scope,
+      tags,
+      source_project: sourceProject,
+    });
+  }
+
+  async searchPatterns(
+    query: string,
+    category?: string,
+    project?: string,
+    limit?: number,
+    threshold?: number,
+  ): Promise<any> {
+    return this.request("POST", "/v1/patterns/search", {
+      query,
+      category,
+      project,
+      limit,
+      threshold,
+    });
+  }
+
+  async adoptPattern(id: string, project: string): Promise<any> {
+    return this.request("POST", `/v1/patterns/${id}/adopt`, { project });
+  }
+
+  async suggestPatterns(project: string, limit?: number): Promise<any> {
+    let path = `/v1/patterns/suggest?project=${encodeURIComponent(project)}`;
+    if (limit) path += `&limit=${limit}`;
+    return this.request("GET", path);
+  }
+
+  // --------------------------------------------------------------------------
+  // Project operations
+  // --------------------------------------------------------------------------
+
+  async registerProject(
+    slug: string,
+    name: string,
+    description?: string,
+    stack?: Record<string, unknown>,
+    repoUrl?: string,
+  ): Promise<any> {
+    return this.request("POST", "/v1/projects", {
+      slug,
+      name,
+      description,
+      stack,
+      repo_url: repoUrl,
+    });
+  }
+
+  async listProjects(limit: number = 20): Promise<any> {
+    return this.request("GET", `/v1/projects?limit=${limit}`);
+  }
+
+  async getProject(slug: string): Promise<any> {
+    return this.request("GET", `/v1/projects/${encodeURIComponent(slug)}`);
+  }
+
+  async addProjectRelationship(
+    from: string,
+    to: string,
+    type: string,
+    details?: Record<string, unknown>,
+  ): Promise<any> {
+    return this.request("POST", "/v1/projects/relationships", {
+      from_slug: from,
+      to_slug: to,
+      relationship_type: type,
+      details,
+    });
+  }
+
+  async getProjectDependencies(project: string): Promise<any> {
+    return this.request(
+      "GET",
+      `/v1/projects/${encodeURIComponent(project)}/dependencies`,
+    );
+  }
+
+  async getProjectDependents(project: string): Promise<any> {
+    return this.request(
+      "GET",
+      `/v1/projects/${encodeURIComponent(project)}/dependents`,
+    );
+  }
+
+  async getProjectRelated(project: string): Promise<any> {
+    return this.request(
+      "GET",
+      `/v1/projects/${encodeURIComponent(project)}/related`,
+    );
+  }
+
+  async projectImpact(project: string, changeDescription: string): Promise<any> {
+    return this.request(
+      "POST",
+      `/v1/projects/${encodeURIComponent(project)}/impact`,
+      { change_description: changeDescription },
+    );
+  }
+
+  async getSharedPatterns(projectA: string, projectB: string): Promise<any> {
+    return this.request(
+      "GET",
+      `/v1/projects/${encodeURIComponent(projectA)}/shared-patterns/${encodeURIComponent(projectB)}`,
+    );
+  }
+
+  async getProjectContext(project: string): Promise<any> {
+    return this.request(
+      "GET",
+      `/v1/projects/${encodeURIComponent(project)}/context`,
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Health & stats
+  // --------------------------------------------------------------------------
 
   async health(): Promise<{ status: string }> {
     return this.request<{ status: string }>("GET", "/v1/health");
@@ -256,7 +626,7 @@ class MemoryRelayClient {
       if (batch.length === 0) break;
       allMemories.push(...batch);
       offset += limit;
-      if (batch.length < limit) break; // Last page
+      if (batch.length < limit) break;
     }
 
     return allMemories;
@@ -291,7 +661,7 @@ function shouldCapture(text: string): boolean {
 export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
 
-  // NEW: Fall back to environment variables
+  // Fall back to environment variables
   const apiKey = cfg?.apiKey || process.env.MEMORYRELAY_API_KEY;
   const agentId = cfg?.agentId || process.env.MEMORYRELAY_AGENT_ID || api.agentName;
 
@@ -317,6 +687,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   const apiUrl = cfg?.apiUrl || process.env.MEMORYRELAY_API_URL || DEFAULT_API_URL;
+  const defaultProject = cfg?.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
   const client = new MemoryRelayClient(apiKey, agentId, apiUrl);
 
   // Verify connection on startup (with timeout)
@@ -374,204 +745,2086 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // ========================================================================
-  // Tools (using JSON Schema directly)
+  // Helper to check if a tool is enabled
   // ========================================================================
 
-  // memory_store tool
-  api.registerTool(
-    {
-      name: "memory_store",
-      description:
-        "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations.",
-      parameters: {
-        type: "object",
-        properties: {
-          content: {
-            type: "string",
-            description: "The memory content to store. Be specific and include relevant context.",
-          },
-          metadata: {
-            type: "object",
-            description: "Optional key-value metadata to attach to the memory",
-            additionalProperties: { type: "string" },
-          },
-        },
-        required: ["content"],
-      },
-      execute: async (_id, { content, metadata }: { content: string; metadata?: Record<string, string> }) => {
-        try {
-          const memory = await client.store(content, metadata);
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Memory stored successfully (id: ${memory.id.slice(0, 8)}...)`,
-              },
-            ],
-            details: { id: memory.id, stored: true },
-          };
-        } catch (err) {
-          return {
-            content: [{ type: "text", text: `Failed to store memory: ${String(err)}` }],
-            details: { error: String(err) },
-          };
-        }
-      },
-    },
-    { name: "memory_store" },
-  );
+  const enabledSet = cfg?.enabledTools
+    ? new Set(cfg.enabledTools.split(",").map((s) => s.trim()))
+    : null;
 
-  // memory_recall tool (semantic search)
-  api.registerTool(
-    {
-      name: "memory_recall",
-      description:
-        "Search memories using natural language. Returns the most relevant memories based on semantic similarity.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "Natural language search query",
-          },
-          limit: {
-            type: "number",
-            description: "Maximum results (1-20)",
-            minimum: 1,
-            maximum: 20,
-            default: 5,
-          },
-        },
-        required: ["query"],
-      },
-      execute: async (_id, { query, limit = 5 }: { query: string; limit?: number }) => {
-        try {
-          const results = await client.search(query, limit, cfg?.recallThreshold || 0.3);
+  function isToolEnabled(name: string): boolean {
+    if (!enabledSet) return true;
+    return enabledSet.has(name);
+  }
 
-          if (results.length === 0) {
-            return {
-              content: [{ type: "text", text: "No relevant memories found." }],
-              details: { count: 0 },
-            };
-          }
+  // ========================================================================
+  // Tools (39 total)
+  // ========================================================================
 
-          const formatted = results
-            .map(
-              (r) =>
-                `- [${r.score.toFixed(2)}] ${r.memory.content.slice(0, 200)}${
-                  r.memory.content.length > 200 ? "..." : ""
-                }`,
-            )
-            .join("\n");
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Found ${results.length} relevant memories:\n${formatted}`,
-              },
-            ],
-            details: {
-              count: results.length,
-              memories: results.map((r) => ({
-                id: r.memory.id,
-                content: r.memory.content,
-                score: r.score,
-              })),
+  // --------------------------------------------------------------------------
+  // 1. memory_store
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_store")) {
+    api.registerTool(
+      {
+        name: "memory_store",
+        description:
+          "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations.",
+        parameters: {
+          type: "object",
+          properties: {
+            content: {
+              type: "string",
+              description: "The memory content to store. Be specific and include relevant context.",
             },
-          };
-        } catch (err) {
-          return {
-            content: [{ type: "text", text: `Search failed: ${String(err)}` }],
-            details: { error: String(err) },
-          };
-        }
-      },
-    },
-    { name: "memory_recall" },
-  );
-
-  // memory_forget tool
-  api.registerTool(
-    {
-      name: "memory_forget",
-      description: "Delete a memory by ID or search for memories to forget.",
-      parameters: {
-        type: "object",
-        properties: {
-          memoryId: {
-            type: "string",
-            description: "Memory ID to delete",
+            metadata: {
+              type: "object",
+              description: "Optional key-value metadata to attach to the memory",
+              additionalProperties: { type: "string" },
+            },
+            deduplicate: {
+              type: "boolean",
+              description: "If true, check for duplicate memories before storing. Default false.",
+            },
+            dedup_threshold: {
+              type: "number",
+              description: "Similarity threshold for deduplication (0-1). Default 0.9.",
+            },
+            project: {
+              type: "string",
+              description: "Project slug to associate with this memory.",
+            },
+            importance: {
+              type: "number",
+              description: "Importance score (0-1). Higher values are retained longer.",
+            },
+            tier: {
+              type: "string",
+              description: "Memory tier: hot, warm, or cold.",
+              enum: ["hot", "warm", "cold"],
+            },
           },
-          query: {
-            type: "string",
-            description: "Search query to find memory",
-          },
+          required: ["content"],
         },
-      },
-      execute: async (_id, { memoryId, query }: { memoryId?: string; query?: string }) => {
-        if (memoryId) {
+        execute: async (
+          _id,
+          args: {
+            content: string;
+            metadata?: Record<string, string>;
+            deduplicate?: boolean;
+            dedup_threshold?: number;
+            project?: string;
+            importance?: number;
+            tier?: string;
+          },
+        ) => {
           try {
-            await client.delete(memoryId);
+            const { content, metadata, ...opts } = args;
+            if (!opts.project && defaultProject) opts.project = defaultProject;
+            const memory = await client.store(content, metadata, opts);
             return {
-              content: [{ type: "text", text: `Memory ${memoryId.slice(0, 8)}... deleted.` }],
-              details: { action: "deleted", id: memoryId },
+              content: [
+                {
+                  type: "text",
+                  text: `Memory stored successfully (id: ${memory.id.slice(0, 8)}...)`,
+                },
+              ],
+              details: { id: memory.id, stored: true },
             };
           } catch (err) {
             return {
-              content: [{ type: "text", text: `Delete failed: ${String(err)}` }],
+              content: [{ type: "text", text: `Failed to store memory: ${String(err)}` }],
               details: { error: String(err) },
             };
           }
-        }
+        },
+      },
+      { name: "memory_store" },
+    );
+  }
 
-        if (query) {
-          const results = await client.search(query, 5, 0.5);
+  // --------------------------------------------------------------------------
+  // 2. memory_recall
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_recall")) {
+    api.registerTool(
+      {
+        name: "memory_recall",
+        description:
+          "Search memories using natural language. Returns the most relevant memories based on semantic similarity.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Natural language search query",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum results (1-50). Default 5.",
+              minimum: 1,
+              maximum: 50,
+            },
+            threshold: {
+              type: "number",
+              description: "Minimum similarity threshold (0-1). Default 0.3.",
+            },
+            project: {
+              type: "string",
+              description: "Filter by project slug.",
+            },
+            tier: {
+              type: "string",
+              description: "Filter by memory tier: hot, warm, or cold.",
+              enum: ["hot", "warm", "cold"],
+            },
+            min_importance: {
+              type: "number",
+              description: "Minimum importance score filter (0-1).",
+            },
+            compress: {
+              type: "boolean",
+              description: "If true, compress results for token efficiency.",
+            },
+          },
+          required: ["query"],
+        },
+        execute: async (
+          _id,
+          args: {
+            query: string;
+            limit?: number;
+            threshold?: number;
+            project?: string;
+            tier?: string;
+            min_importance?: number;
+            compress?: boolean;
+          },
+        ) => {
+          try {
+            const {
+              query,
+              limit = 5,
+              threshold,
+              project,
+              tier,
+              min_importance,
+              compress,
+            } = args;
+            const searchThreshold = threshold ?? cfg?.recallThreshold ?? 0.3;
+            const searchProject = project ?? defaultProject;
+            const results = await client.search(query, limit, searchThreshold, {
+              project: searchProject,
+              tier,
+              min_importance,
+              compress,
+            });
 
-          if (results.length === 0) {
-            return {
-              content: [{ type: "text", text: "No matching memories found." }],
-              details: { count: 0 },
-            };
-          }
+            if (results.length === 0) {
+              return {
+                content: [{ type: "text", text: "No relevant memories found." }],
+                details: { count: 0 },
+              };
+            }
 
-          // If single high-confidence match, delete it
-          if (results.length === 1 && results[0].score > 0.9) {
-            await client.delete(results[0].memory.id);
+            const formatted = results
+              .map(
+                (r) =>
+                  `- [${r.score.toFixed(2)}] ${r.memory.content.slice(0, 200)}${
+                    r.memory.content.length > 200 ? "..." : ""
+                  }`,
+              )
+              .join("\n");
+
             return {
               content: [
-                { type: "text", text: `Forgotten: "${results[0].memory.content.slice(0, 60)}..."` },
+                {
+                  type: "text",
+                  text: `Found ${results.length} relevant memories:\n${formatted}`,
+                },
               ],
-              details: { action: "deleted", id: results[0].memory.id },
+              details: {
+                count: results.length,
+                memories: results.map((r) => ({
+                  id: r.memory.id,
+                  content: r.memory.content,
+                  score: r.score,
+                })),
+              },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Search failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_recall" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 3. memory_forget
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_forget")) {
+    api.registerTool(
+      {
+        name: "memory_forget",
+        description: "Delete a memory by ID or search for memories to forget.",
+        parameters: {
+          type: "object",
+          properties: {
+            memoryId: {
+              type: "string",
+              description: "Memory ID to delete",
+            },
+            query: {
+              type: "string",
+              description: "Search query to find memory",
+            },
+          },
+        },
+        execute: async (_id, { memoryId, query }: { memoryId?: string; query?: string }) => {
+          if (memoryId) {
+            try {
+              await client.delete(memoryId);
+              return {
+                content: [{ type: "text", text: `Memory ${memoryId.slice(0, 8)}... deleted.` }],
+                details: { action: "deleted", id: memoryId },
+              };
+            } catch (err) {
+              return {
+                content: [{ type: "text", text: `Delete failed: ${String(err)}` }],
+                details: { error: String(err) },
+              };
+            }
+          }
+
+          if (query) {
+            const results = await client.search(query, 5, 0.5);
+
+            if (results.length === 0) {
+              return {
+                content: [{ type: "text", text: "No matching memories found." }],
+                details: { count: 0 },
+              };
+            }
+
+            // If single high-confidence match, delete it
+            if (results.length === 1 && results[0].score > 0.9) {
+              await client.delete(results[0].memory.id);
+              return {
+                content: [
+                  { type: "text", text: `Forgotten: "${results[0].memory.content.slice(0, 60)}..."` },
+                ],
+                details: { action: "deleted", id: results[0].memory.id },
+              };
+            }
+
+            const list = results
+              .map((r) => `- [${r.memory.id.slice(0, 8)}] ${r.memory.content.slice(0, 60)}...`)
+              .join("\n");
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Found ${results.length} candidates. Specify memoryId:\n${list}`,
+                },
+              ],
+              details: { action: "candidates", count: results.length },
             };
           }
 
-          const list = results
-            .map((r) => `- [${r.memory.id.slice(0, 8)}] ${r.memory.content.slice(0, 60)}...`)
-            .join("\n");
-
           return {
-            content: [
-              {
-                type: "text",
-                text: `Found ${results.length} candidates. Specify memoryId:\n${list}`,
-              },
-            ],
-            details: { action: "candidates", count: results.length },
+            content: [{ type: "text", text: "Provide query or memoryId." }],
+            details: { error: "missing_param" },
           };
-        }
-
-        return {
-          content: [{ type: "text", text: "Provide query or memoryId." }],
-          details: { error: "missing_param" },
-        };
+        },
       },
-    },
-    { name: "memory_forget" },
-  );
+      { name: "memory_forget" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 4. memory_list
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_list")) {
+    api.registerTool(
+      {
+        name: "memory_list",
+        description: "List recent memories chronologically. Use to review what has been remembered.",
+        parameters: {
+          type: "object",
+          properties: {
+            limit: {
+              type: "number",
+              description: "Number of memories to return (1-100). Default 20.",
+              minimum: 1,
+              maximum: 100,
+            },
+            offset: {
+              type: "number",
+              description: "Offset for pagination. Default 0.",
+              minimum: 0,
+            },
+          },
+        },
+        execute: async (_id, args: { limit?: number; offset?: number }) => {
+          try {
+            const memories = await client.list(args.limit ?? 20, args.offset ?? 0);
+            if (memories.length === 0) {
+              return {
+                content: [{ type: "text", text: "No memories found." }],
+                details: { count: 0 },
+              };
+            }
+            const formatted = memories
+              .map((m) => `- [${m.id.slice(0, 8)}] ${m.content.slice(0, 120)}`)
+              .join("\n");
+            return {
+              content: [{ type: "text", text: `${memories.length} memories:\n${formatted}` }],
+              details: { count: memories.length, memories },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to list memories: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_list" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 5. memory_get
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_get")) {
+    api.registerTool(
+      {
+        name: "memory_get",
+        description: "Retrieve a specific memory by its ID.",
+        parameters: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "The memory ID (UUID) to retrieve.",
+            },
+          },
+          required: ["id"],
+        },
+        execute: async (_id, args: { id: string }) => {
+          try {
+            const memory = await client.get(args.id);
+            return {
+              content: [{ type: "text", text: JSON.stringify(memory, null, 2) }],
+              details: { memory },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get memory: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_get" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 6. memory_update
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_update")) {
+    api.registerTool(
+      {
+        name: "memory_update",
+        description: "Update the content of an existing memory. Use to correct or expand stored information.",
+        parameters: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "The memory ID (UUID) to update.",
+            },
+            content: {
+              type: "string",
+              description: "The new content to replace the existing memory.",
+            },
+            metadata: {
+              type: "object",
+              description: "Updated metadata (replaces existing).",
+              additionalProperties: { type: "string" },
+            },
+          },
+          required: ["id", "content"],
+        },
+        execute: async (_id, args: { id: string; content: string; metadata?: Record<string, string> }) => {
+          try {
+            const memory = await client.update(args.id, args.content, args.metadata);
+            return {
+              content: [{ type: "text", text: `Memory ${args.id.slice(0, 8)}... updated.` }],
+              details: { id: memory.id, updated: true },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to update memory: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_update" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 7. memory_batch_store
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_batch_store")) {
+    api.registerTool(
+      {
+        name: "memory_batch_store",
+        description: "Store multiple memories at once. More efficient than individual calls for bulk storage.",
+        parameters: {
+          type: "object",
+          properties: {
+            memories: {
+              type: "array",
+              description: "Array of memories to store.",
+              items: {
+                type: "object",
+                properties: {
+                  content: { type: "string", description: "Memory content." },
+                  metadata: {
+                    type: "object",
+                    description: "Optional metadata.",
+                    additionalProperties: { type: "string" },
+                  },
+                },
+                required: ["content"],
+              },
+            },
+          },
+          required: ["memories"],
+        },
+        execute: async (
+          _id,
+          args: { memories: Array<{ content: string; metadata?: Record<string, string> }> },
+        ) => {
+          try {
+            const result = await client.batchStore(args.memories);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Batch stored ${args.memories.length} memories successfully.`,
+                },
+              ],
+              details: { count: args.memories.length, result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Batch store failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_batch_store" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 8. memory_context
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_context")) {
+    api.registerTool(
+      {
+        name: "memory_context",
+        description:
+          "Build a context window from relevant memories. Optimized for injecting into agent prompts with token budget awareness.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The query to build context around.",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum number of memories to include.",
+            },
+            threshold: {
+              type: "number",
+              description: "Minimum similarity threshold (0-1).",
+            },
+            max_tokens: {
+              type: "number",
+              description: "Maximum token budget for the context.",
+            },
+          },
+          required: ["query"],
+        },
+        execute: async (
+          _id,
+          args: { query: string; limit?: number; threshold?: number; max_tokens?: number },
+        ) => {
+          try {
+            const result = await client.buildContext(
+              args.query,
+              args.limit,
+              args.threshold,
+              args.max_tokens,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Context build failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_context" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 9. memory_promote
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_promote")) {
+    api.registerTool(
+      {
+        name: "memory_promote",
+        description:
+          "Promote a memory by updating its importance score and/or tier. Use to ensure critical memories are retained longer.",
+        parameters: {
+          type: "object",
+          properties: {
+            memory_id: {
+              type: "string",
+              description: "The memory ID to promote.",
+            },
+            importance: {
+              type: "number",
+              description: "New importance score (0-1).",
+              minimum: 0,
+              maximum: 1,
+            },
+            tier: {
+              type: "string",
+              description: "Target tier: hot, warm, or cold.",
+              enum: ["hot", "warm", "cold"],
+            },
+          },
+          required: ["memory_id", "importance"],
+        },
+        execute: async (_id, args: { memory_id: string; importance: number; tier?: string }) => {
+          try {
+            const result = await client.promote(args.memory_id, args.importance, args.tier);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Memory ${args.memory_id.slice(0, 8)}... promoted (importance: ${args.importance}${args.tier ? `, tier: ${args.tier}` : ""}).`,
+                },
+              ],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Promote failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_promote" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 10. entity_create
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("entity_create")) {
+    api.registerTool(
+      {
+        name: "entity_create",
+        description:
+          "Create a named entity (person, place, organization, project, concept) for the knowledge graph. Entities help organize and connect memories.",
+        parameters: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              description: "Entity name (1-200 characters).",
+            },
+            type: {
+              type: "string",
+              description: "Entity type classification.",
+              enum: ["person", "place", "organization", "project", "concept", "other"],
+            },
+            metadata: {
+              type: "object",
+              description: "Optional key-value metadata.",
+              additionalProperties: { type: "string" },
+            },
+          },
+          required: ["name", "type"],
+        },
+        execute: async (
+          _id,
+          args: { name: string; type: string; metadata?: Record<string, string> },
+        ) => {
+          try {
+            const result = await client.createEntity(args.name, args.type, args.metadata);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to create entity: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "entity_create" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 11. entity_link
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("entity_link")) {
+    api.registerTool(
+      {
+        name: "entity_link",
+        description: "Link an entity to a memory to establish relationships in the knowledge graph.",
+        parameters: {
+          type: "object",
+          properties: {
+            entity_id: {
+              type: "string",
+              description: "Entity UUID.",
+            },
+            memory_id: {
+              type: "string",
+              description: "Memory UUID.",
+            },
+            relationship: {
+              type: "string",
+              description:
+                'Relationship type (e.g., "mentioned_in", "created_by", "relates_to"). Default "mentioned_in".',
+            },
+          },
+          required: ["entity_id", "memory_id"],
+        },
+        execute: async (
+          _id,
+          args: { entity_id: string; memory_id: string; relationship?: string },
+        ) => {
+          try {
+            const result = await client.linkEntity(
+              args.entity_id,
+              args.memory_id,
+              args.relationship,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to link entity: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "entity_link" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 12. entity_list
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("entity_list")) {
+    api.registerTool(
+      {
+        name: "entity_list",
+        description: "List entities in the knowledge graph.",
+        parameters: {
+          type: "object",
+          properties: {
+            limit: {
+              type: "number",
+              description: "Maximum entities to return. Default 20.",
+              minimum: 1,
+              maximum: 100,
+            },
+            offset: {
+              type: "number",
+              description: "Offset for pagination. Default 0.",
+              minimum: 0,
+            },
+          },
+        },
+        execute: async (_id, args: { limit?: number; offset?: number }) => {
+          try {
+            const result = await client.listEntities(args.limit, args.offset);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to list entities: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "entity_list" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 13. entity_graph
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("entity_graph")) {
+    api.registerTool(
+      {
+        name: "entity_graph",
+        description:
+          "Explore the knowledge graph around an entity. Returns the entity and its neighborhood of connected entities and memories.",
+        parameters: {
+          type: "object",
+          properties: {
+            entity_id: {
+              type: "string",
+              description: "Entity UUID to explore from.",
+            },
+            depth: {
+              type: "number",
+              description: "How many hops to traverse. Default 2.",
+              minimum: 1,
+              maximum: 5,
+            },
+            max_neighbors: {
+              type: "number",
+              description: "Maximum neighbors per node. Default 10.",
+              minimum: 1,
+              maximum: 50,
+            },
+          },
+          required: ["entity_id"],
+        },
+        execute: async (
+          _id,
+          args: { entity_id: string; depth?: number; max_neighbors?: number },
+        ) => {
+          try {
+            const result = await client.entityGraph(
+              args.entity_id,
+              args.depth,
+              args.max_neighbors,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get entity graph: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "entity_graph" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 14. agent_list
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("agent_list")) {
+    api.registerTool(
+      {
+        name: "agent_list",
+        description: "List available agents.",
+        parameters: {
+          type: "object",
+          properties: {
+            limit: {
+              type: "number",
+              description: "Maximum agents to return. Default 20.",
+              minimum: 1,
+              maximum: 100,
+            },
+          },
+        },
+        execute: async (_id, args: { limit?: number }) => {
+          try {
+            const result = await client.listAgents(args.limit);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to list agents: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_list" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 15. agent_create
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("agent_create")) {
+    api.registerTool(
+      {
+        name: "agent_create",
+        description: "Create a new agent. Agents serve as memory namespaces and isolation boundaries.",
+        parameters: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              description: "Agent name.",
+            },
+            description: {
+              type: "string",
+              description: "Optional agent description.",
+            },
+          },
+          required: ["name"],
+        },
+        execute: async (_id, args: { name: string; description?: string }) => {
+          try {
+            const result = await client.createAgent(args.name, args.description);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to create agent: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_create" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 16. agent_get
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("agent_get")) {
+    api.registerTool(
+      {
+        name: "agent_get",
+        description: "Get details about a specific agent by ID.",
+        parameters: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "Agent UUID.",
+            },
+          },
+          required: ["id"],
+        },
+        execute: async (_id, args: { id: string }) => {
+          try {
+            const result = await client.getAgent(args.id);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get agent: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_get" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 17. session_start
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("session_start")) {
+    api.registerTool(
+      {
+        name: "session_start",
+        description:
+          "Start a new work session. Sessions track the lifecycle of a task or conversation for later review.",
+        parameters: {
+          type: "object",
+          properties: {
+            title: {
+              type: "string",
+              description: "Session title describing the goal or task.",
+            },
+            project: {
+              type: "string",
+              description: "Project slug to associate this session with.",
+            },
+            metadata: {
+              type: "object",
+              description: "Optional key-value metadata.",
+              additionalProperties: { type: "string" },
+            },
+          },
+        },
+        execute: async (
+          _id,
+          args: { title?: string; project?: string; metadata?: Record<string, string> },
+        ) => {
+          try {
+            const project = args.project ?? defaultProject;
+            const result = await client.startSession(args.title, project, args.metadata);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to start session: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "session_start" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 18. session_end
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("session_end")) {
+    api.registerTool(
+      {
+        name: "session_end",
+        description: "End an active session with an optional summary of what was accomplished.",
+        parameters: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "Session ID to end.",
+            },
+            summary: {
+              type: "string",
+              description: "Summary of what was accomplished during this session.",
+            },
+          },
+          required: ["id"],
+        },
+        execute: async (_id, args: { id: string; summary?: string }) => {
+          try {
+            const result = await client.endSession(args.id, args.summary);
+            return {
+              content: [{ type: "text", text: `Session ${args.id.slice(0, 8)}... ended.` }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to end session: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "session_end" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 19. session_recall
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("session_recall")) {
+    api.registerTool(
+      {
+        name: "session_recall",
+        description: "Retrieve details of a specific session including its timeline and associated memories.",
+        parameters: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "Session ID to retrieve.",
+            },
+          },
+          required: ["id"],
+        },
+        execute: async (_id, args: { id: string }) => {
+          try {
+            const result = await client.getSession(args.id);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to recall session: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "session_recall" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 20. session_list
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("session_list")) {
+    api.registerTool(
+      {
+        name: "session_list",
+        description: "List sessions, optionally filtered by project or status.",
+        parameters: {
+          type: "object",
+          properties: {
+            limit: {
+              type: "number",
+              description: "Maximum sessions to return. Default 20.",
+              minimum: 1,
+              maximum: 100,
+            },
+            project: {
+              type: "string",
+              description: "Filter by project slug.",
+            },
+            status: {
+              type: "string",
+              description: "Filter by status (active, ended).",
+              enum: ["active", "ended"],
+            },
+          },
+        },
+        execute: async (
+          _id,
+          args: { limit?: number; project?: string; status?: string },
+        ) => {
+          try {
+            const project = args.project ?? defaultProject;
+            const result = await client.listSessions(args.limit, project, args.status);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to list sessions: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "session_list" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 21. decision_record
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("decision_record")) {
+    api.registerTool(
+      {
+        name: "decision_record",
+        description:
+          "Record an architectural or design decision. Captures the rationale and alternatives considered for future reference.",
+        parameters: {
+          type: "object",
+          properties: {
+            title: {
+              type: "string",
+              description: "Short title summarizing the decision.",
+            },
+            rationale: {
+              type: "string",
+              description: "Why this decision was made. Include context and reasoning.",
+            },
+            alternatives: {
+              type: "string",
+              description: "What alternatives were considered and why they were rejected.",
+            },
+            project: {
+              type: "string",
+              description: "Project slug this decision applies to.",
+            },
+            tags: {
+              type: "array",
+              description: "Tags for categorizing the decision.",
+              items: { type: "string" },
+            },
+            status: {
+              type: "string",
+              description: "Decision status.",
+              enum: ["active", "superseded", "deprecated"],
+            },
+          },
+          required: ["title", "rationale"],
+        },
+        execute: async (
+          _id,
+          args: {
+            title: string;
+            rationale: string;
+            alternatives?: string;
+            project?: string;
+            tags?: string[];
+            status?: string;
+          },
+        ) => {
+          try {
+            const project = args.project ?? defaultProject;
+            const result = await client.recordDecision(
+              args.title,
+              args.rationale,
+              args.alternatives,
+              project,
+              args.tags,
+              args.status,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to record decision: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "decision_record" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 22. decision_list
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("decision_list")) {
+    api.registerTool(
+      {
+        name: "decision_list",
+        description: "List recorded decisions, optionally filtered by project, status, or tags.",
+        parameters: {
+          type: "object",
+          properties: {
+            limit: {
+              type: "number",
+              description: "Maximum decisions to return. Default 20.",
+              minimum: 1,
+              maximum: 100,
+            },
+            project: {
+              type: "string",
+              description: "Filter by project slug.",
+            },
+            status: {
+              type: "string",
+              description: "Filter by status.",
+              enum: ["active", "superseded", "deprecated"],
+            },
+            tags: {
+              type: "string",
+              description: "Comma-separated tags to filter by.",
+            },
+          },
+        },
+        execute: async (
+          _id,
+          args: { limit?: number; project?: string; status?: string; tags?: string },
+        ) => {
+          try {
+            const project = args.project ?? defaultProject;
+            const result = await client.listDecisions(args.limit, project, args.status, args.tags);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to list decisions: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "decision_list" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 23. decision_supersede
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("decision_supersede")) {
+    api.registerTool(
+      {
+        name: "decision_supersede",
+        description:
+          "Supersede an existing decision with a new one. The old decision is marked as superseded and linked to the replacement.",
+        parameters: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "ID of the decision to supersede.",
+            },
+            title: {
+              type: "string",
+              description: "Title of the new replacement decision.",
+            },
+            rationale: {
+              type: "string",
+              description: "Why the previous decision is being replaced.",
+            },
+            alternatives: {
+              type: "string",
+              description: "Alternatives considered for the new decision.",
+            },
+            tags: {
+              type: "array",
+              description: "Tags for the new decision.",
+              items: { type: "string" },
+            },
+          },
+          required: ["id", "title", "rationale"],
+        },
+        execute: async (
+          _id,
+          args: {
+            id: string;
+            title: string;
+            rationale: string;
+            alternatives?: string;
+            tags?: string[];
+          },
+        ) => {
+          try {
+            const result = await client.supersedeDecision(
+              args.id,
+              args.title,
+              args.rationale,
+              args.alternatives,
+              args.tags,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to supersede decision: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "decision_supersede" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 24. decision_check
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("decision_check")) {
+    api.registerTool(
+      {
+        name: "decision_check",
+        description:
+          "Check if there are existing decisions relevant to a topic. Use before making architectural choices to avoid contradicting past decisions.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Natural language description of the topic or decision area.",
+            },
+            project: {
+              type: "string",
+              description: "Project slug to scope the search.",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum results. Default 5.",
+            },
+            threshold: {
+              type: "number",
+              description: "Minimum similarity threshold (0-1). Default 0.3.",
+            },
+            include_superseded: {
+              type: "boolean",
+              description: "Include superseded decisions in results. Default false.",
+            },
+          },
+          required: ["query"],
+        },
+        execute: async (
+          _id,
+          args: {
+            query: string;
+            project?: string;
+            limit?: number;
+            threshold?: number;
+            include_superseded?: boolean;
+          },
+        ) => {
+          try {
+            const project = args.project ?? defaultProject;
+            const result = await client.checkDecisions(
+              args.query,
+              project,
+              args.limit,
+              args.threshold,
+              args.include_superseded,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to check decisions: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "decision_check" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 25. pattern_create
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("pattern_create")) {
+    api.registerTool(
+      {
+        name: "pattern_create",
+        description:
+          "Create a reusable pattern (coding convention, architecture pattern, or best practice) that can be shared across projects.",
+        parameters: {
+          type: "object",
+          properties: {
+            title: {
+              type: "string",
+              description: "Pattern title.",
+            },
+            description: {
+              type: "string",
+              description: "Detailed description of the pattern, when to use it, and why.",
+            },
+            category: {
+              type: "string",
+              description: "Category (e.g., architecture, testing, error-handling, naming).",
+            },
+            example_code: {
+              type: "string",
+              description: "Example code demonstrating the pattern.",
+            },
+            scope: {
+              type: "string",
+              description: "Scope: global, project, or team.",
+              enum: ["global", "project", "team"],
+            },
+            tags: {
+              type: "array",
+              description: "Tags for categorization.",
+              items: { type: "string" },
+            },
+            source_project: {
+              type: "string",
+              description: "Project slug where this pattern originated.",
+            },
+          },
+          required: ["title", "description"],
+        },
+        execute: async (
+          _id,
+          args: {
+            title: string;
+            description: string;
+            category?: string;
+            example_code?: string;
+            scope?: string;
+            tags?: string[];
+            source_project?: string;
+          },
+        ) => {
+          try {
+            const sourceProject = args.source_project ?? defaultProject;
+            const result = await client.createPattern(
+              args.title,
+              args.description,
+              args.category,
+              args.example_code,
+              args.scope,
+              args.tags,
+              sourceProject,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to create pattern: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "pattern_create" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 26. pattern_search
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("pattern_search")) {
+    api.registerTool(
+      {
+        name: "pattern_search",
+        description: "Search for established patterns by natural language query. Use to find conventions before writing code.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Natural language search query.",
+            },
+            category: {
+              type: "string",
+              description: "Filter by category.",
+            },
+            project: {
+              type: "string",
+              description: "Filter by project slug.",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum results. Default 10.",
+            },
+            threshold: {
+              type: "number",
+              description: "Minimum similarity threshold (0-1). Default 0.3.",
+            },
+          },
+          required: ["query"],
+        },
+        execute: async (
+          _id,
+          args: {
+            query: string;
+            category?: string;
+            project?: string;
+            limit?: number;
+            threshold?: number;
+          },
+        ) => {
+          try {
+            const project = args.project ?? defaultProject;
+            const result = await client.searchPatterns(
+              args.query,
+              args.category,
+              project,
+              args.limit,
+              args.threshold,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to search patterns: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "pattern_search" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 27. pattern_adopt
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("pattern_adopt")) {
+    api.registerTool(
+      {
+        name: "pattern_adopt",
+        description: "Adopt an existing pattern for use in a project. Creates a link between the pattern and the project.",
+        parameters: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "Pattern ID to adopt.",
+            },
+            project: {
+              type: "string",
+              description: "Project slug adopting the pattern.",
+            },
+          },
+          required: ["id", "project"],
+        },
+        execute: async (_id, args: { id: string; project: string }) => {
+          try {
+            const result = await client.adoptPattern(args.id, args.project);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to adopt pattern: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "pattern_adopt" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 28. pattern_suggest
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("pattern_suggest")) {
+    api.registerTool(
+      {
+        name: "pattern_suggest",
+        description:
+          "Get pattern suggestions for a project based on its stack and existing patterns from related projects.",
+        parameters: {
+          type: "object",
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug to get suggestions for.",
+            },
+            limit: {
+              type: "number",
+              description: "Maximum suggestions. Default 10.",
+            },
+          },
+          required: ["project"],
+        },
+        execute: async (_id, args: { project: string; limit?: number }) => {
+          try {
+            const result = await client.suggestPatterns(args.project, args.limit);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to suggest patterns: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "pattern_suggest" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 29. project_register
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_register")) {
+    api.registerTool(
+      {
+        name: "project_register",
+        description: "Register a new project in MemoryRelay. Projects organize memories, decisions, patterns, and sessions.",
+        parameters: {
+          type: "object",
+          properties: {
+            slug: {
+              type: "string",
+              description: "URL-friendly project identifier (e.g., 'my-api', 'frontend-app').",
+            },
+            name: {
+              type: "string",
+              description: "Human-readable project name.",
+            },
+            description: {
+              type: "string",
+              description: "Project description.",
+            },
+            stack: {
+              type: "object",
+              description: "Technology stack details (e.g., {language: 'python', framework: 'fastapi'}).",
+            },
+            repo_url: {
+              type: "string",
+              description: "Repository URL.",
+            },
+          },
+          required: ["slug", "name"],
+        },
+        execute: async (
+          _id,
+          args: {
+            slug: string;
+            name: string;
+            description?: string;
+            stack?: Record<string, unknown>;
+            repo_url?: string;
+          },
+        ) => {
+          try {
+            const result = await client.registerProject(
+              args.slug,
+              args.name,
+              args.description,
+              args.stack,
+              args.repo_url,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to register project: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_register" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 30. project_list
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_list")) {
+    api.registerTool(
+      {
+        name: "project_list",
+        description: "List all registered projects.",
+        parameters: {
+          type: "object",
+          properties: {
+            limit: {
+              type: "number",
+              description: "Maximum projects to return. Default 20.",
+              minimum: 1,
+              maximum: 100,
+            },
+          },
+        },
+        execute: async (_id, args: { limit?: number }) => {
+          try {
+            const result = await client.listProjects(args.limit);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to list projects: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_list" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 31. project_info
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_info")) {
+    api.registerTool(
+      {
+        name: "project_info",
+        description: "Get detailed information about a specific project.",
+        parameters: {
+          type: "object",
+          properties: {
+            slug: {
+              type: "string",
+              description: "Project slug.",
+            },
+          },
+          required: ["slug"],
+        },
+        execute: async (_id, args: { slug: string }) => {
+          try {
+            const result = await client.getProject(args.slug);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get project: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_info" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 32. project_add_relationship
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_add_relationship")) {
+    api.registerTool(
+      {
+        name: "project_add_relationship",
+        description:
+          "Add a relationship between two projects (e.g., depends_on, extends, shares_db, deploys_with).",
+        parameters: {
+          type: "object",
+          properties: {
+            from: {
+              type: "string",
+              description: "Source project slug.",
+            },
+            to: {
+              type: "string",
+              description: "Target project slug.",
+            },
+            type: {
+              type: "string",
+              description: "Relationship type (e.g., depends_on, extends, shares_db, deploys_with).",
+            },
+            details: {
+              type: "object",
+              description: "Optional details about the relationship.",
+            },
+          },
+          required: ["from", "to", "type"],
+        },
+        execute: async (
+          _id,
+          args: { from: string; to: string; type: string; details?: Record<string, unknown> },
+        ) => {
+          try {
+            const result = await client.addProjectRelationship(
+              args.from,
+              args.to,
+              args.type,
+              args.details,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to add relationship: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_add_relationship" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 33. project_dependencies
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_dependencies")) {
+    api.registerTool(
+      {
+        name: "project_dependencies",
+        description: "List projects that a given project depends on.",
+        parameters: {
+          type: "object",
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug.",
+            },
+          },
+          required: ["project"],
+        },
+        execute: async (_id, args: { project: string }) => {
+          try {
+            const result = await client.getProjectDependencies(args.project);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get dependencies: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_dependencies" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 34. project_dependents
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_dependents")) {
+    api.registerTool(
+      {
+        name: "project_dependents",
+        description: "List projects that depend on a given project.",
+        parameters: {
+          type: "object",
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug.",
+            },
+          },
+          required: ["project"],
+        },
+        execute: async (_id, args: { project: string }) => {
+          try {
+            const result = await client.getProjectDependents(args.project);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get dependents: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_dependents" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 35. project_related
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_related")) {
+    api.registerTool(
+      {
+        name: "project_related",
+        description: "List all projects related to a given project (any relationship direction).",
+        parameters: {
+          type: "object",
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug.",
+            },
+          },
+          required: ["project"],
+        },
+        execute: async (_id, args: { project: string }) => {
+          try {
+            const result = await client.getProjectRelated(args.project);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get related projects: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_related" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 36. project_impact
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_impact")) {
+    api.registerTool(
+      {
+        name: "project_impact",
+        description:
+          "Analyze the impact of a proposed change on a project and its dependents. Helps understand blast radius before making changes.",
+        parameters: {
+          type: "object",
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug to analyze.",
+            },
+            change_description: {
+              type: "string",
+              description: "Description of the proposed change.",
+            },
+          },
+          required: ["project", "change_description"],
+        },
+        execute: async (_id, args: { project: string; change_description: string }) => {
+          try {
+            const result = await client.projectImpact(args.project, args.change_description);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to analyze impact: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_impact" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 37. project_shared_patterns
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_shared_patterns")) {
+    api.registerTool(
+      {
+        name: "project_shared_patterns",
+        description: "Find patterns shared between two projects. Useful for maintaining consistency across related projects.",
+        parameters: {
+          type: "object",
+          properties: {
+            project_a: {
+              type: "string",
+              description: "First project slug.",
+            },
+            project_b: {
+              type: "string",
+              description: "Second project slug.",
+            },
+          },
+          required: ["project_a", "project_b"],
+        },
+        execute: async (_id, args: { project_a: string; project_b: string }) => {
+          try {
+            const result = await client.getSharedPatterns(args.project_a, args.project_b);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to get shared patterns: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_shared_patterns" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 38. project_context
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("project_context")) {
+    api.registerTool(
+      {
+        name: "project_context",
+        description:
+          "Load full project context including hot-tier memories, active decisions, adopted patterns, and recent sessions. Ideal for starting work on a project.",
+        parameters: {
+          type: "object",
+          properties: {
+            project: {
+              type: "string",
+              description: "Project slug.",
+            },
+          },
+          required: ["project"],
+        },
+        execute: async (_id, args: { project: string }) => {
+          try {
+            const result = await client.getProjectContext(args.project);
+            return {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              details: { result },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Failed to load project context: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "project_context" },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 39. memory_health
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_health")) {
+    api.registerTool(
+      {
+        name: "memory_health",
+        description: "Check the MemoryRelay API connectivity and health status.",
+        parameters: {
+          type: "object",
+          properties: {},
+        },
+        execute: async () => {
+          try {
+            const health = await client.health();
+            return {
+              content: [{ type: "text", text: JSON.stringify(health, null, 2) }],
+              details: { health },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Health check failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_health" },
+    );
+  }
 
   // ========================================================================
-  // CLI Commands (Enhanced)
+  // CLI Commands
   // ========================================================================
 
   api.registerCli(
@@ -680,14 +2933,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // Lifecycle Hooks
   // ========================================================================
 
-  // Auto-recall: inject relevant memories before agent starts
+  // Auto-recall: inject relevant memories and workflow instructions before agent starts
   if (cfg?.autoRecall) {
     api.on("before_agent_start", async (event) => {
       if (!event.prompt || event.prompt.length < 10) {
         return;
       }
 
-      // NEW: Check if current channel is excluded
+      // Check if current channel is excluded
       if (cfg.excludeChannels && event.channel) {
         const channelId = String(event.channel);
         if (cfg.excludeChannels.some((excluded) => channelId.includes(excluded))) {
@@ -705,8 +2958,20 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           cfg.recallThreshold || 0.3,
         );
 
+        const workflowInstructions = [
+          "Recommended MemoryRelay workflow:",
+          "1. Call project_context(project) to load hot-tier memories for context",
+          "2. Call session_start(project, goal) to begin tracking your work",
+          "3. Call decision_check(project, topic) before making architectural choices",
+          "4. Call pattern_search(query) to find established conventions",
+          "5. Work on the task, using memory_store for important findings",
+          "6. Call session_end(session_id, summary) when done",
+        ].join("\n");
+
         if (results.length === 0) {
-          return;
+          return {
+            prependContext: `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`,
+          };
         }
 
         const memoryContext = results.map((r) => `- ${r.memory.content}`).join("\n");
@@ -716,7 +2981,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         );
 
         return {
-          prependContext: `<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`,
+          prependContext:
+            `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>\n\n` +
+            `<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`,
         };
       } catch (err) {
         api.logger.warn?.(`memory-memoryrelay: recall failed: ${String(err)}`);
@@ -780,6 +3047,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin loaded (autoRecall: ${cfg?.autoRecall}, autoCapture: ${cfg?.autoCapture})`,
+    `memory-memoryrelay: plugin v0.7.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${cfg?.autoCapture})`,
   );
 }
