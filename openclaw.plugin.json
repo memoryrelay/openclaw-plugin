@@ -29,7 +29,7 @@
     },
     "enabledTools": {
       "label": "Enabled Tools",
-      "placeholder": "memory,entity,session,decision,pattern,project",
+      "placeholder": "memory,entity,agent,session,decision,pattern,project,health",
       "advanced": true,
       "help": "Comma-separated list of tool groups to enable (default: all)"
     },
@@ -71,7 +71,7 @@
       },
       "enabledTools": {
         "type": "string",
-        "description": "Comma-separated tool groups to enable: memory, entity, agent, session, decision, pattern, project, health (default: all)"
+        "description": "Comma-separated tool groups to enable: memory, entity, agent, session, decision, pattern, project, health, or 'all' (default: all)"
       },
       "autoCapture": {
         "type": "boolean",

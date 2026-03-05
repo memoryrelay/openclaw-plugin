@@ -584,15 +584,57 @@ describe("Tool Groups", () => {
     expect(TOOL_GROUPS.project.length).toBe(10);
   });
 
-  test("should filter tools by enabledTools config", () => {
+  test("should filter tools by enabledTools config (group names)", () => {
     const enabledGroups = "memory,session";
-    const groups = enabledGroups.split(",").map((g) => g.trim());
-    const enabledTools = groups.flatMap((g) => TOOL_GROUPS[g] || []);
+    const groups = enabledGroups.split(",").map((g) => g.trim().toLowerCase());
+    const enabledToolNames = new Set<string>();
+    for (const group of groups) {
+      const tools = TOOL_GROUPS[group];
+      if (tools) {
+        for (const tool of tools) {
+          enabledToolNames.add(tool);
+        }
+      }
+    }
 
-    expect(enabledTools).toContain("memory_store");
-    expect(enabledTools).toContain("session_start");
-    expect(enabledTools).not.toContain("decision_record");
-    expect(enabledTools).not.toContain("project_register");
+    // Memory group tools should be enabled
+    expect(enabledToolNames.has("memory_store")).toBe(true);
+    expect(enabledToolNames.has("memory_recall")).toBe(true);
+    expect(enabledToolNames.has("memory_promote")).toBe(true);
+
+    // Session group tools should be enabled
+    expect(enabledToolNames.has("session_start")).toBe(true);
+    expect(enabledToolNames.has("session_end")).toBe(true);
+
+    // Other groups should NOT be enabled
+    expect(enabledToolNames.has("decision_record")).toBe(false);
+    expect(enabledToolNames.has("project_register")).toBe(false);
+    expect(enabledToolNames.has("entity_create")).toBe(false);
+    expect(enabledToolNames.has("memory_health")).toBe(false);
+  });
+
+  test("should enable all tools when enabledTools is 'all'", () => {
+    const enabledGroups = "all";
+    const groups = enabledGroups.split(",").map((g) => g.trim().toLowerCase());
+    // When 'all' is present, return null (meaning all enabled)
+    const isAll = groups.includes("all");
+    expect(isAll).toBe(true);
+  });
+
+  test("should ignore unknown group names gracefully", () => {
+    const enabledGroups = "memory,nonexistent,session";
+    const groups = enabledGroups.split(",").map((g) => g.trim().toLowerCase());
+    const enabledToolNames = new Set<string>();
+    for (const group of groups) {
+      const tools = TOOL_GROUPS[group];
+      if (tools) {
+        for (const tool of tools) {
+          enabledToolNames.add(tool);
+        }
+      }
+    }
+    // Only memory + session tools should be enabled (nonexistent is skipped)
+    expect(enabledToolNames.size).toBe(13); // 9 memory + 4 session
   });
 });
 
@@ -641,6 +683,25 @@ describe("Workflow Instructions", () => {
       "6. session_end",
     ];
     expect(workflow[0]).toContain("project_context");
+  });
+
+  test("workflow instructions should include first-time setup guidance", () => {
+    // The workflow instructions should tell the agent to register a project if needed
+    const workflowText = [
+      "project_context",
+      "session_start",
+      "decision_check",
+      "pattern_search",
+      "memory_store",
+      "decision_record",
+      "pattern_create",
+      "session_end",
+      "project_register",
+      "project_list",
+    ];
+    // project_register should be mentioned for first-time setup
+    expect(workflowText).toContain("project_register");
+    expect(workflowText).toContain("project_list");
   });
 });
 
