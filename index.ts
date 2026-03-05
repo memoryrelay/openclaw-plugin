@@ -246,7 +246,7 @@ class MemoryRelayClient {
   async list(limit: number = 20, offset: number = 0): Promise<Memory[]> {
     const response = await this.request<{ data: Memory[] }>(
       "GET",
-      `/v1/memories?limit=${limit}&offset=${offset}`,
+      `/v1/memories?limit=${limit}&offset=${offset}&agent_id=${encodeURIComponent(this.agentId)}`,
     );
     return response.data || [];
   }
@@ -280,6 +280,7 @@ class MemoryRelayClient {
     limit?: number,
     threshold?: number,
     maxTokens?: number,
+    project?: string,
   ): Promise<any> {
     return this.request("POST", "/v1/memories/context", {
       query,
@@ -287,6 +288,7 @@ class MemoryRelayClient {
       threshold,
       max_tokens: maxTokens,
       agent_id: this.agentId,
+      project,
     });
   }
 
@@ -802,7 +804,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "memory_store",
         description:
-          "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations.",
+          "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations." +
+          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : "") +
+          " Set deduplicate=true to avoid storing near-duplicate memories.",
         parameters: {
           type: "object",
           properties: {
@@ -884,7 +888,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "memory_recall",
         description:
-          "Search memories using natural language. Returns the most relevant memories based on semantic similarity.",
+          "Search memories using natural language. Returns the most relevant memories based on semantic similarity to the query." +
+          (defaultProject ? ` Results scoped to project '${defaultProject}' by default; pass project explicitly to override or omit to search all.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -1004,7 +1009,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.registerTool(
       {
         name: "memory_forget",
-        description: "Delete a memory by ID or search for memories to forget.",
+        description: "Delete a memory by ID, or search by query to find candidates. Provide memoryId for direct deletion, or query to search first. A single high-confidence match (>0.9) is auto-deleted; otherwise candidates are listed for you to choose.",
         parameters: {
           type: "object",
           properties: {
@@ -1035,7 +1040,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           }
 
           if (query) {
-            const results = await client.search(query, 5, 0.5);
+            const results = await client.search(query, 5, 0.5, { project: defaultProject });
 
             if (results.length === 0) {
               return {
@@ -1087,7 +1092,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.registerTool(
       {
         name: "memory_list",
-        description: "List recent memories chronologically. Use to review what has been remembered.",
+        description: "List recent memories chronologically for this agent. Use to review what has been stored or to find memory IDs for update/delete operations.",
         parameters: {
           type: "object",
           properties: {
@@ -1280,7 +1285,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "memory_context",
         description:
-          "Build a context window from relevant memories. Optimized for injecting into agent prompts with token budget awareness.",
+          "Build a context window from relevant memories, optimized for injecting into agent prompts with token budget awareness." +
+          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -1300,19 +1306,25 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               type: "number",
               description: "Maximum token budget for the context.",
             },
+            project: {
+              type: "string",
+              description: "Project slug to scope the context.",
+            },
           },
           required: ["query"],
         },
         execute: async (
           _id,
-          args: { query: string; limit?: number; threshold?: number; max_tokens?: number },
+          args: { query: string; limit?: number; threshold?: number; max_tokens?: number; project?: string },
         ) => {
           try {
+            const project = args.project ?? defaultProject;
             const result = await client.buildContext(
               args.query,
               args.limit,
               args.threshold,
               args.max_tokens,
+              project,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -1712,7 +1724,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "session_start",
         description:
-          "Start a new work session. Sessions track the lifecycle of a task or conversation for later review.",
+          "Start a new work session. Sessions track the lifecycle of a task or conversation for later review. Call this early in your workflow and save the returned session ID for session_end later." +
+          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -1761,7 +1774,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.registerTool(
       {
         name: "session_end",
-        description: "End an active session with an optional summary of what was accomplished.",
+        description: "End an active session with a summary of what was accomplished. Always include a meaningful summary — it serves as the historical record of the session.",
         parameters: {
           type: "object",
           properties: {
@@ -1839,7 +1852,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.registerTool(
       {
         name: "session_list",
-        description: "List sessions, optionally filtered by project or status.",
+        description: "List sessions, optionally filtered by project or status." +
+          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -1891,7 +1905,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "decision_record",
         description:
-          "Record an architectural or design decision. Captures the rationale and alternatives considered for future reference.",
+          "Record an architectural or design decision. Captures the rationale and alternatives considered for future reference. Always check existing decisions with decision_check first to avoid contradictions." +
+          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -1968,7 +1983,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.registerTool(
       {
         name: "decision_list",
-        description: "List recorded decisions, optionally filtered by project, status, or tags.",
+        description: "List recorded decisions, optionally filtered by project, status, or tags." +
+          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -2094,7 +2110,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "decision_check",
         description:
-          "Check if there are existing decisions relevant to a topic. Use before making architectural choices to avoid contradicting past decisions.",
+          "Check if there are existing decisions relevant to a topic. ALWAYS call this before making architectural choices to avoid contradicting past decisions." +
+          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -2164,7 +2181,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "pattern_create",
         description:
-          "Create a reusable pattern (coding convention, architecture pattern, or best practice) that can be shared across projects.",
+          "Create a reusable pattern (coding convention, architecture pattern, or best practice) that can be shared across projects. Include example_code for maximum usefulness." +
+          (defaultProject ? ` Source project defaults to '${defaultProject}' if not specified.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -2247,7 +2265,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.registerTool(
       {
         name: "pattern_search",
-        description: "Search for established patterns by natural language query. Use to find conventions before writing code.",
+        description: "Search for established patterns by natural language query. Call this before writing code to find and follow existing conventions." +
+          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
         parameters: {
           type: "object",
           properties: {
@@ -2795,7 +2814,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       {
         name: "project_context",
         description:
-          "Load full project context including hot-tier memories, active decisions, adopted patterns, and recent sessions. Ideal for starting work on a project.",
+          "Load full project context including hot-tier memories, active decisions, adopted patterns, and recent sessions. Call this FIRST when starting work on a project to understand existing context before making changes.",
         parameters: {
           type: "object",
           properties: {
@@ -2984,33 +3003,83 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       }
     }
 
-    const workflowInstructions = [
+    // Build workflow instructions dynamically based on enabled tools
+    const lines: string[] = [
       "You have MemoryRelay tools available for persistent memory across sessions.",
-      "",
-      "## Recommended Workflow",
-      "",
-      "When starting work on a project:",
-      "1. **Load context**: Call `project_context(project)` to load hot-tier memories, active decisions, and adopted patterns",
-      "2. **Start session**: Call `session_start(title, project)` to begin tracking your work",
-      "3. **Check decisions**: Call `decision_check(query, project)` before making architectural choices to avoid contradicting past decisions",
-      "4. **Find patterns**: Call `pattern_search(query)` to find established conventions before writing code",
-      "",
-      "While working:",
-      "5. **Store findings**: Call `memory_store(content, metadata)` for important information worth remembering",
-      "6. **Record decisions**: Call `decision_record(title, rationale)` when making significant architectural choices",
-      "7. **Create patterns**: Call `pattern_create(title, description)` when establishing reusable conventions",
-      "",
-      "When done:",
-      "8. **End session**: Call `session_end(session_id, summary)` with a summary of what was accomplished",
-      "",
-      "## First-Time Setup",
-      "",
-      "If the project is not yet registered, start with:",
-      "1. `project_register(slug, name, description, stack)` to register the project",
-      "2. Then follow the workflow above",
-      "",
-      "Use `project_list()` to see existing projects before registering a new one.",
-    ].join("\n");
+    ];
+
+    if (defaultProject) {
+      lines.push(`Default project: \`${defaultProject}\` (auto-applied when you omit the project parameter).`);
+    }
+
+    lines.push("", "## Recommended Workflow", "");
+
+    // Starting work section — only include steps for enabled tools
+    const startSteps: string[] = [];
+    if (isToolEnabled("project_context")) {
+      startSteps.push(`**Load context**: Call \`project_context(${defaultProject ? `"${defaultProject}"` : "project"})\` to load hot-tier memories, active decisions, and adopted patterns`);
+    }
+    if (isToolEnabled("session_start")) {
+      startSteps.push(`**Start session**: Call \`session_start(title${defaultProject ? "" : ", project"})\` to begin tracking your work`);
+    }
+    if (isToolEnabled("decision_check")) {
+      startSteps.push(`**Check decisions**: Call \`decision_check(query${defaultProject ? "" : ", project"})\` before making architectural choices`);
+    }
+    if (isToolEnabled("pattern_search")) {
+      startSteps.push("**Find patterns**: Call `pattern_search(query)` to find established conventions before writing code");
+    }
+
+    if (startSteps.length > 0) {
+      lines.push("When starting work on a project:");
+      startSteps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
+      lines.push("");
+    }
+
+    // While working section
+    const workSteps: string[] = [];
+    if (isToolEnabled("memory_store")) {
+      workSteps.push("**Store findings**: Call `memory_store(content, metadata)` for important information worth remembering");
+    }
+    if (isToolEnabled("decision_record")) {
+      workSteps.push(`**Record decisions**: Call \`decision_record(title, rationale${defaultProject ? "" : ", project"})\` when making significant architectural choices`);
+    }
+    if (isToolEnabled("pattern_create")) {
+      workSteps.push("**Create patterns**: Call `pattern_create(title, description)` when establishing reusable conventions");
+    }
+
+    if (workSteps.length > 0) {
+      lines.push("While working:");
+      const offset = startSteps.length;
+      workSteps.forEach((step, i) => lines.push(`${offset + i + 1}. ${step}`));
+      lines.push("");
+    }
+
+    // When done section
+    if (isToolEnabled("session_end")) {
+      const offset = startSteps.length + workSteps.length;
+      lines.push("When done:");
+      lines.push(`${offset + 1}. **End session**: Call \`session_end(session_id, summary)\` with a summary of what was accomplished`);
+      lines.push("");
+    }
+
+    // First-time setup — only if project tools are enabled
+    if (isToolEnabled("project_register")) {
+      lines.push("## First-Time Setup", "");
+      lines.push("If the project is not yet registered, start with:");
+      lines.push("1. `project_register(slug, name, description, stack)` to register the project");
+      lines.push("2. Then follow the workflow above");
+      lines.push("");
+      if (isToolEnabled("project_list")) {
+        lines.push("Use `project_list()` to see existing projects before registering a new one.");
+      }
+    }
+
+    // Memory-only fallback — if no session/decision/project tools are enabled
+    if (startSteps.length === 0 && workSteps.length === 0) {
+      lines.push("Use `memory_store(content)` to save important information and `memory_recall(query)` to find relevant memories.");
+    }
+
+    const workflowInstructions = lines.join("\n");
 
     let prependContext = `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`;
 
