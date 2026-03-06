@@ -1536,11 +1536,25 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             importance?: number;
             tier?: string;
           },
+          context?: {
+            sessionId?: string;
+            agentId?: string;
+            sessionKey?: string;
+            workspaceDir?: string;
+            config?: any;
+          },
         ) => {
           try {
             const { content, metadata, ...opts } = args;
+            
+            // Inject sessionId from OpenClaw context into metadata
+            const enrichedMetadata = {
+              ...metadata,
+              ...(context?.sessionId && { session_id: context.sessionId }),
+            };
+            
             if (!opts.project && defaultProject) opts.project = defaultProject;
-            const memory = await client.store(content, metadata, opts);
+            const memory = await client.store(content, enrichedMetadata, opts);
             return {
               content: [
                 {
