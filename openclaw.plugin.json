@@ -100,6 +100,27 @@
         },
         "default": [],
         "description": "List of channel IDs to exclude from auto-recall"
+      },
+      "debug": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable debug logging of API calls"
+      },
+      "verbose": {
+        "type": "boolean",
+        "default": false,
+        "description": "Include request/response bodies in debug logs"
+      },
+      "logFile": {
+        "type": "string",
+        "description": "Optional file path for persistent debug logs"
+      },
+      "maxLogEntries": {
+        "type": "number",
+        "default": 100,
+        "minimum": 10,
+        "maximum": 10000,
+        "description": "Circular buffer size for in-memory logs"
       }
     },
     "required": []
