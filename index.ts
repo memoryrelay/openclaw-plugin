@@ -1,16 +1,26 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.11.5 (Full Single-File)
+ * Version: 0.12.0 (Phase 1 - Adoption Framework)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
+ * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import {
+  calculateStats,
+  morningCheck,
+  eveningReview,
+  shouldRunHeartbeat,
+  formatStatsForDisplay,
+  type DailyStatsConfig,
+  type MemoryStats,
+} from "./src/heartbeat/daily-stats.js";
 
 // ============================================================================
 // Constants
@@ -407,6 +417,8 @@ interface MemoryRelayConfig {
   excludeChannels?: string[];
   defaultProject?: string;
   enabledTools?: string;
+  // Daily stats configuration (v0.12.0)
+  dailyStats?: DailyStatsConfig;
   // Debug and logging options (v0.8.0)
   debug?: boolean;
   verbose?: boolean;
@@ -3982,6 +3994,52 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       }
     });
   }
+
+  // memoryrelay:heartbeat - Daily stats check (Phase 1 - Issue #10)
+  api.registerGatewayMethod?.("memoryrelay.heartbeat", async ({ respond, args }) => {
+    try {
+      const dailyStatsConfig: DailyStatsConfig = {
+        enabled: cfg?.dailyStats?.enabled ?? true,
+        morningTime: cfg?.dailyStats?.morningTime || "09:00",
+        eveningTime: cfg?.dailyStats?.eveningTime || "20:00",
+      };
+
+      // Check if it's time for a heartbeat
+      const heartbeatType = shouldRunHeartbeat(dailyStatsConfig);
+      
+      if (!heartbeatType) {
+        respond(true, {
+          type: "none",
+          message: "Not scheduled for heartbeat check right now",
+        });
+        return;
+      }
+
+      // Calculate stats
+      const memories = await client.list(1000); // Get recent memories
+      const stats = await calculateStats(
+        async () => memories,
+        () => 0 // Recall count not tracked yet (Phase 3)
+      );
+
+      // Run appropriate check
+      let result;
+      if (heartbeatType === "morning") {
+        result = await morningCheck(stats);
+      } else {
+        result = await eveningReview(stats);
+      }
+
+      respond(true, {
+        type: heartbeatType,
+        shouldNotify: result.shouldNotify,
+        message: result.message,
+        stats: result.stats,
+      });
+    } catch (err) {
+      respond(false, { error: String(err) });
+    }
+  });
 
   // memoryrelay:test - Test individual tool
   api.registerGatewayMethod?.("memoryrelay.test", async ({ respond, args }) => {
