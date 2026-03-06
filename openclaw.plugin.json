@@ -3,7 +3,7 @@
   "kind": "memory",
   "name": "MemoryRelay AI",
   "description": "AI memory service with sessions, decisions, patterns & projects (api.memoryrelay.net)",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "uiHints": {
     "apiKey": {
       "label": "MemoryRelay API Key",
@@ -113,7 +113,7 @@
       },
       "logFile": {
         "type": "string",
-        "description": "DEPRECATED (v0.8.5): File logging removed for OpenClaw security compliance. This option is ignored. Use gateway methods to access in-memory logs (coming in v0.9.0)."
+        "description": "DEPRECATED (v0.8.6): File logging removed for OpenClaw security compliance. This option is ignored. Use gateway methods to access in-memory logs (coming in v0.9.0)."
       },
       "maxLogEntries": {
         "type": "number",
