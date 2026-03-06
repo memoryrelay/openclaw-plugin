@@ -1,6 +1,6 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.8.9",
+  "version": "0.9.0",
   "description": "OpenClaw memory plugin for MemoryRelay API - sessions, decisions, patterns, projects & semantic search",
   "type": "module",
   "main": "index.ts",
@@ -42,17 +42,10 @@
       "./index.ts"
     ]
   },
-  "bin": {
-    "memoryrelay-logs": "./bin/memoryrelay-logs.js",
-    "memoryrelay-health": "./bin/memoryrelay-health.js",
-    "memoryrelay-test": "./bin/memoryrelay-test.js",
-    "memoryrelay-metrics": "./bin/memoryrelay-metrics.js"
-  },
   "files": [
     "index.ts",
     "src/*.ts",
     "!src/*.test.ts",
-    "bin/",
     "openclaw.plugin.json",
     "README.md",
     "LICENSE"
