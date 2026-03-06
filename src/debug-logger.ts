@@ -3,6 +3,9 @@
  * 
  * Provides comprehensive logging of API calls with request/response capture
  * for troubleshooting and performance analysis.
+ * 
+ * Note: File logging has been removed in v0.8.4 to pass OpenClaw security validation.
+ * All logs are kept in-memory only. Use gateway methods (coming in v0.9.0) to access logs.
  */
 
 export interface LogEntry {
@@ -23,24 +26,22 @@ export interface DebugLoggerConfig {
   enabled: boolean;
   verbose: boolean;
   maxEntries: number;
-  logFile?: string;
+  logFile?: string; // Deprecated: File logging removed for security compliance
 }
 
 export class DebugLogger {
   private logs: LogEntry[] = [];
   private config: DebugLoggerConfig;
-  private fs?: typeof import("fs");
 
   constructor(config: DebugLoggerConfig) {
     this.config = config;
     
-    // Only load fs if logFile is specified
+    // logFile is no longer supported (v0.8.4)
     if (config.logFile) {
-      try {
-        this.fs = require("fs");
-      } catch (err) {
-        console.warn("fs module not available, file logging disabled");
-      }
+      console.warn(
+        "memoryrelay: logFile is deprecated and ignored. " +
+        "Use gateway methods to access debug logs (coming in v0.9.0)"
+      );
     }
   }
 
@@ -56,11 +57,6 @@ export class DebugLogger {
     // Trim if exceeds max
     if (this.logs.length > this.config.maxEntries) {
       this.logs.shift();
-    }
-
-    // Write to file if configured
-    if (this.config.logFile && this.fs) {
-      this.writeToFile(entry);
     }
   }
 
@@ -121,20 +117,6 @@ export class DebugLogger {
       successRate: total > 0 ? (successful / total) * 100 : 0,
       avgDuration: Math.round(avgDuration),
     };
-  }
-
-  /**
-   * Write log entry to file
-   */
-  private writeToFile(entry: LogEntry): void {
-    if (!this.fs || !this.config.logFile) return;
-
-    try {
-      const logLine = JSON.stringify(entry) + "\n";
-      this.fs.appendFileSync(this.config.logFile, logLine, "utf8");
-    } catch (err) {
-      console.error(`Failed to write debug log: ${err}`);
-    }
   }
 
   /**
