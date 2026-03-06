@@ -1,16 +1,37 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.11.5 (Full Single-File)
+ * Version: 0.12.0 (Phase 1 - Adoption Framework)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
+ * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import {
+  calculateStats,
+  morningCheck,
+  eveningReview,
+  shouldRunHeartbeat,
+  formatStatsForDisplay,
+  type DailyStatsConfig,
+  type MemoryStats,
+} from "./src/heartbeat/daily-stats.js";
+import {
+  statsCommand,
+  type StatsCommandOptions,
+} from "./src/cli/stats-command.js";
+import {
+  checkFirstRun,
+  generateOnboardingPrompt,
+  generateSuccessMessage,
+  runSimpleOnboarding,
+  type OnboardingResult,
+} from "./src/onboarding/first-run.js";
 
 // ============================================================================
 // Constants
@@ -131,7 +152,7 @@ interface MemoryStats {
 interface PluginConfig {
   agentId: string;
   autoRecall: boolean;
-  autoCapture: boolean;
+  autoCapture: AutoCaptureConfig; // Updated in v0.12.0
   recallLimit: number;
   recallThreshold: number;
   excludeChannels: string[];
@@ -283,7 +304,10 @@ class StatusReporter {
       ? `✓ Enabled (limit: ${report.config.recallLimit}, threshold: ${report.config.recallThreshold})`
       : "✗ Disabled";
     lines.push(`  Auto-Recall:   ${recallStatus}`);
-    lines.push(`  Auto-Capture:  ${report.config.autoCapture ? "✓ Enabled" : "✗ Disabled"}`);
+    const captureStatus = report.config.autoCapture.enabled
+      ? `✓ Enabled (tier: ${report.config.autoCapture.tier})`
+      : "✗ Disabled";
+    lines.push(`  Auto-Capture:  ${captureStatus}`);
     if (report.config.defaultProject) {
       lines.push(`  Default Project: ${report.config.defaultProject}`);
     }
@@ -377,17 +401,35 @@ class StatusReporter {
   }
 }
 
+// Auto-capture configuration types (Phase 1 - Issue #12)
+type AutoCaptureTier = "off" | "conservative" | "smart" | "aggressive";
+
+interface AutoCaptureConfig {
+  enabled: boolean;
+  tier: AutoCaptureTier;
+  confirmFirst?: number; // Number of captures to confirm (default: 5)
+  categories?: {
+    credentials?: boolean;
+    preferences?: boolean;
+    technical?: boolean;
+    personal?: boolean;
+  };
+  blocklist?: string[]; // Regex patterns to never capture
+}
+
 interface MemoryRelayConfig {
   apiKey?: string;
   agentId?: string;
   apiUrl?: string;
-  autoCapture?: boolean;
+  autoCapture?: boolean | AutoCaptureConfig; // Enhanced in v0.12.0
   autoRecall?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
   excludeChannels?: string[];
   defaultProject?: string;
   enabledTools?: string;
+  // Daily stats configuration (v0.12.0)
+  dailyStats?: DailyStatsConfig;
   // Debug and logging options (v0.8.0)
   debug?: boolean;
   verbose?: boolean;
@@ -469,6 +511,100 @@ async function fetchWithTimeout(
     }
     throw err;
   }
+}
+
+// ============================================================================
+// Auto-Capture Configuration Helpers (Phase 1 - Issue #12)
+// ============================================================================
+
+/**
+ * Normalize auto-capture config from boolean or object format
+ */
+function normalizeAutoCaptureConfig(
+  config: boolean | AutoCaptureConfig | undefined
+): AutoCaptureConfig {
+  // Default configuration (smart auto-capture enabled by default in v0.12.0)
+  const defaultConfig: AutoCaptureConfig = {
+    enabled: true,
+    tier: "smart",
+    confirmFirst: 5,
+    categories: {
+      credentials: true,
+      preferences: true,
+      technical: true,
+      personal: false, // Privacy: personal info requires confirmation
+    },
+    blocklist: [
+      // Privacy patterns - never auto-capture
+      /password\s*[:=]\s*[^\s]+/i,
+      /credit\s*card/i,
+      /ssn\s*[:=]/i,
+      /social\s*security/i,
+    ].map((r) => r.source),
+  };
+
+  // Handle legacy boolean config
+  if (typeof config === "boolean") {
+    return {
+      ...defaultConfig,
+      enabled: config,
+    };
+  }
+
+  // Handle undefined (use smart default in v0.12.0+)
+  if (config === undefined) {
+    return defaultConfig;
+  }
+
+  // Merge provided config with defaults
+  return {
+    enabled: config.enabled ?? defaultConfig.enabled,
+    tier: config.tier ?? defaultConfig.tier,
+    confirmFirst: config.confirmFirst ?? defaultConfig.confirmFirst,
+    categories: {
+      ...defaultConfig.categories,
+      ...config.categories,
+    },
+    blocklist: config.blocklist ?? defaultConfig.blocklist,
+  };
+}
+
+/**
+ * Check if content matches any blocklist patterns
+ */
+function isBlocklisted(content: string, blocklist: string[]): boolean {
+  return blocklist.some((pattern) => {
+    try {
+      return new RegExp(pattern, "i").test(content);
+    } catch {
+      return false; // Invalid regex, skip
+    }
+  });
+}
+
+/**
+ * Mask sensitive data in content (API keys, tokens, etc.)
+ */
+function maskSensitiveData(content: string): string {
+  // Mask API keys (show only last 4 chars)
+  content = content.replace(
+    /\b([a-z]{2,}_)?([a-z]{4,}_)?[a-f0-9]{32,}\b/gi,
+    (match) => {
+      if (match.length <= 8) return match;
+      return `${match.slice(0, 4)}...${match.slice(-4)}`;
+    }
+  );
+
+  // Mask email addresses (show only domain)
+  content = content.replace(
+    /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi,
+    (match) => {
+      const domain = match.split("@")[1];
+      return `***@${domain}`;
+    }
+  );
+
+  return content;
 }
 
 // ============================================================================
@@ -1208,11 +1344,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         total_memories: memoryCount,
       };
       
-      // Get config
+      // Get config - normalize autoCapture to new format
+      const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
+      
       const pluginConfig = {
         agentId: agentId,
         autoRecall: cfg?.autoRecall ?? true,
-        autoCapture: cfg?.autoCapture ?? false,
+        autoCapture: autoCaptureConfig,
         recallLimit: cfg?.recallLimit ?? 5,
         recallThreshold: cfg?.recallThreshold ?? 0.3,
         excludeChannels: cfg?.excludeChannels ?? [],
@@ -3641,7 +3779,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // Auto-capture: analyze and store important information after agent ends
-  if (cfg?.autoCapture) {
+  const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
+  
+  if (autoCaptureConfig.enabled) {
     api.on("agent_end", async (event) => {
       if (!event.success || !event.messages || event.messages.length === 0) {
         return;
@@ -3673,7 +3813,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           }
         }
 
-        const toCapture = texts.filter((text) => text && shouldCapture(text));
+        const toCapture = texts.filter((text) => {
+          if (!text || !shouldCapture(text)) return false;
+          // Check blocklist
+          if (isBlocklisted(text, autoCaptureConfig.blocklist || [])) return false;
+          return true;
+        });
+        
         if (toCapture.length === 0) return;
 
         let stored = 0;
@@ -3696,8 +3842,42 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.11.5 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${cfg?.autoCapture}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.12.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
+
+  // ========================================================================
+  // First-Run Onboarding (Phase 1 - Issue #9)
+  // ========================================================================
+
+  // Check if this is the first run and auto-onboard if needed
+  try {
+    const onboardingCheck = await checkFirstRun(async () => {
+      const memories = await client.list(1);
+      return memories.length;
+    });
+
+    if (onboardingCheck.shouldOnboard) {
+      // Auto-onboard with simple setup
+      await runSimpleOnboarding(
+        async (content, metadata) => {
+          const memory = await client.store(content, metadata || {});
+          return { id: memory.id };
+        },
+        "Welcome to MemoryRelay! This is your first memory. Use memory_store to add more.",
+        autoCaptureConfig.enabled
+      );
+
+      const successMsg = generateSuccessMessage(
+        "Welcome to MemoryRelay! This is your first memory.",
+        autoCaptureConfig.enabled
+      );
+
+      api.logger.info?.(`\n${successMsg}`);
+    }
+  } catch (err) {
+    // Don't fail plugin load if onboarding fails
+    api.logger.warn?.(`memory-memoryrelay: onboarding check failed: ${String(err)}`);
+  }
 
   // ========================================================================
   // CLI Helper Tools (v0.8.0)
@@ -3859,6 +4039,92 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       }
     });
   }
+
+  // memoryrelay:heartbeat - Daily stats check (Phase 1 - Issue #10)
+  api.registerGatewayMethod?.("memoryrelay.heartbeat", async ({ respond, args }) => {
+    try {
+      const dailyStatsConfig: DailyStatsConfig = {
+        enabled: cfg?.dailyStats?.enabled ?? true,
+        morningTime: cfg?.dailyStats?.morningTime || "09:00",
+        eveningTime: cfg?.dailyStats?.eveningTime || "20:00",
+      };
+
+      // Check if it's time for a heartbeat
+      const heartbeatType = shouldRunHeartbeat(dailyStatsConfig);
+      
+      if (!heartbeatType) {
+        respond(true, {
+          type: "none",
+          message: "Not scheduled for heartbeat check right now",
+        });
+        return;
+      }
+
+      // Calculate stats
+      const memories = await client.list(1000); // Get recent memories
+      const stats = await calculateStats(
+        async () => memories,
+        () => 0 // Recall count not tracked yet (Phase 3)
+      );
+
+      // Run appropriate check
+      let result;
+      if (heartbeatType === "morning") {
+        result = await morningCheck(stats);
+      } else {
+        result = await eveningReview(stats);
+      }
+
+      respond(true, {
+        type: heartbeatType,
+        shouldNotify: result.shouldNotify,
+        message: result.message,
+        stats: result.stats,
+      });
+    } catch (err) {
+      respond(false, { error: String(err) });
+    }
+  });
+
+  // memoryrelay:onboarding - Show onboarding prompt (Phase 1 - Issue #9)
+  api.registerGatewayMethod?.("memoryrelay.onboarding", async ({ respond }) => {
+    try {
+      const onboardingCheck = await checkFirstRun(async () => {
+        const memories = await client.list(1);
+        return memories.length;
+      });
+
+      const prompt = generateOnboardingPrompt();
+
+      respond(true, {
+        isFirstRun: onboardingCheck.isFirstRun,
+        alreadyOnboarded: onboardingCheck.state?.completed || false,
+        prompt,
+      });
+    } catch (err) {
+      respond(false, { error: String(err) });
+    }
+  });
+
+  // memoryrelay:stats - CLI stats command (Phase 1 - Issue #11)
+  api.registerGatewayMethod?.("memoryrelay.stats", async ({ respond, args }) => {
+    try {
+      const options: StatsCommandOptions = {
+        format: (args?.format as "text" | "json") || "text",
+        verbose: Boolean(args?.verbose),
+      };
+
+      const memories = await client.list(1000);
+      const output = await statsCommand(async () => memories, options);
+
+      respond(true, {
+        output,
+        format: options.format,
+      });
+    } catch (err) {
+      respond(false, { error: String(err) });
+    }
+  });
 
   // memoryrelay:test - Test individual tool
   api.registerGatewayMethod?.("memoryrelay.test", async ({ respond, args }) => {
