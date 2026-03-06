@@ -3,24 +3,24 @@
   "kind": "memory",
   "name": "MemoryRelay AI",
   "description": "AI memory service with sessions, decisions, patterns & projects (api.memoryrelay.net)",
-  "version": "0.9.7",
+  "version": "0.9.6",
   "uiHints": {
     "apiKey": {
       "label": "MemoryRelay API Key",
       "sensitive": true,
       "placeholder": "mem_prod_...",
-      "help": "API key from memoryrelay.ai (or use MEMORYRELAY_API_KEY env var)"
+      "help": "API key from memoryrelay.ai (or use ${MEMORYRELAY_API_KEY} env var)"
     },
     "agentId": {
       "label": "Agent ID",
       "placeholder": "iris",
-      "help": "Unique identifier for this agent in MemoryRelay (or use MEMORYRELAY_AGENT_ID env var)"
+      "help": "Unique identifier for this agent in MemoryRelay (or use ${MEMORYRELAY_AGENT_ID} env var)"
     },
     "apiUrl": {
       "label": "API URL",
       "placeholder": "https://api.memoryrelay.net",
       "advanced": true,
-      "help": "MemoryRelay API endpoint (or use MEMORYRELAY_API_URL env var)"
+      "help": "MemoryRelay API endpoint (or use ${MEMORYRELAY_API_URL} env var)"
     },
     "defaultProject": {
       "label": "Default Project",
