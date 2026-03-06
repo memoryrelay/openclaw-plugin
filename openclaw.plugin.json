@@ -3,7 +3,7 @@
   "kind": "memory",
   "name": "MemoryRelay AI",
   "description": "AI memory service with sessions, decisions, patterns & projects (api.memoryrelay.net)",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "uiHints": {
     "apiKey": {
       "label": "MemoryRelay API Key",
