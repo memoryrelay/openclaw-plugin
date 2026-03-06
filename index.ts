@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.7.0 (Full Suite)
+ * Version: 0.8.0 (Enhanced Debug & Status)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -8,6 +8,15 @@
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
+ *
+ * ENHANCEMENTS (v0.8.0):
+ * - Debug mode with comprehensive API call logging
+ * - Enhanced status reporting with tool breakdown
+ * - Request/response capture (verbose mode)
+ * - Tool failure tracking and known issues display
+ * - Performance metrics (duration, success rate)
+ * - Recent activity display
+ * - Formatted CLI output with Unicode symbols
  *
  * ENHANCEMENTS (v0.7.0):
  * - 39 tools covering all MemoryRelay API resources
@@ -21,6 +30,8 @@
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { DebugLogger, type LogEntry } from "./src/debug-logger";
+import { StatusReporter } from "./src/status-reporter";
 
 // ============================================================================
 // Constants
@@ -47,6 +58,11 @@ interface MemoryRelayConfig {
   excludeChannels?: string[];
   defaultProject?: string;
   enabledTools?: string;
+  // Debug and logging options (v0.8.0)
+  debug?: boolean;
+  verbose?: boolean;
+  logFile?: string;
+  maxLogEntries?: number;
 }
 
 interface Memory {
@@ -130,11 +146,41 @@ async function fetchWithTimeout(
 // ============================================================================
 
 class MemoryRelayClient {
+  private debugLogger?: DebugLogger;
+  private statusReporter?: StatusReporter;
+
   constructor(
     private readonly apiKey: string,
     private readonly agentId: string,
     private readonly apiUrl: string = DEFAULT_API_URL,
-  ) {}
+    debugLogger?: DebugLogger,
+    statusReporter?: StatusReporter,
+  ) {
+    this.debugLogger = debugLogger;
+    this.statusReporter = statusReporter;
+  }
+
+  /**
+   * Extract tool name from API path
+   */
+  private extractToolName(path: string): string {
+    // /v1/memories -> memory
+    // /v1/memories/batch -> memory_batch
+    // /v1/sessions/123/end -> session_end
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length < 2) return "unknown";
+    
+    let toolName = parts[1].replace(/s$/, ""); // Remove trailing 's'
+    
+    // Check for specific endpoints
+    if (path.includes("/batch")) toolName += "_batch";
+    if (path.includes("/recall")) toolName += "_recall";
+    if (path.includes("/context")) toolName += "_context";
+    if (path.includes("/end")) toolName += "_end";
+    if (path.includes("/health")) return "memory_health";
+    
+    return toolName;
+  }
 
   /**
    * Make HTTP request with retry logic and timeout
@@ -146,6 +192,8 @@ class MemoryRelayClient {
     retryCount = 0,
   ): Promise<T> {
     const url = `${this.apiUrl}${path}`;
+    const startTime = Date.now();
+    const toolName = this.extractToolName(path);
 
     try {
       const response = await fetchWithTimeout(
@@ -155,12 +203,14 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.7.0",
+            "User-Agent": "openclaw-memory-memoryrelay/0.8.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
         REQUEST_TIMEOUT_MS,
       );
+
+      const duration = Date.now() - startTime;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -169,6 +219,27 @@ class MemoryRelayClient {
           `MemoryRelay API error: ${response.status} ${response.statusText}` +
             (errorMsg ? ` - ${errorMsg}` : ""),
         );
+
+        // Log error
+        if (this.debugLogger) {
+          this.debugLogger.log({
+            timestamp: new Date().toISOString(),
+            tool: toolName,
+            method,
+            path,
+            duration,
+            status: "error",
+            responseStatus: response.status,
+            error: error.message,
+            retries: retryCount,
+            requestBody: this.debugLogger && body ? body : undefined,
+          });
+        }
+
+        // Track failure
+        if (this.statusReporter) {
+          this.statusReporter.recordFailure(toolName, `${response.status} ${errorMsg || response.statusText}`);
+        }
 
         // Retry on 5xx errors
         if (response.status >= 500 && retryCount < MAX_RETRIES) {
@@ -180,8 +251,53 @@ class MemoryRelayClient {
         throw error;
       }
 
-      return response.json();
+      const result = await response.json();
+
+      // Log success
+      if (this.debugLogger) {
+        this.debugLogger.log({
+          timestamp: new Date().toISOString(),
+          tool: toolName,
+          method,
+          path,
+          duration,
+          status: "success",
+          responseStatus: response.status,
+          retries: retryCount,
+          requestBody: this.debugLogger && body ? body : undefined,
+          responseBody: this.debugLogger && result ? result : undefined,
+        });
+      }
+
+      // Track success
+      if (this.statusReporter) {
+        this.statusReporter.recordSuccess(toolName);
+      }
+
+      return result;
     } catch (err) {
+      const duration = Date.now() - startTime;
+
+      // Log error
+      if (this.debugLogger) {
+        this.debugLogger.log({
+          timestamp: new Date().toISOString(),
+          tool: toolName,
+          method,
+          path,
+          duration,
+          status: "error",
+          error: String(err),
+          retries: retryCount,
+          requestBody: this.debugLogger && body ? body : undefined,
+        });
+      }
+
+      // Track failure
+      if (this.statusReporter) {
+        this.statusReporter.recordFailure(toolName, String(err));
+      }
+
       // Retry on network errors
       if (isRetryableError(err) && retryCount < MAX_RETRIES) {
         const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount);
@@ -694,7 +810,32 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
   const apiUrl = cfg?.apiUrl || process.env.MEMORYRELAY_API_URL || DEFAULT_API_URL;
   const defaultProject = cfg?.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
-  const client = new MemoryRelayClient(apiKey, agentId, apiUrl);
+  
+  // ========================================================================
+  // Debug Logger and Status Reporter (v0.8.0)
+  // ========================================================================
+  
+  const debugEnabled = cfg?.debug || false;
+  const verboseEnabled = cfg?.verbose || false;
+  const logFile = cfg?.logFile;
+  const maxLogEntries = cfg?.maxLogEntries || 100;
+  
+  let debugLogger: DebugLogger | undefined;
+  let statusReporter: StatusReporter | undefined;
+  
+  if (debugEnabled) {
+    debugLogger = new DebugLogger({
+      enabled: true,
+      verbose: verboseEnabled,
+      maxEntries: maxLogEntries,
+      logFile: logFile,
+    });
+    api.logger.info(`memory-memoryrelay: debug mode enabled (verbose: ${verboseEnabled}, maxEntries: ${maxLogEntries})`);
+  }
+  
+  statusReporter = new StatusReporter(debugLogger);
+  
+  const client = new MemoryRelayClient(apiKey, agentId, apiUrl, debugLogger, statusReporter);
 
   // Verify connection on startup (with timeout)
   try {
@@ -711,30 +852,87 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
   api.registerGatewayMethod?.("memory.status", async ({ respond }) => {
     try {
+      // Get connection status
+      const startTime = Date.now();
       const health = await client.health();
+      const responseTime = Date.now() - startTime;
+      
+      const healthStatus = String(health.status).toLowerCase();
+      const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
+      
+      const connectionStatus = {
+        status: isConnected ? "connected" as const : "disconnected" as const,
+        endpoint: apiUrl,
+        lastCheck: new Date().toISOString(),
+        responseTime,
+      };
+      
+      // Get memory stats
       let memoryCount = 0;
-
       try {
         const stats = await client.stats();
         memoryCount = stats.total_memories;
       } catch (statsErr) {
         api.logger.debug?.(`memory-memoryrelay: stats endpoint unavailable: ${String(statsErr)}`);
       }
-
-      const healthStatus = String(health.status).toLowerCase();
-      const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
-
-      respond(true, {
-        available: true,
-        connected: isConnected,
-        endpoint: apiUrl,
-        memoryCount: memoryCount,
+      
+      const memoryStats = {
+        total_memories: memoryCount,
+      };
+      
+      // Get config
+      const pluginConfig = {
         agentId: agentId,
-        vector: {
+        autoRecall: cfg?.autoRecall ?? true,
+        autoCapture: cfg?.autoCapture ?? false,
+        recallLimit: cfg?.recallLimit ?? 5,
+        recallThreshold: cfg?.recallThreshold ?? 0.3,
+        excludeChannels: cfg?.excludeChannels ?? [],
+        defaultProject: defaultProject,
+      };
+      
+      // Build comprehensive status report
+      if (statusReporter) {
+        const report = statusReporter.buildReport(
+          connectionStatus,
+          pluginConfig,
+          memoryStats,
+          TOOL_GROUPS,
+        );
+        
+        // Format and output
+        const formatted = StatusReporter.formatReport(report);
+        api.logger.info(formatted);
+        
+        // Also return structured data for programmatic access
+        respond(true, {
           available: true,
-          enabled: true,
-        },
-      });
+          connected: isConnected,
+          endpoint: apiUrl,
+          memoryCount: memoryCount,
+          agentId: agentId,
+          debug: debugEnabled,
+          verbose: verboseEnabled,
+          report: report,
+          vector: {
+            available: true,
+            enabled: true,
+          },
+        });
+      } else {
+        // Fallback to simple status (shouldn't happen)
+        respond(true, {
+          available: true,
+          connected: isConnected,
+          endpoint: apiUrl,
+          memoryCount: memoryCount,
+          agentId: agentId,
+          vector: {
+            available: true,
+            enabled: true,
+          },
+        });
+      }
     } catch (err) {
       respond(true, {
         available: false,
