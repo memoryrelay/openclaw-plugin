@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.8.2 (Enhanced Gateway Logging)
+ * Version: 0.8.3 (Security & Installation Fixes)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -8,6 +8,12 @@
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
+ *
+ * ENHANCEMENTS (v0.8.3):
+ * - Security fix: logFile now restricted to relative paths only
+ * - Rejects absolute paths and path traversal attempts
+ * - Passes OpenClaw security validation for npm installation
+ * - Clean installation without security warnings
  *
  * ENHANCEMENTS (v0.8.2):
  * - Human-readable gateway logs with memory previews
@@ -154,6 +160,8 @@ async function fetchWithTimeout(
 class MemoryRelayClient {
   private debugLogger?: DebugLogger;
   private statusReporter?: StatusReporter;
+  private config?: MemoryRelayConfig;
+  private api?: OpenClawPluginApi;
 
   constructor(
     private readonly apiKey: string,
@@ -161,9 +169,12 @@ class MemoryRelayClient {
     private readonly apiUrl: string = DEFAULT_API_URL,
     debugLogger?: DebugLogger,
     statusReporter?: StatusReporter,
+    api?: OpenClawPluginApi,
   ) {
     this.debugLogger = debugLogger;
     this.statusReporter = statusReporter;
+    this.api = api;
+    this.config = api?.pluginConfig as MemoryRelayConfig | undefined;
   }
 
   /**
@@ -840,8 +851,33 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   
   const debugEnabled = cfg?.debug || false;
   const verboseEnabled = cfg?.verbose || false;
-  const logFile = cfg?.logFile;
   const maxLogEntries = cfg?.maxLogEntries || 100;
+  
+  // Security fix (v0.8.3): logFile must be relative to workspace/plugin directory
+  // Absolute paths and path traversal are rejected
+  let logFile: string | undefined;
+  if (cfg?.logFile) {
+    const requestedPath = cfg.logFile;
+    
+    // Reject absolute paths
+    if (requestedPath.startsWith('/') || requestedPath.startsWith('~') || /^[A-Za-z]:/.test(requestedPath)) {
+      api.logger.warn(
+        `memory-memoryrelay: logFile must be relative path (got: ${requestedPath}). Using default location.`
+      );
+      logFile = undefined;
+    }
+    // Reject path traversal
+    else if (requestedPath.includes('..')) {
+      api.logger.warn(
+        `memory-memoryrelay: logFile cannot contain '..' (got: ${requestedPath}). Using default location.`
+      );
+      logFile = undefined;
+    }
+    // Accept relative path (will be resolved by DebugLogger relative to workspace)
+    else {
+      logFile = requestedPath;
+    }
+  }
   
   let debugLogger: DebugLogger | undefined;
   let statusReporter: StatusReporter | undefined;
@@ -853,12 +889,16 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       maxEntries: maxLogEntries,
       logFile: logFile,
     });
-    api.logger.info(`memory-memoryrelay: debug mode enabled (verbose: ${verboseEnabled}, maxEntries: ${maxLogEntries})`);
+    
+    const logLocation = logFile ? ` → ${logFile}` : '';
+    api.logger.info(
+      `memory-memoryrelay: debug mode enabled (verbose: ${verboseEnabled}, maxEntries: ${maxLogEntries}${logLocation})`
+    );
   }
   
   statusReporter = new StatusReporter(debugLogger);
   
-  const client = new MemoryRelayClient(apiKey, agentId, apiUrl, debugLogger, statusReporter);
+  const client = new MemoryRelayClient(apiKey, agentId, apiUrl, debugLogger, statusReporter, api);
 
   // Verify connection on startup (with timeout)
   try {

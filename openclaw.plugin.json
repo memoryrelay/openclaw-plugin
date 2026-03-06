@@ -3,7 +3,7 @@
   "kind": "memory",
   "name": "MemoryRelay AI",
   "description": "AI memory service with sessions, decisions, patterns & projects (api.memoryrelay.net)",
-  "version": "0.7.0",
+  "version": "0.8.3",
   "uiHints": {
     "apiKey": {
       "label": "MemoryRelay API Key",
@@ -113,7 +113,7 @@
       },
       "logFile": {
         "type": "string",
-        "description": "Optional file path for persistent debug logs"
+        "description": "Relative file path for persistent debug logs (e.g., 'memoryrelay-debug.log'). Absolute paths and path traversal (..) are rejected for security."
       },
       "maxLogEntries": {
         "type": "number",
