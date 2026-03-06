@@ -8,8 +8,10 @@ AI-powered long-term memory for OpenClaw agents. Gives your AI assistant persist
 ## Features
 
 - **39 Tools** covering memories, entities, sessions, decisions, patterns, and projects
+- **6 Gateway Methods** for stats, debugging, and onboarding (v0.8.0+, Phase 1)
+- **Smart Auto-Capture** - Tier-based privacy system with automatic filtering (v0.12.0+)
+- **Daily Memory Stats** - Morning/evening summaries with growth metrics (v0.12.0+)
 - **Debug & Monitoring** - Comprehensive logging, health checks, and performance metrics (v0.8.0+)
-- **CLI Commands** - 4 commands for debugging and diagnostics (v0.8.0+)
 - **Semantic Search** - Vector-based retrieval finds relevant context by meaning
 - **Auto-Recall** - Automatically injects relevant memories into agent context
 - **Project-First Workflow** - Agents receive workflow instructions to start with project context
@@ -283,29 +285,31 @@ Based on Zero-Friction Adoption Strategy (Issue #8):
 }
 ```
 
-### CLI Commands
+### Debug Commands (Gateway Methods)
 
-The plugin provides four CLI commands for debugging and monitoring:
+The plugin provides four debug commands accessible via OpenClaw gateway methods:
+
+**Note**: These are **gateway methods**, not standalone shell commands. Invoke them using `openclaw gateway-call memoryrelay.<method>`.
 
 #### View Debug Logs
 ```bash
 # Last 20 logs
-memoryrelay-logs
+openclaw gateway-call memoryrelay.logs
 
 # Last 50 logs
-memoryrelay-logs --limit=50
+openclaw gateway-call memoryrelay.logs '{"limit": 50}'
 
 # Filter by tool
-memoryrelay-logs --tool=memory_store --limit=20
+openclaw gateway-call memoryrelay.logs '{"tool": "memory_store", "limit": 20}'
 
 # Show errors only
-memoryrelay-logs --errors-only
+openclaw gateway-call memoryrelay.logs '{"errorsOnly": true}'
 ```
 
 #### Health Check
 ```bash
 # Run comprehensive health check
-memoryrelay-health
+openclaw gateway-call memoryrelay.health
 
 # Tests API connectivity, authentication, and core tools
 ```
@@ -313,15 +317,15 @@ memoryrelay-health
 #### Test Individual Tools
 ```bash
 # Test specific tool
-memoryrelay-test --tool=memory_store
-memoryrelay-test --tool=memory_recall
-memoryrelay-test --tool=project_list
+openclaw gateway-call memoryrelay.test '{"tool": "memory_store"}'
+openclaw gateway-call memoryrelay.test '{"tool": "memory_recall"}'
+openclaw gateway-call memoryrelay.test '{"tool": "project_list"}'
 ```
 
 #### View Performance Metrics
 ```bash
 # Show performance statistics
-memoryrelay-metrics
+openclaw gateway-call memoryrelay.metrics
 
 # Displays per-tool metrics:
 # - Call count
@@ -330,16 +334,9 @@ memoryrelay-metrics
 # - p95/p99 latencies
 ```
 
-### Gateway Method Calls
+### Alternative: Direct Gateway Method Calls
 
-You can also call these commands via the OpenClaw gateway:
-
-```bash
-openclaw gateway call memoryrelay.logs '{"limit": 20}'
-openclaw gateway call memoryrelay.health
-openclaw gateway call memoryrelay.test '{"tool": "memory_store"}'
-openclaw gateway call memoryrelay.metrics
-```
+The same methods can be called programmatically from code or scripts (same syntax as above).
 
 ### Enhanced Status Reporting
 
