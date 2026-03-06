@@ -3856,7 +3856,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.12.2 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.12.5 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
