@@ -1,8 +1,124 @@
 {
   "id": "plugin-memoryrelay-ai",
+  "kind": "memory",
+  "name": "MemoryRelay AI",
+  "description": "AI memory service with sessions, decisions, patterns & projects (api.memoryrelay.net)",
+  "version": "0.9.6",
+  "uiHints": {
+    "apiKey": {
+      "label": "MemoryRelay API Key",
+      "sensitive": true,
+      "placeholder": "mem_prod_...",
+      "help": "API key from memoryrelay.ai (or use ${MEMORYRELAY_API_KEY} env var)"
+    },
+    "agentId": {
+      "label": "Agent ID",
+      "placeholder": "iris",
+      "help": "Unique identifier for this agent in MemoryRelay (or use ${MEMORYRELAY_AGENT_ID} env var)"
+    },
+    "apiUrl": {
+      "label": "API URL",
+      "placeholder": "https://api.memoryrelay.net",
+      "advanced": true,
+      "help": "MemoryRelay API endpoint (or use ${MEMORYRELAY_API_URL} env var)"
+    },
+    "defaultProject": {
+      "label": "Default Project",
+      "placeholder": "my-api",
+      "help": "Default project slug for scoping sessions, decisions, and memories"
+    },
+    "enabledTools": {
+      "label": "Enabled Tools",
+      "placeholder": "memory,entity,agent,session,decision,pattern,project,health",
+      "advanced": true,
+      "help": "Comma-separated list of tool groups to enable (default: all)"
+    },
+    "autoCapture": {
+      "label": "Auto-Capture",
+      "help": "Automatically capture important information from conversations"
+    },
+    "autoRecall": {
+      "label": "Auto-Recall",
+      "help": "Automatically inject relevant memories into context"
+    },
+    "excludeChannels": {
+      "label": "Exclude Channels",
+      "help": "List of channel IDs to skip auto-recall (e.g., ['whatsapp:group_123', 'telegram:456'])",
+      "advanced": true
+    }
+  },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "apiKey": {
+        "type": "string",
+        "minLength": 1,
+        "description": "MemoryRelay API key (optional, can use MEMORYRELAY_API_KEY env var)"
+      },
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Unique agent identifier (optional, can use MEMORYRELAY_AGENT_ID env var or agent name)"
+      },
+      "apiUrl": {
+        "type": "string",
+        "default": "https://api.memoryrelay.net"
+      },
+      "defaultProject": {
+        "type": "string",
+        "description": "Default project slug for scoping sessions, decisions, and memories"
+      },
+      "enabledTools": {
+        "type": "string",
+        "description": "Comma-separated tool groups to enable: memory, entity, agent, session, decision, pattern, project, health, or 'all' (default: all)"
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "default": false
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "default": true
+      },
+      "recallLimit": {
+        "type": "number",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 20
+      },
+      "recallThreshold": {
+        "type": "number",
+        "default": 0.3,
+        "minimum": 0,
+        "maximum": 1
+      },
+      "excludeChannels": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "List of channel IDs to exclude from auto-recall"
+      },
+      "debug": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable debug logging of API calls"
+      },
+      "verbose": {
+        "type": "boolean",
+        "default": false,
+        "description": "Include request/response bodies in debug logs"
+      },
+      "maxLogEntries": {
+        "type": "number",
+        "default": 100,
+        "minimum": 10,
+        "maximum": 10000,
+        "description": "Circular buffer size for in-memory logs"
+      }
+    },
+    "required": []
   }
 }
