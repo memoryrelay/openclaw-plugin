@@ -21,6 +21,10 @@ import {
   type DailyStatsConfig,
   type MemoryStats,
 } from "./src/heartbeat/daily-stats.js";
+import {
+  statsCommand,
+  type StatsCommandOptions,
+} from "./src/cli/stats-command.js";
 
 // ============================================================================
 // Constants
@@ -4035,6 +4039,26 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         shouldNotify: result.shouldNotify,
         message: result.message,
         stats: result.stats,
+      });
+    } catch (err) {
+      respond(false, { error: String(err) });
+    }
+  });
+
+  // memoryrelay:stats - CLI stats command (Phase 1 - Issue #11)
+  api.registerGatewayMethod?.("memoryrelay.stats", async ({ respond, args }) => {
+    try {
+      const options: StatsCommandOptions = {
+        format: (args?.format as "text" | "json") || "text",
+        verbose: Boolean(args?.verbose),
+      };
+
+      const memories = await client.list(1000);
+      const output = await statsCommand(async () => memories, options);
+
+      respond(true, {
+        output,
+        format: options.format,
       });
     } catch (err) {
       respond(false, { error: String(err) });
