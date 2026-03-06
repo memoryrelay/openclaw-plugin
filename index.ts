@@ -3368,6 +3368,230 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.7.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${cfg?.autoCapture})`,
+    `memory-memoryrelay: plugin v0.8.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${cfg?.autoCapture}, debug: ${debugEnabled})`,
   );
+
+  // ========================================================================
+  // CLI Helper Tools (v0.8.0)
+  // ========================================================================
+
+  // Register CLI-accessible tools for debugging and diagnostics
+  
+  // memoryrelay:logs - Get debug logs
+  if (debugLogger) {
+    api.registerGatewayMethod?.("memoryrelay.logs", async ({ respond, args }) => {
+      try {
+        const limit = args?.limit || 20;
+        const toolName = args?.tool;
+        const errorsOnly = args?.errorsOnly || false;
+
+        let logs: LogEntry[];
+        if (toolName) {
+          logs = debugLogger.getToolLogs(toolName, limit);
+        } else if (errorsOnly) {
+          logs = debugLogger.getErrorLogs(limit);
+        } else {
+          logs = debugLogger.getRecentLogs(limit);
+        }
+
+        const formatted = DebugLogger.formatTable(logs);
+        respond(true, {
+          logs,
+          formatted,
+          count: logs.length,
+        });
+      } catch (err) {
+        respond(false, { error: String(err) });
+      }
+    });
+  }
+
+  // memoryrelay:health - Comprehensive health check
+  api.registerGatewayMethod?.("memoryrelay.health", async ({ respond }) => {
+    try {
+      const startTime = Date.now();
+      const health = await client.health();
+      const healthDuration = Date.now() - startTime;
+
+      const results: any = {
+        api: {
+          status: health.status,
+          endpoint: apiUrl,
+          responseTime: healthDuration,
+          reachable: true,
+        },
+        authentication: {
+          status: "valid",
+          apiKey: apiKey.substring(0, 16) + "...",
+        },
+        tools: {},
+      };
+
+      // Test critical tools
+      const toolTests = [
+        { name: "memory_store", test: async () => {
+          const testMem = await client.store("Plugin health check test", { test: "true" });
+          await client.delete(testMem.id);
+          return { success: true };
+        }},
+        { name: "memory_recall", test: async () => {
+          await client.search("test", 1, 0.5);
+          return { success: true };
+        }},
+        { name: "memory_list", test: async () => {
+          await client.list(1);
+          return { success: true };
+        }},
+      ];
+
+      for (const { name, test } of toolTests) {
+        const testStart = Date.now();
+        try {
+          await test();
+          results.tools[name] = {
+            status: "working",
+            duration: Date.now() - testStart,
+          };
+        } catch (err) {
+          results.tools[name] = {
+            status: "error",
+            error: String(err),
+            duration: Date.now() - testStart,
+          };
+        }
+      }
+
+      // Overall status
+      const allToolsWorking = Object.values(results.tools).every(
+        (t: any) => t.status === "working"
+      );
+      results.overall = allToolsWorking ? "healthy" : "degraded";
+
+      respond(true, results);
+    } catch (err) {
+      respond(false, {
+        overall: "unhealthy",
+        error: String(err),
+      });
+    }
+  });
+
+  // memoryrelay:metrics - Performance metrics
+  if (debugLogger) {
+    api.registerGatewayMethod?.("memoryrelay.metrics", async ({ respond }) => {
+      try {
+        const stats = debugLogger.getStats();
+        const allLogs = debugLogger.getAllLogs();
+
+        // Calculate per-tool metrics
+        const toolMetrics: Record<string, any> = {};
+        for (const log of allLogs) {
+          if (!toolMetrics[log.tool]) {
+            toolMetrics[log.tool] = {
+              calls: 0,
+              successes: 0,
+              failures: 0,
+              totalDuration: 0,
+              durations: [],
+            };
+          }
+          const metric = toolMetrics[log.tool];
+          metric.calls++;
+          if (log.status === "success") {
+            metric.successes++;
+          } else {
+            metric.failures++;
+          }
+          metric.totalDuration += log.duration;
+          metric.durations.push(log.duration);
+        }
+
+        // Calculate averages and percentiles
+        for (const tool in toolMetrics) {
+          const metric = toolMetrics[tool];
+          metric.avgDuration = Math.round(metric.totalDuration / metric.calls);
+          metric.successRate = Math.round((metric.successes / metric.calls) * 100);
+          
+          // Calculate p95 and p99
+          const sorted = metric.durations.sort((a: number, b: number) => a - b);
+          const p95Index = Math.floor(sorted.length * 0.95);
+          const p99Index = Math.floor(sorted.length * 0.99);
+          metric.p95Duration = sorted[p95Index] || 0;
+          metric.p99Duration = sorted[p99Index] || 0;
+          
+          delete metric.durations; // Don't include raw data in response
+        }
+
+        respond(true, {
+          summary: stats,
+          toolMetrics,
+        });
+      } catch (err) {
+        respond(false, { error: String(err) });
+      }
+    });
+  }
+
+  // memoryrelay:test - Test individual tool
+  api.registerGatewayMethod?.("memoryrelay.test", async ({ respond, args }) => {
+    try {
+      const toolName = args?.tool;
+      if (!toolName) {
+        respond(false, { error: "Missing required argument: tool" });
+        return;
+      }
+
+      const startTime = Date.now();
+      let result: any;
+      let error: string | undefined;
+
+      // Test the specified tool
+      try {
+        switch (toolName) {
+          case "memory_store":
+            const mem = await client.store("Test memory", { test: "true" });
+            await client.delete(mem.id);
+            result = { success: true, message: "Memory stored and deleted successfully" };
+            break;
+
+          case "memory_recall":
+            const searchResults = await client.search("test", 1, 0.5);
+            result = { success: true, results: searchResults.length, message: "Search completed" };
+            break;
+
+          case "memory_list":
+            const list = await client.list(5);
+            result = { success: true, count: list.length, message: "List retrieved" };
+            break;
+
+          case "project_list":
+            const projects = await client.listProjects(5);
+            result = { success: true, count: projects.length, message: "Projects listed" };
+            break;
+
+          case "memory_health":
+            const health = await client.health();
+            result = { success: true, status: health.status, message: "Health check passed" };
+            break;
+
+          default:
+            result = { success: false, message: `Unknown tool: ${toolName}` };
+        }
+      } catch (err) {
+        error = String(err);
+        result = { success: false, error };
+      }
+
+      const duration = Date.now() - startTime;
+
+      respond(true, {
+        tool: toolName,
+        duration,
+        result,
+        error,
+      });
+    } catch (err) {
+      respond(false, { error: String(err) });
+    }
+  });
 }

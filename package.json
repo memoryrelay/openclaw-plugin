@@ -43,8 +43,16 @@
       "./index.ts"
     ]
   },
+  "bin": {
+    "memoryrelay-logs": "./bin/memoryrelay-logs.js",
+    "memoryrelay-health": "./bin/memoryrelay-health.js",
+    "memoryrelay-test": "./bin/memoryrelay-test.js",
+    "memoryrelay-metrics": "./bin/memoryrelay-metrics.js"
+  },
   "files": [
     "index.ts",
+    "src/",
+    "bin/",
     "openclaw.plugin.json",
     "README.md",
     "LICENSE"
