@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.11.1 (Full Single-File)
+ * Version: 0.11.2 (Full Single-File)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -11,6 +11,16 @@
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const DEFAULT_API_URL = "https://api.memoryrelay.net";
+const VALID_HEALTH_STATUSES = ["ok", "healthy", "up"];
+const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1000; // 1 second
 
 // ============================================================================
 // DebugLogger (Inlined from src/debug-logger.ts)
