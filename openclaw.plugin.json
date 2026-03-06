@@ -2,8 +2,8 @@
   "id": "plugin-memoryrelay-ai",
   "kind": "memory",
   "name": "MemoryRelay AI",
-  "description": "MemoryRelay v0.11.5 - Long-term memory with sessions, decisions, patterns & projects (api.memoryrelay.net)",
-  "version": "0.11.4",
+  "description": "MemoryRelay v0.12.3 - Long-term memory with sessions, decisions, patterns & projects (api.memoryrelay.net)",
+  "version": "0.12.3",
   "uiHints": {
     "apiKey": {
       "label": "MemoryRelay API Key",

@@ -1,11 +1,11 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.12.0 (Phase 1 - Adoption Framework)
+ * Version: 0.12.3 (Phase 1 - Adoption Framework)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
- * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
+ * New in v0.12.3: Smart auto-capture, daily stats, CLI commands, onboarding
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
