@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.11.3 (Full Single-File)
+ * Version: 0.11.4 (Full Single-File)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -101,12 +101,7 @@ class DebugLogger {
 // StatusReporter (Inlined from src/status-reporter.ts)
 // ============================================================================
 
- * including connection status, tool breakdown, and recent activity.
- */
-
-import type { LogEntry, DebugLogger } from "./debug-logger";
-
-export interface ToolStatus {
+interface ToolStatus {
   enabled: number;
   available: number;
   failed: number;
@@ -119,21 +114,21 @@ export interface ToolStatus {
   }[];
 }
 
-export interface ConnectionStatus {
+interface ConnectionStatus {
   status: "connected" | "disconnected" | "degraded";
   endpoint: string;
   lastCheck: string;
   responseTime: number;
 }
 
-export interface MemoryStats {
+interface MemoryStats {
   total_memories: number;
   memories_today?: number;
   last_stored?: string;
   search_count_24h?: number;
 }
 
-export interface PluginConfig {
+interface PluginConfig {
   agentId: string;
   autoRecall: boolean;
   autoCapture: boolean;
@@ -143,7 +138,7 @@ export interface PluginConfig {
   defaultProject?: string;
 }
 
-export interface StatusReport {
+interface StatusReport {
   connection: ConnectionStatus;
   config: PluginConfig;
   stats: MemoryStats;
@@ -152,7 +147,7 @@ export interface StatusReport {
   issues: { tool: string; error: string; since: string }[];
 }
 
-export class StatusReporter {
+class StatusReporter {
   private debugLogger?: DebugLogger;
   private toolFailures: Map<string, { error: string; since: string }> = new Map();
 
