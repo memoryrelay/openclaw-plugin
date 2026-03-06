@@ -1,9 +1,12 @@
-name: Publish to NPM
+name: Manual Publish to NPM
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.12.1)'
+        required: true
+        type: string
 
 jobs:
   publish:
@@ -27,6 +30,14 @@ jobs:
       
       - name: Run tests
         run: npm test
+      
+      - name: Verify version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PKG_VERSION" != "${{ inputs.version }}" ]; then
+            echo "Error: Input version (${{ inputs.version }}) doesn't match package.json ($PKG_VERSION)"
+            exit 1
+          fi
       
       - name: Publish to NPM
         run: npm publish --provenance --access public
