@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.12.3] - 2026-03-06
+
+### Fixed
+- **Session Tracking**: Fixed session-memory linking by extracting `session_id` from metadata and passing it as a top-level parameter to the API (Fixes #24, PR #25)
+  - `session.memory_count` now increments correctly
+  - Memories appear in session's `memories` array
+  - Backward compatible - no breaking changes
+
 
 ## [0.6.2] - 2026-03-01
 
