@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.8.0 (Enhanced Debug & Status)
+ * Version: 0.8.2 (Enhanced Gateway Logging)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -8,6 +8,12 @@
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
+ *
+ * ENHANCEMENTS (v0.8.2):
+ * - Human-readable gateway logs with memory previews
+ * - Show similarity scores and memory snippets during auto-recall
+ * - Performance indicators (✓/✗ and timing with SLOW warnings)
+ * - Cleaner error messages in gateway logs
  *
  * ENHANCEMENTS (v0.8.0):
  * - Debug mode with comprehensive API call logging
@@ -234,6 +240,14 @@ class MemoryRelayClient {
             retries: retryCount,
             requestBody: this.debugLogger && body ? body : undefined,
           });
+
+          // Enhanced gateway logging (v0.8.2): Readable error summary
+          if (this.config.debug && this.api) {
+            const retryMsg = retryCount > 0 ? ` (retry ${retryCount}/${MAX_RETRIES})` : '';
+            this.api.logger.warn?.(
+              `memory-memoryrelay: ${toolName} → ${response.status} ${errorMsg || response.statusText}${retryMsg}`
+            );
+          }
         }
 
         // Track failure
@@ -267,6 +281,15 @@ class MemoryRelayClient {
           requestBody: this.debugLogger && body ? body : undefined,
           responseBody: this.debugLogger && result ? result : undefined,
         });
+
+        // Enhanced gateway logging (v0.8.2): Readable API call summary
+        if (this.config.debug && this.api) {
+          const statusSymbol = response.status < 400 ? '✓' : '✗';
+          const durationColor = duration > 1000 ? ' (SLOW)' : duration > 500 ? ' (slow)' : '';
+          this.api.logger.info?.(
+            `memory-memoryrelay: ${toolName} → ${duration}ms ${statusSymbol}${durationColor}`
+          );
+        }
       }
 
       // Track success
@@ -3297,9 +3320,23 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         if (results.length > 0) {
           const memoryContext = results.map((r) => `- ${r.memory.content}`).join("\n");
 
-          api.logger.info?.(
-            `memory-memoryrelay: injecting ${results.length} memories into context`,
-          );
+          // Enhanced gateway logging (v0.8.2): Show memory previews
+          if (cfg?.debug) {
+            const snippets = results
+              .map((r) => {
+                const preview = r.memory.content.substring(0, 100).replace(/\n/g, ' ');
+                const ellipsis = r.memory.content.length > 100 ? '...' : '';
+                return `  • [${r.score.toFixed(2)}] ${preview}${ellipsis}`;
+              })
+              .join('\n');
+            api.logger.info?.(
+              `memory-memoryrelay: injecting ${results.length} memories into context:\n${snippets}`,
+            );
+          } else {
+            api.logger.info?.(
+              `memory-memoryrelay: injecting ${results.length} memories into context`,
+            );
+          }
 
           prependContext +=
             `\n\n<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`;
