@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay (Single File Version)
- * Version: 0.9.9
+ * Version: 0.10.1
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
@@ -110,7 +110,7 @@ class StatusReporter {
 
 const DEFAULT_API_URL = "https://api.memoryrelay.net";
 
-export default async function plugin(api: OpenClawPluginApi): Promise<void> {
+export default function plugin(api: OpenClawPluginApi): void {
   const cfg = api.pluginConfig as any;
   
   const apiKey = cfg?.apiKey || process.env.MEMORYRELAY_API_KEY;
