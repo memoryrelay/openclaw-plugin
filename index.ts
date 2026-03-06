@@ -131,7 +131,7 @@ interface MemoryStats {
 interface PluginConfig {
   agentId: string;
   autoRecall: boolean;
-  autoCapture: boolean;
+  autoCapture: AutoCaptureConfig; // Updated in v0.12.0
   recallLimit: number;
   recallThreshold: number;
   excludeChannels: string[];
@@ -283,7 +283,10 @@ class StatusReporter {
       ? `✓ Enabled (limit: ${report.config.recallLimit}, threshold: ${report.config.recallThreshold})`
       : "✗ Disabled";
     lines.push(`  Auto-Recall:   ${recallStatus}`);
-    lines.push(`  Auto-Capture:  ${report.config.autoCapture ? "✓ Enabled" : "✗ Disabled"}`);
+    const captureStatus = report.config.autoCapture.enabled
+      ? `✓ Enabled (tier: ${report.config.autoCapture.tier})`
+      : "✗ Disabled";
+    lines.push(`  Auto-Capture:  ${captureStatus}`);
     if (report.config.defaultProject) {
       lines.push(`  Default Project: ${report.config.defaultProject}`);
     }
@@ -377,11 +380,27 @@ class StatusReporter {
   }
 }
 
+// Auto-capture configuration types (Phase 1 - Issue #12)
+type AutoCaptureTier = "off" | "conservative" | "smart" | "aggressive";
+
+interface AutoCaptureConfig {
+  enabled: boolean;
+  tier: AutoCaptureTier;
+  confirmFirst?: number; // Number of captures to confirm (default: 5)
+  categories?: {
+    credentials?: boolean;
+    preferences?: boolean;
+    technical?: boolean;
+    personal?: boolean;
+  };
+  blocklist?: string[]; // Regex patterns to never capture
+}
+
 interface MemoryRelayConfig {
   apiKey?: string;
   agentId?: string;
   apiUrl?: string;
-  autoCapture?: boolean;
+  autoCapture?: boolean | AutoCaptureConfig; // Enhanced in v0.12.0
   autoRecall?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
@@ -469,6 +488,100 @@ async function fetchWithTimeout(
     }
     throw err;
   }
+}
+
+// ============================================================================
+// Auto-Capture Configuration Helpers (Phase 1 - Issue #12)
+// ============================================================================
+
+/**
+ * Normalize auto-capture config from boolean or object format
+ */
+function normalizeAutoCaptureConfig(
+  config: boolean | AutoCaptureConfig | undefined
+): AutoCaptureConfig {
+  // Default configuration (smart auto-capture enabled by default in v0.12.0)
+  const defaultConfig: AutoCaptureConfig = {
+    enabled: true,
+    tier: "smart",
+    confirmFirst: 5,
+    categories: {
+      credentials: true,
+      preferences: true,
+      technical: true,
+      personal: false, // Privacy: personal info requires confirmation
+    },
+    blocklist: [
+      // Privacy patterns - never auto-capture
+      /password\s*[:=]\s*[^\s]+/i,
+      /credit\s*card/i,
+      /ssn\s*[:=]/i,
+      /social\s*security/i,
+    ].map((r) => r.source),
+  };
+
+  // Handle legacy boolean config
+  if (typeof config === "boolean") {
+    return {
+      ...defaultConfig,
+      enabled: config,
+    };
+  }
+
+  // Handle undefined (use smart default in v0.12.0+)
+  if (config === undefined) {
+    return defaultConfig;
+  }
+
+  // Merge provided config with defaults
+  return {
+    enabled: config.enabled ?? defaultConfig.enabled,
+    tier: config.tier ?? defaultConfig.tier,
+    confirmFirst: config.confirmFirst ?? defaultConfig.confirmFirst,
+    categories: {
+      ...defaultConfig.categories,
+      ...config.categories,
+    },
+    blocklist: config.blocklist ?? defaultConfig.blocklist,
+  };
+}
+
+/**
+ * Check if content matches any blocklist patterns
+ */
+function isBlocklisted(content: string, blocklist: string[]): boolean {
+  return blocklist.some((pattern) => {
+    try {
+      return new RegExp(pattern, "i").test(content);
+    } catch {
+      return false; // Invalid regex, skip
+    }
+  });
+}
+
+/**
+ * Mask sensitive data in content (API keys, tokens, etc.)
+ */
+function maskSensitiveData(content: string): string {
+  // Mask API keys (show only last 4 chars)
+  content = content.replace(
+    /\b([a-z]{2,}_)?([a-z]{4,}_)?[a-f0-9]{32,}\b/gi,
+    (match) => {
+      if (match.length <= 8) return match;
+      return `${match.slice(0, 4)}...${match.slice(-4)}`;
+    }
+  );
+
+  // Mask email addresses (show only domain)
+  content = content.replace(
+    /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi,
+    (match) => {
+      const domain = match.split("@")[1];
+      return `***@${domain}`;
+    }
+  );
+
+  return content;
 }
 
 // ============================================================================
@@ -1208,11 +1321,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         total_memories: memoryCount,
       };
       
-      // Get config
+      // Get config - normalize autoCapture to new format
+      const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
+      
       const pluginConfig = {
         agentId: agentId,
         autoRecall: cfg?.autoRecall ?? true,
-        autoCapture: cfg?.autoCapture ?? false,
+        autoCapture: autoCaptureConfig,
         recallLimit: cfg?.recallLimit ?? 5,
         recallThreshold: cfg?.recallThreshold ?? 0.3,
         excludeChannels: cfg?.excludeChannels ?? [],
@@ -3641,7 +3756,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // Auto-capture: analyze and store important information after agent ends
-  if (cfg?.autoCapture) {
+  const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
+  
+  if (autoCaptureConfig.enabled) {
     api.on("agent_end", async (event) => {
       if (!event.success || !event.messages || event.messages.length === 0) {
         return;
@@ -3673,7 +3790,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           }
         }
 
-        const toCapture = texts.filter((text) => text && shouldCapture(text));
+        const toCapture = texts.filter((text) => {
+          if (!text || !shouldCapture(text)) return false;
+          // Check blocklist
+          if (isBlocklisted(text, autoCaptureConfig.blocklist || [])) return false;
+          return true;
+        });
+        
         if (toCapture.length === 0) return;
 
         let stored = 0;
@@ -3696,7 +3819,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.11.5 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${cfg?.autoCapture}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.12.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
