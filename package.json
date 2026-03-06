@@ -1,14 +1,13 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "description": "OpenClaw memory plugin for MemoryRelay API - sessions, decisions, patterns, projects & semantic search",
   "type": "module",
   "main": "index.ts",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "postinstall": "node -e \"console.log('\\n⚠️  CONFIGURATION REQUIRED\\n\\nAdd config after installation:\\n\\ncat ~/.openclaw/openclaw.json | jq \\'.plugins.entries.\\\"plugin-memoryrelay-ai\\\".config = {\\\"apiKey\\\": \\\"YOUR_KEY\\\", \\\"agentId\\\": \\\"YOUR_AGENT\\\"}\\' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json\\n\\nOr use environment variables:\\nexport MEMORYRELAY_API_KEY=\\\"mem_prod_...\\\"\\nexport MEMORYRELAY_AGENT_ID=\\\"your-agent\\\"\\n\\nThen restart: openclaw gateway restart\\n\\nGet your API key from: https://memoryrelay.ai\\n')\""
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "openclaw",
