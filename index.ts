@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.11.0 (Full Single-File)
+ * Version: 0.11.1 (Full Single-File)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -842,7 +842,7 @@ function shouldCapture(text: string): boolean {
 
 // ============================================================================
 // Plugin Export
-export default function plugin(api: OpenClawPluginApi): void {
+export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
 
   // Fall back to environment variables
