@@ -25,6 +25,13 @@ import {
   statsCommand,
   type StatsCommandOptions,
 } from "./src/cli/stats-command.js";
+import {
+  checkFirstRun,
+  generateOnboardingPrompt,
+  generateSuccessMessage,
+  runSimpleOnboarding,
+  type OnboardingResult,
+} from "./src/onboarding/first-run.js";
 
 // ============================================================================
 // Constants
@@ -3839,6 +3846,40 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   );
 
   // ========================================================================
+  // First-Run Onboarding (Phase 1 - Issue #9)
+  // ========================================================================
+
+  // Check if this is the first run and auto-onboard if needed
+  try {
+    const onboardingCheck = await checkFirstRun(async () => {
+      const memories = await client.list(1);
+      return memories.length;
+    });
+
+    if (onboardingCheck.shouldOnboard) {
+      // Auto-onboard with simple setup
+      await runSimpleOnboarding(
+        async (content, metadata) => {
+          const memory = await client.store(content, metadata || {});
+          return { id: memory.id };
+        },
+        "Welcome to MemoryRelay! This is your first memory. Use memory_store to add more.",
+        autoCaptureConfig.enabled
+      );
+
+      const successMsg = generateSuccessMessage(
+        "Welcome to MemoryRelay! This is your first memory.",
+        autoCaptureConfig.enabled
+      );
+
+      api.logger.info?.(`\n${successMsg}`);
+    }
+  } catch (err) {
+    // Don't fail plugin load if onboarding fails
+    api.logger.warn?.(`memory-memoryrelay: onboarding check failed: ${String(err)}`);
+  }
+
+  // ========================================================================
   // CLI Helper Tools (v0.8.0)
   // ========================================================================
 
@@ -4039,6 +4080,26 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         shouldNotify: result.shouldNotify,
         message: result.message,
         stats: result.stats,
+      });
+    } catch (err) {
+      respond(false, { error: String(err) });
+    }
+  });
+
+  // memoryrelay:onboarding - Show onboarding prompt (Phase 1 - Issue #9)
+  api.registerGatewayMethod?.("memoryrelay.onboarding", async ({ respond }) => {
+    try {
+      const onboardingCheck = await checkFirstRun(async () => {
+        const memories = await client.list(1);
+        return memories.length;
+      });
+
+      const prompt = generateOnboardingPrompt();
+
+      respond(true, {
+        isFirstRun: onboardingCheck.isFirstRun,
+        alreadyOnboarded: onboardingCheck.state?.completed || false,
+        prompt,
       });
     } catch (err) {
       respond(false, { error: String(err) });
