@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay (Single File Version)
- * Version: 0.9.5
+ * Version: 0.9.6
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
