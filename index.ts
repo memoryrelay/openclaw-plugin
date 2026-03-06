@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.8.4 (OpenClaw Security Compliance)
+ * Version: 0.8.5 (OpenClaw Security Compliance)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -8,6 +8,11 @@
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
+ *
+ * ENHANCEMENTS (v0.8.5):
+ * - Removed fs.writeFile from export command (stdout only now)
+ * - No filesystem operations - passes OpenClaw security validation
+ * - Export usage: openclaw memoryrelay export > memories.json
  *
  * ENHANCEMENTS (v0.8.4):
  * - Removed file logging feature to pass OpenClaw security validation
@@ -858,7 +863,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const verboseEnabled = cfg?.verbose || false;
   const maxLogEntries = cfg?.maxLogEntries || 100;
   
-  // Note: logFile is deprecated in v0.8.4 (removed for OpenClaw security compliance)
+  // Note: logFile is deprecated in v0.8.5 (removed for OpenClaw security compliance)
   // All debug logs are in-memory only. Use gateway methods to access logs.
   
   let debugLogger: DebugLogger | undefined;
@@ -3209,15 +3214,12 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
       mem
         .command("export")
-        .description("Export all memories to JSON file")
-        .option("--output <path>", "Output file path", "memories-export.json")
-        .action(async (opts) => {
+        .description("Export all memories to JSON (outputs to stdout)")
+        .action(async () => {
           try {
-            console.log("Exporting memories...");
             const memories = await client.export();
-            const fs = await import("fs/promises");
-            await fs.writeFile(opts.output, JSON.stringify(memories, null, 2));
-            console.log(`Exported ${memories.length} memories to ${opts.output}`);
+            console.log(JSON.stringify(memories, null, 2));
+            console.error(`\n# Exported ${memories.length} memories. Redirect stdout to save: memoryrelay export > memories.json`);
           } catch (err) {
             console.error(`Export failed: ${String(err)}`);
           }
