@@ -790,12 +790,26 @@ class MemoryRelayClient {
       tier?: string;
     },
   ): Promise<Memory> {
-    return this.request<Memory>("POST", "/v1/memories", {
+    // Extract session_id from metadata if present and move to top-level
+    const { session_id, ...cleanMetadata } = metadata || {};
+    
+    const payload: any = {
       content,
-      metadata,
       agent_id: this.agentId,
       ...options,
-    });
+    };
+    
+    // Only include metadata if there's something left after extracting session_id
+    if (Object.keys(cleanMetadata).length > 0) {
+      payload.metadata = cleanMetadata;
+    }
+    
+    // Add session_id as top-level parameter if provided
+    if (session_id) {
+      payload.session_id = session_id;
+    }
+    
+    return this.request<Memory>("POST", "/v1/memories", payload);
   }
 
   async search(
