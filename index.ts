@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.8.8 (OpenClaw Security Compliance)
+ * Version: 0.8.9 (OpenClaw Security Compliance)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -9,7 +9,7 @@
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
  *
- * ENHANCEMENTS (v0.8.8):
+ * ENHANCEMENTS (v0.8.9):
  * - Removed fs.writeFile from export command (stdout only now)
  * - No filesystem operations - passes OpenClaw security validation
  * - Export usage: openclaw memoryrelay export > memories.json
@@ -865,7 +865,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const verboseEnabled = cfg?.verbose || false;
   const maxLogEntries = cfg?.maxLogEntries || 100;
   
-  // Note: logFile is deprecated in v0.8.8 (removed for OpenClaw security compliance)
+  // Note: logFile is deprecated in v0.8.9 (removed for OpenClaw security compliance)
   // All debug logs are in-memory only. Use gateway methods to access logs.
   
   let debugLogger: DebugLogger | undefined;
