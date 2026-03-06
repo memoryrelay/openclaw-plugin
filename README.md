@@ -8,6 +8,8 @@ AI-powered long-term memory for OpenClaw agents. Gives your AI assistant persist
 ## Features
 
 - **39 Tools** covering memories, entities, sessions, decisions, patterns, and projects
+- **Debug & Monitoring** - Comprehensive logging, health checks, and performance metrics (v0.8.0+)
+- **CLI Commands** - 4 commands for debugging and diagnostics (v0.8.0+)
 - **Semantic Search** - Vector-based retrieval finds relevant context by meaning
 - **Auto-Recall** - Automatically injects relevant memories into agent context
 - **Project-First Workflow** - Agents receive workflow instructions to start with project context
@@ -64,6 +66,126 @@ openclaw gateway restart
 | `recallLimit` | number | `5` | Max memories to inject per turn (1-20) |
 | `recallThreshold` | number | `0.3` | Minimum similarity score for recall (0-1) |
 | `excludeChannels` | string[] | `[]` | Channel IDs to skip auto-recall |
+| `debug` | boolean | `false` | Enable debug logging of API calls (v0.8.0+) |
+| `verbose` | boolean | `false` | Include request/response bodies in debug logs (v0.8.0+) |
+| `logFile` | string | — | Optional file path for persistent debug logs (v0.8.0+) |
+| `maxLogEntries` | number | `100` | Circular buffer size for in-memory logs (v0.8.0+) |
+
+## Debug & Monitoring (v0.8.0+)
+
+### Enable Debug Mode
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "plugin-memoryrelay-ai": {
+        "enabled": true,
+        "config": {
+          "apiKey": "mem_prod_xxxxx",
+          "agentId": "your-agent",
+          "debug": true,
+          "verbose": false,
+          "maxLogEntries": 1000
+        }
+      }
+    }
+  }
+}
+```
+
+### CLI Commands
+
+The plugin provides four CLI commands for debugging and monitoring:
+
+#### View Debug Logs
+```bash
+# Last 20 logs
+memoryrelay-logs
+
+# Last 50 logs
+memoryrelay-logs --limit=50
+
+# Filter by tool
+memoryrelay-logs --tool=memory_store --limit=20
+
+# Show errors only
+memoryrelay-logs --errors-only
+```
+
+#### Health Check
+```bash
+# Run comprehensive health check
+memoryrelay-health
+
+# Tests API connectivity, authentication, and core tools
+```
+
+#### Test Individual Tools
+```bash
+# Test specific tool
+memoryrelay-test --tool=memory_store
+memoryrelay-test --tool=memory_recall
+memoryrelay-test --tool=project_list
+```
+
+#### View Performance Metrics
+```bash
+# Show performance statistics
+memoryrelay-metrics
+
+# Displays per-tool metrics:
+# - Call count
+# - Success rate
+# - Average duration
+# - p95/p99 latencies
+```
+
+### Gateway Method Calls
+
+You can also call these commands via the OpenClaw gateway:
+
+```bash
+openclaw gateway call memoryrelay.logs '{"limit": 20}'
+openclaw gateway call memoryrelay.health
+openclaw gateway call memoryrelay.test '{"tool": "memory_store"}'
+openclaw gateway call memoryrelay.metrics
+```
+
+### Enhanced Status Reporting
+
+The `memory.status` gateway method now provides comprehensive reports including:
+
+- Connection status with response time
+- Tool breakdown by category (39 tools across 8 groups)
+- Recent API call history
+- Known issues with affected tools
+- Debug/verbose mode status
+
+```bash
+openclaw gateway call memory.status
+```
+
+### Debug Log Format
+
+When debug mode is enabled, each API call is logged with:
+
+```
+TIMESTAMP          TOOL                    DURATION  STATUS  ERROR
+━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━  ━━━━━━  ━━━━━━━━━━━━━━━━━━━
+7:35:15 PM        memory_store              142ms  ✓      
+7:35:10 PM        memory_recall              78ms  ✓      
+7:35:05 PM        memory_batch_store        245ms  ✗      500 Internal Server Error
+```
+
+Verbose mode additionally captures request/response bodies for deep troubleshooting.
+
+### Performance Impact
+
+- **Debug disabled**: ~0ms overhead (no-op checks)
+- **Debug enabled**: ~1-2ms per call (logging only)
+- **Verbose enabled**: ~2-5ms per call (includes JSON serialization)
+- **Memory usage**: ~10KB (default 100 entries) to ~100KB (1000 entries)
 
 ## Agent Workflow
 
@@ -225,20 +347,171 @@ openclaw memoryrelay export          # Export all memories to JSON
 
 ### Plugin Not Loading
 
+**Symptoms**: Plugin doesn't appear in `openclaw plugins list` or shows as "unavailable"
+
+**Solutions**:
 ```bash
-openclaw plugins list | grep memoryrelay
-openclaw config get plugins.entries.plugin-memoryrelay-ai
-openclaw logs --tail 100 | grep memory
+# Check if installed
+npm list -g @memoryrelay/plugin-memoryrelay-ai
+
+# Reinstall if needed
+openclaw plugins install @memoryrelay/plugin-memoryrelay-ai --force
+
+# Check config syntax
+cat ~/.openclaw/openclaw.json | jq '.plugins.entries."plugin-memoryrelay-ai"'
+
+# Restart gateway
+openclaw gateway restart
+
+# Check logs for errors
+openclaw gateway logs | grep memoryrelay
 ```
 
 ### API Connection Issues
 
+**Symptoms**: "Failed to connect" errors, timeouts, or "unhealthy" status
+
+**Solutions**:
 ```bash
-curl -H "Authorization: Bearer YOUR_API_KEY" \
-  https://api.memoryrelay.net/v1/health
+# Test API directly
+curl -H "X-API-Key: YOUR_KEY" https://api.memoryrelay.net/v1/health
+
+# Check gateway logs
+openclaw gateway logs -f | grep memory-memoryrelay
+
+# Verify API key format (should be mem_prod_xxxxx with 32 chars after prefix)
+openclaw config get plugins.entries.plugin-memoryrelay-ai.config.apiKey
+
+# Run health check
+memoryrelay-health
 ```
 
+### Auto-Recall Not Working
+
+**Symptoms**: Memories not appearing in agent context
+
+**Checks**:
+1. Verify `autoRecall: true` in config
+2. Check memories exist: `openclaw gateway call memory_list '{"limit": 10}'`
+3. Lower `recallThreshold` (try 0.1) for more results
+4. Review logs: `openclaw gateway logs | grep "injecting.*memories"`
+5. Check channel not in `excludeChannels`
+
+### Debug Mode Not Working
+
+**Symptoms**: `memoryrelay-logs` shows "No logs" or debug commands fail
+
+**Solutions**:
+1. Verify `debug: true` in config
+2. Restart gateway after config change: `openclaw gateway restart`
+3. Use the plugin to generate logs
+4. Check `maxLogEntries` isn't set too low (default: 100)
+
+### Tool Not Found Errors
+
+**Symptoms**: "Tool xxx not found" or "Tool not enabled"
+
+**Solutions**:
+1. Check `enabledTools` config (should be `"all"` or include the tool's group)
+2. Verify tool name spelling matches exactly (e.g., `memory_store` not `memoryStore`)
+3. Check plugin version: `npm list -g @memoryrelay/plugin-memoryrelay-ai`
+4. Update to latest: `openclaw plugins install @memoryrelay/plugin-memoryrelay-ai@latest`
+
+### Performance Issues
+
+**Symptoms**: Slow API calls, timeouts, high latency
+
+**Diagnosis**:
+```bash
+# Enable debug mode
+openclaw config set plugins.entries.plugin-memoryrelay-ai.config.debug true
+openclaw gateway restart
+
+# View metrics
+memoryrelay-metrics
+
+# Check for slow tools (high avgDuration or p99)
+# Check for failures (low successRate)
+```
+
+**Solutions**:
+1. Check network latency to api.memoryrelay.net
+2. Reduce `recallLimit` (fewer memories = faster)
+3. Lower `recallThreshold` (fewer vector comparisons)
+4. Check MemoryRelay API status at status.memoryrelay.ai
+
+### Memory Storage Failures
+
+**Symptoms**: `memory_store` returns 422 validation errors or 500 errors
+
+**Common Causes**:
+1. Content too long (max 50,000 characters)
+2. Metadata too large (max 10KB when serialized)
+3. Invalid project slug (use `project_list` to verify)
+4. API rate limits exceeded (30 req/min for memory_store)
+
+**Solutions**:
+```bash
+# Test with minimal memory
+openclaw gateway call memory_store '{"content": "Test memory"}'
+
+# Check recent errors
+memoryrelay-logs --errors-only --limit=10
+
+# Verify API key has write permissions
+curl -X POST https://api.memoryrelay.net/v1/memories \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Test"}'
+```
+
+### Session Tracking Issues
+
+**Symptoms**: `session_start` fails or `session_end` can't find session
+
+**Solutions**:
+1. Save session ID from `session_start` response
+2. Verify project exists: `openclaw gateway call project_list`
+3. Check for API validation errors in logs
+4. Use `session_list` to find active sessions
+
+### Known Limitations
+
+**API Issues** (reported to MemoryRelay team):
+- `memory_batch_store`: May return 500 errors (use individual `memory_store` as workaround)
+- `memory_context`: Returns 405 Method Not Allowed (use `memory_recall` instead)
+- `entity_create`: May fail with 422 validation errors
+- `decision_record`: May fail with 422 validation errors
+- `session_start`: May fail with 422 validation errors
+
+**Workarounds**:
+- Use alternative tools where available
+- Check GitHub Issues for latest status
+- Enable debug mode to capture full error details
+
 ## Changelog
+
+### v0.8.0 (2026-03-05)
+
+**🚀 Debug & Monitoring Release**
+
+- **NEW**: Debug logging system with circular buffer (configurable maxLogEntries)
+- **NEW**: DebugLogger class tracks all API calls with timing, status, errors
+- **NEW**: StatusReporter class provides enhanced status reports
+- **NEW**: 4 CLI commands: `memoryrelay-logs`, `memoryrelay-health`, `memoryrelay-test`, `memoryrelay-metrics`
+- **NEW**: 4 gateway methods: `memoryrelay.logs`, `memoryrelay.health`, `memoryrelay.test`, `memoryrelay.metrics`
+- **NEW**: Performance metrics with p95/p99 latency tracking
+- **NEW**: Enhanced `memory.status` handler with comprehensive reports
+- **NEW**: Debug config options: `debug`, `verbose`, `logFile`, `maxLogEntries`
+- **NEW**: Tool failure tracking and recovery monitoring
+- **NEW**: Request/response capture in verbose mode
+- **NEW**: Persistent file logging option
+- **TESTS**: 92 tests total (73 existing + 19 new for DebugLogger and StatusReporter)
+- **DOCS**: CLI_COMMANDS.md with complete usage guide
+- **DOCS**: Enhanced README with Debug & Monitoring section
+- **DOCS**: Comprehensive troubleshooting guide
+
+**Performance**: Minimal overhead when disabled (~0ms), 1-2ms when enabled, 2-5ms in verbose mode
 
 ### v0.7.0 (2026-03-05)
 
