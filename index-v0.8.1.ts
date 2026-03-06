@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.11.0 (Full Single-File)
+ * Version: 0.8.0 (Enhanced Debug & Status)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -8,108 +8,44 @@
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
+ *
+ * ENHANCEMENTS (v0.8.0):
+ * - Debug mode with comprehensive API call logging
+ * - Enhanced status reporting with tool breakdown
+ * - Request/response capture (verbose mode)
+ * - Tool failure tracking and known issues display
+ * - Performance metrics (duration, success rate)
+ * - Recent activity display
+ * - Formatted CLI output with Unicode symbols
+ *
+ * ENHANCEMENTS (v0.7.0):
+ * - 39 tools covering all MemoryRelay API resources
+ * - Session tracking, decision logging, pattern management, project context
+ * - Agent workflow instructions injected via before_agent_start
+ * - Retry logic with exponential backoff (3 attempts)
+ * - Request timeout (30 seconds)
+ * - Environment variable fallback support
+ * - Channel filtering (excludeChannels config)
+ * - Additional CLI commands (stats, delete, export)
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { DebugLogger, type LogEntry } from "./src/debug-logger";
+import { StatusReporter } from "./src/status-reporter";
 
 // ============================================================================
-// DebugLogger (Inlined from src/debug-logger.ts)
+// Constants
 // ============================================================================
 
-interface LogEntry {
-  timestamp: string;
-  tool: string;
-  method: string;
-  path: string;
-  duration: number;
-  status: "success" | "error";
-  requestBody?: unknown;
-  responseBody?: unknown;
-  responseStatus?: number;
-  error?: string;
-  retries?: number;
-}
-
-interface DebugLoggerConfig {
-  enabled: boolean;
-  verbose: boolean;
-  maxEntries: number;
-}
-
-class DebugLogger {
-  private logs: LogEntry[] = [];
-  private config: DebugLoggerConfig;
-
-  constructor(config: DebugLoggerConfig) {
-    this.config = config;
-  }
-
-  log(entry: LogEntry): void {
-    if (!this.config.enabled) return;
-    this.logs.push(entry);
-    if (this.logs.length > this.config.maxEntries) {
-      this.logs.shift();
-    }
-  }
-
-  getRecentLogs(limit: number = 10): LogEntry[] {
-    return this.logs.slice(-limit);
-  }
-
-  getToolLogs(toolName: string, limit: number = 10): LogEntry[] {
-    return this.logs.filter(log => log.tool === toolName).slice(-limit);
-  }
-
-  getErrorLogs(limit: number = 10): LogEntry[] {
-    return this.logs.filter(log => log.status === "error").slice(-limit);
-  }
-
-  getAllLogs(): LogEntry[] {
-    return [...this.logs];
-  }
-
-  clear(): void {
-    this.logs = [];
-  }
-
-  getStats() {
-    const total = this.logs.length;
-    const successful = this.logs.filter(l => l.status === "success").length;
-    const failed = total - successful;
-    const avgDuration = total > 0 ? this.logs.reduce((sum, l) => sum + l.duration, 0) / total : 0;
-    return {
-      total,
-      successful,
-      failed,
-      successRate: total > 0 ? (successful / total) * 100 : 0,
-      avgDuration: Math.round(avgDuration),
-    };
-  }
-}
+const DEFAULT_API_URL = "https://api.memoryrelay.net";
+const VALID_HEALTH_STATUSES = ["ok", "healthy", "up"];
+const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1000; // 1 second
 
 // ============================================================================
-// StatusReporter (Inlined from src/status-reporter.ts)
+// Types
 // ============================================================================
-
-class StatusReporter {
-  constructor(private debugLogger?: DebugLogger) {}
-
-  buildReport(connectionStatus: any, config: any, stats: any, toolGroups: any) {
-    const report = {
-      available: true,
-      connected: connectionStatus.connected,
-      apiVersion: connectionStatus.apiVersion,
-      config,
-      stats,
-      tools: toolGroups,
-    };
-    return report;
-  }
-
-  static formatReport(report: any): string {
-    return JSON.stringify(report, null, 2);
-  }
-}
 
 interface MemoryRelayConfig {
   apiKey?: string;
@@ -842,7 +778,9 @@ function shouldCapture(text: string): boolean {
 
 // ============================================================================
 // Plugin Export
-export default function plugin(api: OpenClawPluginApi): void {
+// ============================================================================
+
+export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
 
   // Fall back to environment variables
