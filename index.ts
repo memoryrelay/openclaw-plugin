@@ -1,10 +1,11 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.12.3 (Phase 1 - Adoption Framework)
+ * Version: 0.12.6 (Session Context Integration)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
+ * New in v0.12.6: OpenClaw session context integration for session tracking
  * New in v0.12.3: Smart auto-capture, daily stats, CLI commands, onboarding
  *
  * API: https://api.memoryrelay.net
@@ -1536,11 +1537,25 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             importance?: number;
             tier?: string;
           },
+          context?: {
+            sessionId?: string;
+            agentId?: string;
+            sessionKey?: string;
+            workspaceDir?: string;
+            config?: any;
+          },
         ) => {
           try {
             const { content, metadata, ...opts } = args;
+            
+            // Inject sessionId from OpenClaw context into metadata
+            const enrichedMetadata = {
+              ...metadata,
+              ...(context?.sessionId && { session_id: context.sessionId }),
+            };
+            
             if (!opts.project && defaultProject) opts.project = defaultProject;
-            const memory = await client.store(content, metadata, opts);
+            const memory = await client.store(content, enrichedMetadata, opts);
             return {
               content: [
                 {
@@ -3856,7 +3871,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.12.5 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.12.6 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
