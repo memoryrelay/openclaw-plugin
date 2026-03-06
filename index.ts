@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.8.7 (OpenClaw Security Compliance)
+ * Version: 0.8.8 (OpenClaw Security Compliance)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -9,7 +9,7 @@
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
  *
- * ENHANCEMENTS (v0.8.7):
+ * ENHANCEMENTS (v0.8.8):
  * - Removed fs.writeFile from export command (stdout only now)
  * - No filesystem operations - passes OpenClaw security validation
  * - Export usage: openclaw memoryrelay export > memories.json
@@ -834,13 +834,15 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   if (!apiKey) {
     api.logger.error(
       "memory-memoryrelay: Missing API key in config or MEMORYRELAY_API_KEY env var.\n\n" +
-        "REQUIRED: Add config after installation:\n\n" +
-        'cat ~/.openclaw/openclaw.json | jq \'.plugins.entries."plugin-memoryrelay-ai".config = {\n' +
-        '  "apiKey": "YOUR_API_KEY",\n' +
-        '  "agentId": "YOUR_AGENT_ID"\n' +
-        "}' > /tmp/config.json && mv /tmp/config.json ~/.openclaw/openclaw.json\n\n" +
+        "REQUIRED: Configure plugin via OpenClaw:\n\n" +
+        "  openclaw config edit\n\n" +
+        'Navigate to plugins.entries.plugin-memoryrelay-ai.config and add:\n' +
+        '  {\n' +
+        '    "apiKey": "YOUR_API_KEY",\n' +
+        '    "agentId": "YOUR_AGENT_ID"\n' +
+        '  }\n\n' +
         "Or set environment variable:\n" +
-        'export MEMORYRELAY_API_KEY="mem_prod_..."\n\n' +
+        '  export MEMORYRELAY_API_KEY="mem_prod_..."\n\n' +
         "Then restart: openclaw gateway restart\n\n" +
         "Get your API key from: https://memoryrelay.ai",
     );
@@ -863,7 +865,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const verboseEnabled = cfg?.verbose || false;
   const maxLogEntries = cfg?.maxLogEntries || 100;
   
-  // Note: logFile is deprecated in v0.8.7 (removed for OpenClaw security compliance)
+  // Note: logFile is deprecated in v0.8.8 (removed for OpenClaw security compliance)
   // All debug logs are in-memory only. Use gateway methods to access logs.
   
   let debugLogger: DebugLogger | undefined;
