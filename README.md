@@ -677,6 +677,57 @@ curl -X POST https://api.memoryrelay.net/v1/memories \
 
 ## Changelog
 
+### v0.12.7 (2026-03-06)
+
+**🎯 Tool Factory Pattern Fix - Session Tracking Now Works!**
+
+- **FIX**: Converted all 39 tools from direct registration to factory pattern for context access
+- **FIX**: Session tracking now works - `ctx.sessionId` properly captured via factory closure
+- **CHANGE**: Tools now registered via `api.registerTool((ctx) => tool)` instead of direct objects
+- **CHANGE**: Removed unused `context?` parameter from execute functions
+- **ROOT CAUSE**: OpenClaw passes context to tool factories at registration time, NOT to execute functions
+- **EVIDENCE**: Examined OpenClaw core source code (`src/plugins/types.ts`, `OpenClawPluginToolFactory`)
+- **AUTOMATION**: Python script converted all 39 tools automatically
+- **IMPACT**: Session-memory linking finally works end-to-end
+- **BACKWARD COMPAT**: Fully compatible, no breaking changes, graceful degradation
+- **RELATED**: Closes #26, part of session tracking fix chain (#24, #25, #226)
+
+**Files changed**: 7 files, 5,176 insertions(+), 246 deletions(-)  
+**Implementation time**: 1.5 hours  
+**Total investigation**: ~7 hours across 6 sessions
+
+### v0.12.6 (2026-03-06)
+
+**⚠️ Wrong Approach - Superseded by v0.12.7**
+
+- **ATTEMPT**: Added context parameter to execute functions
+- **ISSUE**: OpenClaw doesn't pass context to execute - wrong pattern
+- **LESSON**: Should have checked OpenClaw source code first
+
+### v0.12.5 (2026-03-06)
+
+**🔧 Version String Sync**
+
+- **FIX**: Synchronized all version strings across package.json, openclaw.plugin.json, and index.ts
+- **IMPACT**: Gateway now displays correct version (v0.12.5)
+
+### v0.12.4 (2026-03-06)
+
+**❌ Failed Release**
+
+- **ISSUE**: Created git tag before pushing version bump commit
+- **RESULT**: Published to npm without version string updates
+- **LESSON**: Always push commits before tagging releases
+
+### v0.12.3 (2026-03-06)
+
+**🔗 Session Tracking - Plugin Fix**
+
+- **FIX**: Extract session_id from metadata and pass as top-level parameter to API
+- **CHANGE**: Backend expects `{ session_id, content, metadata }`, not `{ content, metadata: { session_id } }`
+- **IMPACT**: Memories now correctly link to sessions in database
+- **RELATED**: Backend fixed in PR #225, plugin integration fixed here
+
 ### v0.12.2 (2026-03-06)
 
 **📚 Documentation & Maintenance Release**

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.7] - 2026-03-06
+
+### Fixed
+- **Session Tracking - Tool Factory Pattern**: All 39 tools converted from direct registration to factory pattern
+  - OpenClaw passes context to tool **factories**, not execute functions (examined source code)
+  - Tools now access `ctx.sessionId` via JavaScript closure instead of function parameter
+  - Pattern: `api.registerTool((ctx) => ({ execute: async (_id, args) => { ctx.sessionId } }))`
+  - Closes #26, completes session tracking fix chain (#24, #25, #226)
+
+### Changed
+- **Architecture**: All tools now registered via factory pattern for context access
+- **Execute Functions**: Removed unused `context?` parameter (was never populated)
+- **SessionId Access**: Changed from `context?.sessionId` (always undefined) to `ctx.sessionId` (closure)
+
+### Technical
+- Files changed: 7 files, 5,176 insertions(+), 246 deletions(-)
+- Automated conversion via Python script (regex pattern matching)
+- Implementation time: 1.5 hours
+- Investigation time: ~7 hours total across 6 debugging sessions
+
+### Backward Compatibility
+- ✅ Fully backward compatible
+- ✅ Graceful degradation if ctx.sessionId undefined
+- ✅ No breaking changes to API surface
+
+## [0.12.6] - 2026-03-06
+
+### Changed
+- ⚠️ Wrong approach - attempted to add context parameter to execute functions
+- OpenClaw doesn't pass context to execute (lesson: check source code first)
+- Superseded by v0.12.7 factory pattern fix
+
+## [0.12.5] - 2026-03-06
+
+### Fixed
+- **Version Strings**: Synchronized all version strings across package.json, openclaw.plugin.json, and index.ts
+- Gateway now displays correct version
+
 ## [0.12.4] - 2026-03-06
 
 ### Fixed
