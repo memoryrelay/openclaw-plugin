@@ -1360,8 +1360,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     }
     
     // Generate external_id from project or workspace
-    const externalId = project || 
-      (workspaceDir ? `workspace-${workspaceDir.split('/').pop()}` : null);
+    const externalId = project ||
+      (workspaceDir ? `workspace-${workspaceDir.split(/[/\\]/).pop()}` : null);
     
     if (!externalId) {
       return null;
@@ -1369,6 +1369,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     
     // Check cache first
     if (sessionCache.has(externalId)) {
+      if (debugLogger) {
+        debugLogger.log(`Session: Cache hit for external_id="${externalId}"`, "info");
+      }
       return sessionCache.get(externalId)!;
     }
     
@@ -1631,18 +1634,19 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           try {
             const { content, metadata, session_id: explicitSessionId, ...opts } = args;
             
+            // Apply defaultProject fallback before session resolution
+            if (!opts.project && defaultProject) opts.project = defaultProject;
+
             // Get session_id from cache if project context available
             // Priority: explicit session_id > context session > no session
             let sessionId: string | undefined = explicitSessionId;
-            
+
             if (!sessionId && (opts.project || ctx.workspaceDir)) {
               const contextSessionId = await getContextSession(opts.project, ctx.workspaceDir);
               if (contextSessionId) {
                 sessionId = contextSessionId;
               }
             }
-            
-            if (!opts.project && defaultProject) opts.project = defaultProject;
             
             // Build request options with session_id as top-level parameter
             const storeOpts = {
