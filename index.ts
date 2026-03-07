@@ -974,6 +974,22 @@ class MemoryRelayClient {
     });
   }
 
+  async getOrCreateSession(
+    external_id: string,
+    agent_id?: string,
+    title?: string,
+    project?: string,
+    metadata?: Record<string, string>,
+  ): Promise<any> {
+    return this.request("POST", "/v1/sessions/get-or-create", {
+      external_id,
+      agent_id: agent_id || this.agentId,
+      title,
+      project,
+      metadata,
+    });
+  }
+
   async endSession(id: string, summary?: string): Promise<any> {
     return this.request("PUT", `/v1/sessions/${id}/end`, { summary });
   }
@@ -1316,6 +1332,78 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   
   const client = new MemoryRelayClient(apiKey, agentId, apiUrl, debugLogger, statusReporter);
 
+  // ========================================================================
+  // Session Cache for External Session IDs (v0.12.11)
+  // ========================================================================
+  
+  /**
+   * Cache mapping: external_id → MemoryRelay session_id
+   * Enables multi-agent collaboration and conversation-spanning sessions
+   */
+  const sessionCache = new Map<string, string>();
+  
+  /**
+   * Get or create MemoryRelay session for current workspace/project context.
+   * Uses external_id as semantic key for multi-agent collaboration.
+   * 
+   * @param project - Project slug (from context or user args)
+   * @param workspaceDir - Workspace directory path
+   * @returns MemoryRelay session UUID, or null if session creation disabled
+   */
+  async function getContextSession(
+    project?: string,
+    workspaceDir?: string
+  ): Promise<string | null> {
+    // If no project context, don't auto-create session
+    if (!project && !workspaceDir) {
+      return null;
+    }
+    
+    // Generate external_id from project or workspace
+    const externalId = project ||
+      (workspaceDir ? `workspace-${workspaceDir.split(/[/\\]/).pop()}` : null);
+    
+    if (!externalId) {
+      return null;
+    }
+    
+    // Check cache first
+    if (sessionCache.has(externalId)) {
+      if (debugLogger) {
+        debugLogger.log(`Session: Cache hit for external_id="${externalId}"`, "info");
+      }
+      return sessionCache.get(externalId)!;
+    }
+    
+    try {
+      // Get or create session via new API endpoint
+      const response = await client.getOrCreateSession(
+        externalId,
+        agentId,
+        project ? `${project} work session` : `Workspace ${externalId}`,
+        project,
+        { source: "openclaw-plugin", agent: agentId }
+      );
+      
+      // Cache the mapping
+      sessionCache.set(externalId, response.id);
+      
+      if (debugLogger) {
+        debugLogger.log(
+          `Session: ${response.created ? 'Created' : 'Retrieved'} session ${response.id} for external_id="${externalId}"`,
+          "info"
+        );
+      }
+      
+      return response.id;
+    } catch (err) {
+      if (debugLogger) {
+        debugLogger.log(`Session: Failed to get-or-create session for ${externalId}: ${String(err)}`, "error");
+      }
+      return null;
+    }
+  }
+
   // Verify connection on startup (with timeout)
   try {
     await client.health();
@@ -1523,6 +1611,10 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               description: "Memory tier: hot, warm, or cold.",
               enum: ["hot", "warm", "cold"],
             },
+            session_id: {
+              type: "string",
+              description: "Optional MemoryRelay session UUID to associate this memory with. If omitted and project is set, plugin auto-creates session via external_id.",
+            },
           },
           required: ["content"],
         },
@@ -1536,27 +1628,41 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             project?: string;
             importance?: number;
             tier?: string;
+            session_id?: string;  // Allow explicit session_id
           },
         ) => {
           try {
-            const { content, metadata, ...opts } = args;
+            const { content, metadata, session_id: explicitSessionId, ...opts } = args;
             
-            // Inject sessionId from OpenClaw context into metadata
-            const enrichedMetadata = {
-              ...metadata,
-              ...(ctx.sessionId && { session_id: ctx.sessionId }),
+            // Apply defaultProject fallback before session resolution
+            if (!opts.project && defaultProject) opts.project = defaultProject;
+
+            // Get session_id from cache if project context available
+            // Priority: explicit session_id > context session > no session
+            let sessionId: string | undefined = explicitSessionId;
+
+            if (!sessionId && (opts.project || ctx.workspaceDir)) {
+              const contextSessionId = await getContextSession(opts.project, ctx.workspaceDir);
+              if (contextSessionId) {
+                sessionId = contextSessionId;
+              }
+            }
+            
+            // Build request options with session_id as top-level parameter
+            const storeOpts = {
+              ...opts,
+              ...(sessionId && { session_id: sessionId }),
             };
             
-            if (!opts.project && defaultProject) opts.project = defaultProject;
-            const memory = await client.store(content, enrichedMetadata, opts);
+            const memory = await client.store(content, metadata, storeOpts);
             return {
               content: [
                 {
                   type: "text",
-                  text: `Memory stored successfully (id: ${memory.id.slice(0, 8)}...)`,
+                  text: `Memory stored successfully (id: ${memory.id.slice(0, 8)}...)${sessionId ? ` in session ${sessionId.slice(0, 8)}...` : ''}`,
                 },
               ],
-              details: { id: memory.id, stored: true },
+              details: { id: memory.id, stored: true, session_id: sessionId },
             };
           } catch (err) {
             return {
@@ -3864,7 +3970,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.12.10 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.12.11 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================

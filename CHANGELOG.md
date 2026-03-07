@@ -7,201 +7,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.7] - 2026-03-06
-
-### Fixed
-- **Session Tracking - Tool Factory Pattern**: All 39 tools converted from direct registration to factory pattern
-  - OpenClaw passes context to tool **factories**, not execute functions (examined source code)
-  - Tools now access `ctx.sessionId` via JavaScript closure instead of function parameter
-  - Pattern: `api.registerTool((ctx) => ({ execute: async (_id, args) => { ctx.sessionId } }))`
-  - Closes #26, completes session tracking fix chain (#24, #25, #226)
-
-### Changed
-- **Architecture**: All tools now registered via factory pattern for context access
-- **Execute Functions**: Removed unused `context?` parameter (was never populated)
-- **SessionId Access**: Changed from `context?.sessionId` (always undefined) to `ctx.sessionId` (closure)
-
-### Technical
-- Files changed: 7 files, 5,176 insertions(+), 246 deletions(-)
-- Automated conversion via Python script (regex pattern matching)
-- Implementation time: 1.5 hours
-- Investigation time: ~7 hours total across 6 debugging sessions
-
-### Backward Compatibility
-- ✅ Fully backward compatible
-- ✅ Graceful degradation if ctx.sessionId undefined
-- ✅ No breaking changes to API surface
-
-## [0.12.6] - 2026-03-06
-
-### Changed
-- ⚠️ Wrong approach - attempted to add context parameter to execute functions
-- OpenClaw doesn't pass context to execute (lesson: check source code first)
-- Superseded by v0.12.7 factory pattern fix
-
-## [0.12.5] - 2026-03-06
-
-### Fixed
-- **Version Strings**: Synchronized all version strings across package.json, openclaw.plugin.json, and index.ts
-- Gateway now displays correct version
-
-## [0.12.4] - 2026-03-06
-
-### Fixed
-- **Version Display**: Fixed hardcoded version strings in openclaw.plugin.json and index.ts (description "v0.11.5" → "v0.12.4", version 0.11.4 → 0.12.4)
-
-## [0.12.3] - 2026-03-06
-
-### Fixed
-- **Session Tracking**: Fixed session-memory linking by extracting `session_id` from metadata and passing it as a top-level parameter to the API (Fixes #24, PR #25)
-  - `session.memory_count` now increments correctly
-  - Memories appear in session's `memories` array
-  - Backward compatible - no breaking changes
-
-
-## [0.6.2] - 2026-03-01
-
-### Fixed
-- **OpenClaw 2026.2.26 Compatibility**: Fixed plugin loading security validation error
-  - Changed `"extensions": ["./"]` to `"extensions": ["./index.ts"]`
-  - Plugin now loads correctly in OpenClaw 2026.2.26+
-  - Error fixed: "extension entry escapes package directory: ./"
-
-### Changed
-- **Installation Method**: Plugin must now be installed via `openclaw plugins install` instead of `npm install -g`
-- **Documentation**: Complete rewrite with comprehensive installation, usage, and troubleshooting guides
+## [0.12.11]
 
 ### Added
-- **README.md** (8.9 KB): Comprehensive documentation with examples
-- **LICENSE**: MIT License
-- **CHANGELOG-v0.6.2.md**: Detailed release notes
-- **OPENCLAW-2026.2.26-MIGRATION.md**: Migration guide for existing users
-
-### Migration Required
-- Users must uninstall old version and reinstall via OpenClaw CLI
-- See OPENCLAW-2026.2.26-MIGRATION.md for step-by-step instructions
-
-### Backward Compatibility
-- ⚠️ Breaking for npm global installs (must use `openclaw plugins install`)
-- ✅ Configuration and API remain unchanged
-- ✅ No changes to plugin functionality
-
-## [0.6.1] - 2026-02-18
-
-### Fixed (FAILED)
-- Attempted to fix plugin loading by removing `extensions` field entirely
-- Did not resolve the issue (plugin discovery requires valid `extensions` field)
-- This version was not functional
-
-## [0.6.0] - 2026-02-18
-
-### Added
-- **Circuit Breaker Pattern**: Prevents cascading failures when API is unavailable (3 failures → 60s cooldown)
-- **Retry Logic**: Exponential backoff for transient network errors (1s → 2s → 4s, max 3 retries)
-- **Enhanced Entity Extraction**: Automatically captures API keys, emails, URLs, IP addresses (10-20x more captures)
-- **Query Preprocessing**: Removes question words and punctuation for better search relevance (15-30% improvement)
-- **Error Classification**: Actionable error messages with troubleshooting hints (AUTH, RATE_LIMIT, SERVER, NETWORK, VALIDATION)
-
-### Changed
-- Auto-capture now includes structured data extraction (optional, enabled by default)
-- Search queries are preprocessed for better semantic matching (optional, enabled by default)
-- Error handling is more resilient with automatic recovery from transient failures
-
-### Performance
-- Circuit breaker overhead: ~1ms per check
-- Retry logic overhead: 0-7s (only on error)
-- Entity extraction: ~5-10ms per message
-- Query preprocessing: ~1-2ms per search
-
-### Impact
-- 90% reduction in cascading failures
-- 60% reduction in transient error failures
-- 10-20x improvement in auto-capture coverage
-- 15-30% improvement in search relevance
-
-### Backward Compatibility
-- ✅ Fully backward compatible - all features are opt-in or non-breaking
-- ✅ Existing configs continue working unchanged
-- ✅ Default behavior preserved with sensible new defaults
-
-## [0.5.3] - 2026-02-17
-
-### Changed
-- Documentation update clarifying architecture and status display
-
-## [0.5.2] - 2026-02-17
-
-### Added
-- Postinstall message with config instructions
-
-## [0.5.1] - 2026-02-17
+- **External Session IDs**: New `getOrCreateSession()` client method calls `POST /v1/sessions/get-or-create`
+- **Session Cache**: In-memory cache maps `external_id` to MemoryRelay session UUID for efficient lookups
+- **Auto-Session Creation**: Sessions auto-created from project slug or workspace directory context
+- **Multi-Agent Collaboration**: Multiple agents sharing a project slug share the same session
+- **`session_id` parameter**: `memory_store` accepts optional explicit session UUID
 
 ### Fixed
-- Made config fields optional (schema validation fix)
-
-## [0.5.0] - 2026-02-17
+- **Removed ctx.sessionId auto-injection**: Was causing HTTP 400 errors when OpenClaw session ID was sent as MemoryRelay session ID
 
 ### Changed
-- Removed env var support, require config (security fix)
+- Session ID injection priority: explicit `session_id` > context session (project/workspace) > no session
+- `memory_store` response now includes `session_id` in details when a session is active
 
-## [0.4.1] - 2026-02-13
+## [0.12.7]
+
+### Fixed
+- **Session Tracking**: All 39 tools converted from direct registration to factory pattern for proper context access
+- `ctx.sessionId` now properly captured via factory closure
+
+### Changed
+- Tools registered via `api.registerTool((ctx) => tool)` instead of direct objects
+
+## [0.12.3]
+
+### Fixed
+- **Session-Memory Linking**: Extract `session_id` from metadata and pass as top-level API parameter
+- Memories now correctly link to sessions in database
+
+## [0.12.0]
+
+### Added
+- **Smart Auto-Capture**: Tier-based privacy system with 4 capture modes (off/conservative/smart/aggressive)
+- **Privacy Blocklist**: Automatic filtering of passwords, SSNs, credit cards, API keys
+- **Daily Memory Stats**: Morning/evening summaries via `memoryrelay:heartbeat` gateway method
+- **CLI Stats Command**: `memoryrelay:stats` gateway method with text/JSON output
+- **First-Run Onboarding**: Welcome wizard with `memoryrelay:onboarding` gateway method
+- **Modular Architecture**: `src/` directory with heartbeat, cli, and onboarding modules
+
+### Changed
+- `autoCapture` config accepts boolean (backward compat) or object with tier system
+
+## [0.8.0]
+
+### Added
+- **Debug Logging**: DebugLogger class with circular buffer and configurable `maxLogEntries`
+- **Status Reporting**: StatusReporter class with comprehensive plugin status reports
+- **Gateway Methods**: `memoryrelay.logs`, `memoryrelay.health`, `memoryrelay.test`, `memoryrelay.metrics`
+- **Performance Metrics**: Per-tool call count, success rate, average duration, p95/p99 latencies
+- **Config Options**: `debug`, `verbose`, `logFile`, `maxLogEntries`
+
+## [0.7.0]
+
+### Added
+- **39 Tools**: Full MemoryRelay API surface (up from 3)
+- **Session Tracking**: `session_start`, `session_end`, `session_recall`, `session_list`
+- **Decision Records**: `decision_record`, `decision_list`, `decision_supersede`, `decision_check`
+- **Pattern Library**: `pattern_create`, `pattern_search`, `pattern_adopt`, `pattern_suggest`
+- **Project Management**: 10 project tools including relationships, impact analysis, shared patterns, context loading
+- **Agent Workflow**: Instructions injected via `before_agent_start` hook
+- **Tool Group Filtering**: `enabledTools` config
+- **Default Project**: `defaultProject` config for automatic project scoping
+
+## [0.6.2]
+
+### Fixed
+- **OpenClaw 2026.2.26 Compatibility**: Changed `"extensions": ["./"]` to `"extensions": ["./index.ts"]`
+
+## [0.6.0]
+
+### Added
+- Retry logic with exponential backoff (3 attempts)
+- Request timeout (30 seconds)
+- Environment variable fallback support
+- Channel filtering (`excludeChannels` config)
+
+## [0.4.1]
 
 ### Fixed
 - Added `safety` declaration to plugin manifest to resolve false-positive security warning
-- Whitelisted environment variables: `MEMORYRELAY_API_KEY`, `MEMORYRELAY_AGENT_ID`, `MEMORYRELAY_BASE_URL`
-- Whitelisted network access: `api.memoryrelay.net`
-- Plugin installation no longer shows "dangerous code patterns" warning
 
-### Impact
-- Clarifies that environment variable access is legitimate configuration fallback
-- Removes confusing security warning during installation
-- Plugin is now explicitly approved for env var usage
-
-## [0.4.0] - 2026-02-13
+## [0.4.0]
 
 ### Added
 - Status reporting via `memory.status` gateway RPC method
-- Plugin now reports availability and connection status to `openclaw status`
-- Memory count reporting (via new `/v1/stats` API endpoint)
-- Vector availability reporting for semantic search
-- Graceful handling of missing stats endpoint (backwards compatible)
-- Status shows "available" when API is reachable, "unavailable" when down
-- Detailed status information: connected state, endpoint, agent ID, memory count
+- Memory count reporting via `/v1/stats` API endpoint
 
-### Fixed
-- Plugin no longer shows as "unavailable" in `openclaw status` when functional
-- Status accurately reflects API connection state
-
-### Technical Improvements
-- Extracted `DEFAULT_API_URL` and `VALID_HEALTH_STATUSES` constants for maintainability
-- Case-insensitive health status validation using extensible array pattern
-- Proper type safety with nullish coalescing operators throughout
-- Consistent variable usage with extracted `apiUrl` for clarity
-
-## [0.3.0] - 2026-02-13
-
-### Changed
-- Better installation UX with env var support
-
-## [0.1.0] - 2026-02-12
+## [0.1.0]
 
 ### Added
 - Initial release
 - Three AI agent tools: `memory_store`, `memory_recall`, `memory_forget`
-- Auto-recall lifecycle hook (inject relevant memories into context)
-- Auto-capture lifecycle hook (detect and store important information)
-- CLI commands: `openclaw memoryrelay status|list|search`
-- Support for semantic search with configurable threshold
+- Auto-recall lifecycle hook
+- Auto-capture lifecycle hook
+- Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
-- Environment variable configuration support
-- Comprehensive documentation
 
-### Security
-- API key handling via config or environment variables
-- Auto-capture disabled by default (privacy)
-- Pattern-based filtering for sensitive data
-
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.1.0...v0.3.0
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.11...HEAD
+[0.12.11]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.11
+[0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
+[0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.12.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.8.0...v0.12.0
+[0.8.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.6.2...v0.7.0
+[0.6.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.6.0...v0.6.2
+[0.6.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.4.1...v0.6.0
+[0.4.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.1.0...v0.4.0
 [0.1.0]: https://github.com/memoryrelay/openclaw-plugin/releases/tag/v0.1.0
