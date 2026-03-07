@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.12.6 (Session Context Integration)
+ * Version: 0.12.7 (Session Context Integration)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -1483,8 +1483,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 1. memory_store
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_store")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_store",
         description:
           "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations." +
@@ -1537,13 +1537,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             importance?: number;
             tier?: string;
           },
-          context?: {
-            sessionId?: string;
-            agentId?: string;
-            sessionKey?: string;
-            workspaceDir?: string;
-            config?: any;
-          },
         ) => {
           try {
             const { content, metadata, ...opts } = args;
@@ -1551,7 +1544,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             // Inject sessionId from OpenClaw context into metadata
             const enrichedMetadata = {
               ...metadata,
-              ...(context?.sessionId && { session_id: context.sessionId }),
+              ...(ctx.sessionId && { session_id: ctx.sessionId }),
             };
             
             if (!opts.project && defaultProject) opts.project = defaultProject;
@@ -1572,7 +1565,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_store" },
     );
   }
@@ -1581,8 +1574,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 2. memory_recall
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_recall")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_recall",
         description:
           "Search memories using natural language. Returns the most relevant memories based on semantic similarity to the query." +
@@ -1694,7 +1687,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_recall" },
     );
   }
@@ -1703,8 +1696,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 3. memory_forget
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_forget")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_forget",
         description: "Delete a memory by ID, or search by query to find candidates. Provide memoryId for direct deletion, or query to search first. A single high-confidence match (>0.9) is auto-deleted; otherwise candidates are listed for you to choose.",
         parameters: {
@@ -1777,7 +1770,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             details: { error: "missing_param" },
           };
         },
-      },
+      }),
       { name: "memory_forget" },
     );
   }
@@ -1786,8 +1779,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 4. memory_list
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_list")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_list",
         description: "List recent memories chronologically for this agent. Use to review what has been stored or to find memory IDs for update/delete operations.",
         parameters: {
@@ -1829,7 +1822,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_list" },
     );
   }
@@ -1838,8 +1831,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 5. memory_get
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_get")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_get",
         description: "Retrieve a specific memory by its ID.",
         parameters: {
@@ -1866,7 +1859,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_get" },
     );
   }
@@ -1875,8 +1868,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 6. memory_update
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_update")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_update",
         description: "Update the content of an existing memory. Use to correct or expand stored information.",
         parameters: {
@@ -1912,7 +1905,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_update" },
     );
   }
@@ -1921,8 +1914,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 7. memory_batch_store
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_batch_store")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_batch_store",
         description: "Store multiple memories at once. More efficient than individual calls for bulk storage.",
         parameters: {
@@ -1969,7 +1962,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_batch_store" },
     );
   }
@@ -1978,8 +1971,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 8. memory_context
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_context")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_context",
         description:
           "Build a context window from relevant memories, optimized for injecting into agent prompts with token budget awareness." +
@@ -2034,7 +2027,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_context" },
     );
   }
@@ -2043,8 +2036,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 9. memory_promote
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_promote")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_promote",
         description:
           "Promote a memory by updating its importance score and/or tier. Use to ensure critical memories are retained longer.",
@@ -2088,7 +2081,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_promote" },
     );
   }
@@ -2097,8 +2090,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 10. entity_create
   // --------------------------------------------------------------------------
   if (isToolEnabled("entity_create")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "entity_create",
         description:
           "Create a named entity (person, place, organization, project, concept) for the knowledge graph. Entities help organize and connect memories.",
@@ -2139,7 +2132,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "entity_create" },
     );
   }
@@ -2148,8 +2141,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 11. entity_link
   // --------------------------------------------------------------------------
   if (isToolEnabled("entity_link")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "entity_link",
         description: "Link an entity to a memory to establish relationships in the knowledge graph.",
         parameters: {
@@ -2192,7 +2185,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "entity_link" },
     );
   }
@@ -2201,8 +2194,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 12. entity_list
   // --------------------------------------------------------------------------
   if (isToolEnabled("entity_list")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "entity_list",
         description: "List entities in the knowledge graph.",
         parameters: {
@@ -2235,7 +2228,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "entity_list" },
     );
   }
@@ -2244,8 +2237,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 13. entity_graph
   // --------------------------------------------------------------------------
   if (isToolEnabled("entity_graph")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "entity_graph",
         description:
           "Explore the knowledge graph around an entity. Returns the entity and its neighborhood of connected entities and memories.",
@@ -2292,7 +2285,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "entity_graph" },
     );
   }
@@ -2301,8 +2294,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 14. agent_list
   // --------------------------------------------------------------------------
   if (isToolEnabled("agent_list")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "agent_list",
         description: "List available agents.",
         parameters: {
@@ -2330,7 +2323,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "agent_list" },
     );
   }
@@ -2339,8 +2332,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 15. agent_create
   // --------------------------------------------------------------------------
   if (isToolEnabled("agent_create")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "agent_create",
         description: "Create a new agent. Agents serve as memory namespaces and isolation boundaries.",
         parameters: {
@@ -2371,7 +2364,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "agent_create" },
     );
   }
@@ -2380,8 +2373,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 16. agent_get
   // --------------------------------------------------------------------------
   if (isToolEnabled("agent_get")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "agent_get",
         description: "Get details about a specific agent by ID.",
         parameters: {
@@ -2408,7 +2401,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "agent_get" },
     );
   }
@@ -2417,8 +2410,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 17. session_start
   // --------------------------------------------------------------------------
   if (isToolEnabled("session_start")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "session_start",
         description:
           "Start a new work session. Sessions track the lifecycle of a task or conversation for later review. Call this early in your workflow and save the returned session ID for session_end later." +
@@ -2459,7 +2452,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "session_start" },
     );
   }
@@ -2468,8 +2461,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 18. session_end
   // --------------------------------------------------------------------------
   if (isToolEnabled("session_end")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "session_end",
         description: "End an active session with a summary of what was accomplished. Always include a meaningful summary — it serves as the historical record of the session.",
         parameters: {
@@ -2500,7 +2493,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "session_end" },
     );
   }
@@ -2509,8 +2502,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 19. session_recall
   // --------------------------------------------------------------------------
   if (isToolEnabled("session_recall")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "session_recall",
         description: "Retrieve details of a specific session including its timeline and associated memories.",
         parameters: {
@@ -2537,7 +2530,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "session_recall" },
     );
   }
@@ -2546,8 +2539,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 20. session_list
   // --------------------------------------------------------------------------
   if (isToolEnabled("session_list")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "session_list",
         description: "List sessions, optionally filtered by project or status." +
           (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
@@ -2589,7 +2582,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "session_list" },
     );
   }
@@ -2598,8 +2591,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 21. decision_record
   // --------------------------------------------------------------------------
   if (isToolEnabled("decision_record")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "decision_record",
         description:
           "Record an architectural or design decision. Captures the rationale and alternatives considered for future reference. Always check existing decisions with decision_check first to avoid contradictions." +
@@ -2668,7 +2661,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "decision_record" },
     );
   }
@@ -2677,8 +2670,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 22. decision_list
   // --------------------------------------------------------------------------
   if (isToolEnabled("decision_list")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "decision_list",
         description: "List recorded decisions, optionally filtered by project, status, or tags." +
           (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
@@ -2724,7 +2717,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "decision_list" },
     );
   }
@@ -2733,8 +2726,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 23. decision_supersede
   // --------------------------------------------------------------------------
   if (isToolEnabled("decision_supersede")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "decision_supersede",
         description:
           "Supersede an existing decision with a new one. The old decision is marked as superseded and linked to the replacement.",
@@ -2794,7 +2787,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "decision_supersede" },
     );
   }
@@ -2803,8 +2796,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 24. decision_check
   // --------------------------------------------------------------------------
   if (isToolEnabled("decision_check")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "decision_check",
         description:
           "Check if there are existing decisions relevant to a topic. ALWAYS call this before making architectural choices to avoid contradicting past decisions." +
@@ -2865,7 +2858,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "decision_check" },
     );
   }
@@ -2874,8 +2867,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 25. pattern_create
   // --------------------------------------------------------------------------
   if (isToolEnabled("pattern_create")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "pattern_create",
         description:
           "Create a reusable pattern (coding convention, architecture pattern, or best practice) that can be shared across projects. Include example_code for maximum usefulness." +
@@ -2950,7 +2943,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "pattern_create" },
     );
   }
@@ -2959,8 +2952,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 26. pattern_search
   // --------------------------------------------------------------------------
   if (isToolEnabled("pattern_search")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "pattern_search",
         description: "Search for established patterns by natural language query. Call this before writing code to find and follow existing conventions." +
           (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
@@ -3020,7 +3013,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "pattern_search" },
     );
   }
@@ -3029,8 +3022,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 27. pattern_adopt
   // --------------------------------------------------------------------------
   if (isToolEnabled("pattern_adopt")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "pattern_adopt",
         description: "Adopt an existing pattern for use in a project. Creates a link between the pattern and the project.",
         parameters: {
@@ -3061,7 +3054,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "pattern_adopt" },
     );
   }
@@ -3070,8 +3063,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 28. pattern_suggest
   // --------------------------------------------------------------------------
   if (isToolEnabled("pattern_suggest")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "pattern_suggest",
         description:
           "Get pattern suggestions for a project based on its stack and existing patterns from related projects.",
@@ -3103,7 +3096,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "pattern_suggest" },
     );
   }
@@ -3112,8 +3105,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 29. project_register
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_register")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_register",
         description: "Register a new project in MemoryRelay. Projects organize memories, decisions, patterns, and sessions.",
         parameters: {
@@ -3171,7 +3164,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_register" },
     );
   }
@@ -3180,8 +3173,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 30. project_list
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_list")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_list",
         description: "List all registered projects.",
         parameters: {
@@ -3209,7 +3202,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_list" },
     );
   }
@@ -3218,8 +3211,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 31. project_info
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_info")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_info",
         description: "Get detailed information about a specific project.",
         parameters: {
@@ -3246,7 +3239,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_info" },
     );
   }
@@ -3255,8 +3248,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 32. project_add_relationship
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_add_relationship")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_add_relationship",
         description:
           "Add a relationship between two projects (e.g., depends_on, api_consumer, shares_schema, shares_infra, pattern_source, forked_from).",
@@ -3304,7 +3297,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_add_relationship" },
     );
   }
@@ -3313,8 +3306,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 33. project_dependencies
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_dependencies")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_dependencies",
         description: "List projects that a given project depends on.",
         parameters: {
@@ -3341,7 +3334,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_dependencies" },
     );
   }
@@ -3350,8 +3343,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 34. project_dependents
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_dependents")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_dependents",
         description: "List projects that depend on a given project.",
         parameters: {
@@ -3378,7 +3371,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_dependents" },
     );
   }
@@ -3387,8 +3380,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 35. project_related
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_related")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_related",
         description: "List all projects related to a given project (any relationship direction).",
         parameters: {
@@ -3415,7 +3408,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_related" },
     );
   }
@@ -3424,8 +3417,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 36. project_impact
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_impact")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_impact",
         description:
           "Analyze the impact of a proposed change on a project and its dependents. Helps understand blast radius before making changes.",
@@ -3457,7 +3450,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_impact" },
     );
   }
@@ -3466,8 +3459,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 37. project_shared_patterns
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_shared_patterns")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_shared_patterns",
         description: "Find patterns shared between two projects. Useful for maintaining consistency across related projects.",
         parameters: {
@@ -3498,7 +3491,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_shared_patterns" },
     );
   }
@@ -3507,8 +3500,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 38. project_context
   // --------------------------------------------------------------------------
   if (isToolEnabled("project_context")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "project_context",
         description:
           "Load full project context including hot-tier memories, active decisions, adopted patterns, and recent sessions. Call this FIRST when starting work on a project to understand existing context before making changes.",
@@ -3536,7 +3529,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "project_context" },
     );
   }
@@ -3545,8 +3538,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // 39. memory_health
   // --------------------------------------------------------------------------
   if (isToolEnabled("memory_health")) {
-    api.registerTool(
-      {
+    api.registerTool((ctx) => ({
+      
         name: "memory_health",
         description: "Check the MemoryRelay API connectivity and health status.",
         parameters: {
@@ -3567,7 +3560,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             };
           }
         },
-      },
+      }),
       { name: "memory_health" },
     );
   }
@@ -3970,11 +3963,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           const testMem = await client.store("Plugin health check test", { test: "true" });
           await client.delete(testMem.id);
           return { success: true };
-        }},
+        }}),
         { name: "memory_recall", test: async () => {
           await client.search("test", 1, 0.5);
           return { success: true };
-        }},
+        }}),
         { name: "memory_list", test: async () => {
           await client.list(1);
           return { success: true };
