@@ -3963,11 +3963,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           const testMem = await client.store("Plugin health check test", { test: "true" });
           await client.delete(testMem.id);
           return { success: true };
-        }}),
+        }},
         { name: "memory_recall", test: async () => {
           await client.search("test", 1, 0.5);
           return { success: true };
-        }}),
+        }},
         { name: "memory_list", test: async () => {
           await client.list(1);
           return { success: true };
