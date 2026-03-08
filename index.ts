@@ -6,8 +6,8 @@
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
  * New in v0.12.11: External session IDs, get-or-create sessions, multi-agent collaboration
- * New in v0.12.6: OpenClaw session context integration for session tracking
- * New in v0.12.3: Smart auto-capture, daily stats, CLI commands, onboarding
+ * New in v0.12.7: OpenClaw session context integration for session tracking
+ * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
  *
  * API: https://api.memoryrelay.net
  * Docs: https://memoryrelay.ai
@@ -671,7 +671,7 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.8.0",
+            "User-Agent": "openclaw-memory-memoryrelay/0.12.11",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
