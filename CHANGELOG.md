@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.11]
+## [0.12.11] - 2026-03-07
 
 ### Added
 - **External Session IDs**: New `getOrCreateSession()` client method calls `POST /v1/sessions/get-or-create`
@@ -23,7 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session ID injection priority: explicit `session_id` > context session (project/workspace) > no session
 - `memory_store` response now includes `session_id` in details when a session is active
 
-## [0.12.7]
+## [0.12.8] - [0.12.10] (Patch Releases, 2026-03-06)
+
+### Fixed
+- **v0.12.8**: Removed extra closing parentheses from `toolTests` array
+- **v0.12.9**: Fixed version string in runtime log message
+- **v0.12.10**: Updated version string to v0.12.10 in log message
+
+## [0.12.7] - 2026-03-06
 
 ### Fixed
 - **Session Tracking**: All 39 tools converted from direct registration to factory pattern for proper context access
@@ -32,13 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Tools registered via `api.registerTool((ctx) => tool)` instead of direct objects
 
-## [0.12.3]
+## [0.12.3] - 2026-03-06
 
 ### Fixed
 - **Session-Memory Linking**: Extract `session_id` from metadata and pass as top-level API parameter
 - Memories now correctly link to sessions in database
 
-## [0.12.0]
+## [0.12.0] - 2026-03-06
 
 ### Added
 - **Smart Auto-Capture**: Tier-based privacy system with 4 capture modes (off/conservative/smart/aggressive)
@@ -51,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `autoCapture` config accepts boolean (backward compat) or object with tier system
 
-## [0.8.0]
+## [0.8.0] - 2026-03-05
 
 ### Added
 - **Debug Logging**: DebugLogger class with circular buffer and configurable `maxLogEntries`
@@ -60,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance Metrics**: Per-tool call count, success rate, average duration, p95/p99 latencies
 - **Config Options**: `debug`, `verbose`, `logFile`, `maxLogEntries`
 
-## [0.7.0]
+## [0.7.0] - 2026-03-05
 
 ### Added
 - **39 Tools**: Full MemoryRelay API surface (up from 3)
@@ -72,12 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tool Group Filtering**: `enabledTools` config
 - **Default Project**: `defaultProject` config for automatic project scoping
 
-## [0.6.2]
+## [0.6.2] - 2026-03-01
 
 ### Fixed
 - **OpenClaw 2026.2.26 Compatibility**: Changed `"extensions": ["./"]` to `"extensions": ["./index.ts"]`
 
-## [0.6.0]
+## [0.6.0] - 2026-02-18
 
 ### Added
 - Retry logic with exponential backoff (3 attempts)
@@ -85,18 +92,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment variable fallback support
 - Channel filtering (`excludeChannels` config)
 
-## [0.4.1]
+## [0.4.1] - 2026-02-13
 
 ### Fixed
 - Added `safety` declaration to plugin manifest to resolve false-positive security warning
 
-## [0.4.0]
+## [0.4.0] - 2026-02-13
 
 ### Added
 - Status reporting via `memory.status` gateway RPC method
 - Memory count reporting via `/v1/stats` API endpoint
 
-## [0.1.0]
+## [0.1.0] - 2026-02-12
 
 ### Added
 - Initial release
@@ -107,7 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-agent support with isolated namespaces
 
 [Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.11...HEAD
-[0.12.11]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.11
+[0.12.11]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.10...v0.12.11
+[0.12.10]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.9...v0.12.10
+[0.12.9]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.8...v0.12.9
+[0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
 [0.12.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.8.0...v0.12.0

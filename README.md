@@ -8,7 +8,7 @@ AI-powered long-term memory for OpenClaw agents. Gives your AI assistant persist
 ## Features
 
 - **39 Tools** covering memories, entities, sessions, decisions, patterns, and projects
-- **6 Gateway Methods** for stats, debugging, and onboarding
+- **8 Gateway Methods** for stats, debugging, and onboarding
 - **Smart Auto-Capture** - Tier-based privacy system with automatic filtering
 - **Daily Memory Stats** - Morning/evening summaries with growth metrics
 - **Debug & Monitoring** - Comprehensive logging, health checks, and performance metrics
@@ -304,7 +304,7 @@ openclaw gateway logs -f | grep memory-memoryrelay
 ### Auto-Recall Not Working
 
 1. Verify `autoRecall: true` in config
-2. Check memories exist: `openclaw gateway call memory_list '{"limit": 10}'`
+2. Check memories exist: `openclaw gateway-call memory_list '{"limit": 10}'`
 3. Lower `recallThreshold` (try 0.1) for more results
 4. Check channel not in `excludeChannels`
 
