@@ -1,10 +1,11 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.12.8 (Session Context Integration)
+ * Version: 0.12.11 (External Session IDs)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
+ * New in v0.12.11: External session IDs, get-or-create sessions, multi-agent collaboration
  * New in v0.12.6: OpenClaw session context integration for session tracking
  * New in v0.12.3: Smart auto-capture, daily stats, CLI commands, onboarding
  *
