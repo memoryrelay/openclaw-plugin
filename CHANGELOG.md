@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session ID injection priority: explicit `session_id` > context session (project/workspace) > no session
 - `memory_store` response now includes `session_id` in details when a session is active
 
+## [0.12.8] - [0.12.10] (Patch Releases)
+
+### Fixed
+- **v0.12.8**: Removed extra closing parentheses from `toolTests` array
+- **v0.12.9**: Fixed version string in runtime log message
+- **v0.12.10**: Updated version string to v0.12.10 in log message
+
 ## [0.12.7]
 
 ### Fixed
@@ -107,7 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-agent support with isolated namespaces
 
 [Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.11...HEAD
-[0.12.11]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.11
+[0.12.11]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.10...v0.12.11
+[0.12.10]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.9...v0.12.10
+[0.12.9]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.8...v0.12.9
+[0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
 [0.12.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.8.0...v0.12.0
