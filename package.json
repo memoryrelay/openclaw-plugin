@@ -48,7 +48,8 @@
     "openclaw.plugin.json",
     "README.md",
     "LICENSE",
-    "src/"
+    "src/",
+    "skills/"
   ],
   "engines": {
     "node": ">=20.0.0"
