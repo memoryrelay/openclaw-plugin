@@ -4047,6 +4047,36 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     }
   });
 
+  // ==========================================================================
+  // Tool Observation Hooks
+  // ==========================================================================
+
+  // Tool observation: no-op, registered for future extensibility
+  api.on("before_tool_call", (_event, _ctx) => {
+    // Reserved for future: tool blocking, param injection, audit
+  });
+
+  // Tool observation: update session activity + log metrics
+  api.on("after_tool_call", (event, _ctx) => {
+    // Update activity timestamp on all active sessions
+    for (const entry of sessionCache.values()) {
+      entry.lastActivityAt = Date.now();
+    }
+
+    // Log to debug logger if enabled
+    if (debugLogger) {
+      debugLogger.log({
+        timestamp: new Date().toISOString(),
+        tool: event.toolName,
+        method: "tool_call",
+        path: "",
+        duration: event.durationMs || 0,
+        status: event.error ? "error" : "success",
+        error: event.error,
+      });
+    }
+  });
+
   api.logger.info?.(
     `memory-memoryrelay: plugin v0.12.11 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
