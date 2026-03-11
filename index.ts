@@ -4185,6 +4185,35 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     }
   });
 
+  // Subagent lifecycle hooks: track multi-agent collaboration
+  api.on("subagent_spawned", async (event, _ctx) => {
+    try {
+      api.logger.debug?.(
+        `memory-memoryrelay: subagent spawned: ${event.agentId} (session: ${event.childSessionKey}, label: ${event.label || "none"})`
+      );
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: subagent_spawned hook failed: ${String(err)}`);
+    }
+  });
+
+  api.on("subagent_ended", async (event, _ctx) => {
+    try {
+      const outcome = event.outcome || "unknown";
+      const summary = `Subagent ${event.targetSessionKey} ended: ${event.reason} (outcome: ${outcome})`;
+
+      await client.store(summary, {
+        category: "subagent-activity",
+        source: "subagent_ended_hook",
+        agent: agentId,
+        outcome,
+      });
+
+      api.logger.debug?.(`memory-memoryrelay: stored subagent completion: ${summary}`);
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: subagent_ended hook failed: ${String(err)}`);
+    }
+  });
+
   api.logger.info?.(
     `memory-memoryrelay: plugin v0.12.11 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
