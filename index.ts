@@ -585,6 +585,22 @@ function isBlocklisted(content: string, blocklist: string[]): boolean {
 }
 
 /**
+ * Redact sensitive patterns from content using the blocklist.
+ * Returns the content with matches replaced by [REDACTED].
+ */
+function redactSensitive(content: string, blocklist: string[]): string {
+  let redacted = content;
+  for (const pattern of blocklist) {
+    try {
+      redacted = redacted.replace(new RegExp(pattern, "gi"), "[REDACTED]");
+    } catch {
+      // Invalid regex, skip
+    }
+  }
+  return redacted;
+}
+
+/**
  * Extract storable content from messages about to be lost (compaction/reset).
  * Only keeps assistant messages longer than 200 chars.
  * Respects the privacy blocklist.
@@ -4136,6 +4152,36 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       }
     } catch (err) {
       api.logger.warn?.(`memory-memoryrelay: reset rescue failed: ${String(err)}`);
+    }
+  });
+
+  // Message processing hooks: activity tracking and privacy redaction
+  api.on("message_received", (_event, _ctx) => {
+    // Update activity timestamps on active sessions
+    for (const entry of sessionCache.values()) {
+      entry.lastActivityAt = Date.now();
+    }
+  });
+
+  api.on("message_sending", (_event, _ctx) => {
+    // No-op: registered for future extensibility
+  });
+
+  api.on("before_message_write", (event, _ctx) => {
+    const blocklist = autoCaptureConfig.blocklist || [];
+    if (blocklist.length === 0) return;
+
+    const msg = event.message;
+    if (!msg || typeof msg !== "object") return;
+
+    const m = msg as Record<string, unknown>;
+    if (typeof m.content === "string" && isBlocklisted(m.content, blocklist)) {
+      return {
+        message: {
+          ...msg,
+          content: redactSensitive(m.content as string, blocklist),
+        } as typeof msg,
+      };
     }
   });
 
