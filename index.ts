@@ -4351,4 +4351,209 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       respond(false, { error: String(err) });
     }
   });
+
+  // ========================================================================
+  // Direct Commands (5 total) — bypass LLM, execute immediately
+  // ========================================================================
+
+  // /memory-status — Show full plugin status report
+  api.registerCommand?.({
+    name: "memory-status",
+    description: "Show MemoryRelay connection status, tool counts, and memory stats",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        // Get connection status via health check
+        const startTime = Date.now();
+        const healthResult = await client.health();
+        const responseTime = Date.now() - startTime;
+
+        const healthStatus = String(healthResult.status).toLowerCase();
+        const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
+
+        const connectionStatus = {
+          status: isConnected ? "connected" as const : "disconnected" as const,
+          endpoint: apiUrl,
+          lastCheck: new Date().toISOString(),
+          responseTime,
+        };
+
+        // Get memory stats
+        let memoryCount = 0;
+        try {
+          const stats = await client.stats();
+          memoryCount = stats.total_memories;
+        } catch (_statsErr) {
+          // stats endpoint may be unavailable
+        }
+
+        const memoryStats = { total_memories: memoryCount };
+
+        const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
+        const pluginConfig = {
+          agentId,
+          autoRecall: cfg?.autoRecall ?? true,
+          autoCapture: autoCaptureConfig,
+          recallLimit: cfg?.recallLimit ?? 5,
+          recallThreshold: cfg?.recallThreshold ?? 0.3,
+          excludeChannels: cfg?.excludeChannels ?? [],
+          defaultProject,
+        };
+
+        if (statusReporter) {
+          const report = statusReporter.buildReport(
+            connectionStatus,
+            pluginConfig,
+            memoryStats,
+            TOOL_GROUPS,
+          );
+          const formatted = StatusReporter.formatReport(report);
+          return { text: formatted };
+        }
+
+        // Fallback: simple text status
+        return {
+          text: `MemoryRelay: ${isConnected ? "connected" : "disconnected"} | Endpoint: ${apiUrl} | Memories: ${memoryCount} | Agent: ${agentId}`,
+        };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-stats — Show daily memory statistics
+  api.registerCommand?.({
+    name: "memory-stats",
+    description: "Show daily memory statistics (total, today, weekly growth, top categories)",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        const memories = await client.list(1000);
+        const stats = await calculateStats(
+          async () => memories,
+          () => 0,
+        );
+        const formatted = formatStatsForDisplay(stats);
+        return { text: formatted };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-health — Quick health check with response time
+  api.registerCommand?.({
+    name: "memory-health",
+    description: "Check MemoryRelay API health and response time",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        const startTime = Date.now();
+        const healthResult = await client.health();
+        const responseTime = Date.now() - startTime;
+
+        const healthStatus = String(healthResult.status).toLowerCase();
+        const isHealthy = VALID_HEALTH_STATUSES.includes(healthStatus);
+        const symbol = isHealthy ? "OK" : "DEGRADED";
+
+        return {
+          text: `MemoryRelay Health: ${symbol}\n  Status:        ${healthResult.status}\n  Response Time: ${responseTime}ms\n  Endpoint:      ${apiUrl}`,
+        };
+      } catch (err) {
+        return { text: `MemoryRelay Health: UNREACHABLE\n  Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-logs — Show recent debug log entries
+  api.registerCommand?.({
+    name: "memory-logs",
+    description: "Show recent MemoryRelay debug log entries",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        if (!debugLogger) {
+          return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
+        }
+
+        const logs = debugLogger.getRecentLogs(10);
+        if (logs.length === 0) {
+          return { text: "No recent log entries." };
+        }
+
+        const lines: string[] = ["Recent MemoryRelay Logs", "━".repeat(50)];
+        for (const entry of logs) {
+          const statusSymbol = entry.status === "success" ? "OK" : "ERR";
+          lines.push(
+            `[${entry.timestamp}] ${statusSymbol} ${entry.method} ${entry.path} (${entry.duration}ms)` +
+            (entry.error ? ` - ${entry.error}` : ""),
+          );
+        }
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-metrics — Show per-tool performance metrics
+  api.registerCommand?.({
+    name: "memory-metrics",
+    description: "Show per-tool call counts, success rates, and latency metrics",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        if (!debugLogger) {
+          return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
+        }
+
+        const allLogs = debugLogger.getAllLogs();
+        if (allLogs.length === 0) {
+          return { text: "No metrics data available yet." };
+        }
+
+        // Build per-tool metrics
+        const toolMetrics = new Map<string, { calls: number; successes: number; durations: number[] }>();
+        for (const entry of allLogs) {
+          let metrics = toolMetrics.get(entry.tool);
+          if (!metrics) {
+            metrics = { calls: 0, successes: 0, durations: [] };
+            toolMetrics.set(entry.tool, metrics);
+          }
+          metrics.calls++;
+          if (entry.status === "success") metrics.successes++;
+          metrics.durations.push(entry.duration);
+        }
+
+        // Format table
+        const lines: string[] = [
+          "MemoryRelay Tool Metrics",
+          "━".repeat(65),
+          `${"Tool".padEnd(22)} ${"Calls".padStart(6)} ${"Success%".padStart(9)} ${"Avg(ms)".padStart(8)} ${"P95(ms)".padStart(8)}`,
+          "─".repeat(65),
+        ];
+
+        for (const [tool, m] of Array.from(toolMetrics.entries()).sort((a, b) => b[1].calls - a[1].calls)) {
+          const successRate = m.calls > 0 ? ((m.successes / m.calls) * 100).toFixed(1) : "0.0";
+          const avg = m.durations.length > 0
+            ? Math.round(m.durations.reduce((s, d) => s + d, 0) / m.durations.length)
+            : 0;
+          const sorted = [...m.durations].sort((a, b) => a - b);
+          const p95idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+          const p95 = sorted.length > 0 ? sorted[Math.max(0, p95idx)] : 0;
+
+          lines.push(
+            `${tool.padEnd(22)} ${String(m.calls).padStart(6)} ${(successRate + "%").padStart(9)} ${String(avg).padStart(8)} ${String(p95).padStart(8)}`,
+          );
+        }
+
+        lines.push("─".repeat(65));
+        lines.push(`Total entries: ${allLogs.length}`);
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
 }
