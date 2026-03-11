@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Session cache upgraded from simple string map to track `lastActivityAt` timestamps
-- OpenClaw SDK alignment: now uses 12 lifecycle hooks (up from 2), 5 direct commands, 1 background service
+- OpenClaw SDK alignment: now uses 14 lifecycle hooks (up from 2), 5 direct commands, 1 background service
 
 ## [0.12.11] - 2026-03-07
 
