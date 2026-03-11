@@ -5,7 +5,7 @@ description: "Use when navigating the openclaw-plugin codebase for the first tim
 
 # Codebase Navigation
 
-The plugin is a single monolithic `index.ts` (4320 lines) plus a few extracted modules.
+The plugin is a single monolithic `index.ts` (4839 lines) plus a few extracted modules.
 
 ## index.ts File Map
 
@@ -17,17 +17,18 @@ The plugin is a single monolithic `index.ts` (4320 lines) plus a few extracted m
 | 48--121 | `DebugLogger` class (inlined) with `LogEntry`, `DebugLoggerConfig` |
 | 123--404 | `StatusReporter` class (inlined) with `ToolStatus`, `ConnectionStatus`, `MemoryStats` |
 | 406--461 | Types: `AutoCaptureConfig`, `MemoryRelayConfig`, `Memory`, `SearchResult`, `Stats` |
-| 463--610 | Utility functions: `sleep`, `isRetryableError`, `fetchWithTimeout`, auto-capture helpers |
-| 612--1255 | `MemoryRelayClient` class (API client with retry logic, all endpoints) |
-| 1256--1275 | Pattern detection for auto-capture (`CAPTURE_PATTERNS`, `shouldCapture`) |
-| 1277--1524 | Plugin entry: `export default async function plugin(api)`, config resolution, client init |
-| 1525--1565 | `TOOL_GROUPS` map and `isToolEnabled()` |
-| 1567--3673 | 39 tool registrations |
-| 3675--3779 | CLI commands (`memoryrelay status/stats/list/export`) |
-| 3781--3908 | `before_agent_start` hook (workflow instructions + auto-recall) |
-| 3910--3971 | `agent_end` hook (auto-capture) |
-| 3977--4009 | First-run onboarding |
-| 4011--4320 | Gateway methods (`memoryrelay.logs`, `.health`, `.metrics`, `.heartbeat`, `.onboarding`, `.stats`, `.test`) |
+| 463--648 | Utility functions: `sleep`, `isRetryableError`, `fetchWithTimeout`, auto-capture helpers, `redactSensitive`, `extractRescueContent` |
+| 650--1294 | `MemoryRelayClient` class (API client with retry logic, all endpoints) |
+| 1296--1315 | Pattern detection for auto-capture (`CAPTURE_PATTERNS`, `shouldCapture`) |
+| 1317--1562 | Plugin entry: `export default async function plugin(api)`, config resolution, client init, session cache, `touchSession` |
+| 1564--1613 | `TOOL_GROUPS` map and `isToolEnabled()` |
+| 1615--3747 | 39 tool registrations |
+| 3749--3853 | CLI commands (`memoryrelay status/stats/list/export`) |
+| 3855--4240 | 14 lifecycle hooks (`before_agent_start`, `agent_end`, `session_start`, `session_end`, `before_tool_call`, `after_tool_call`, `before_compaction`, `before_reset`, `message_received`, `message_sending`, `before_message_write`, `subagent_spawned`, `subagent_ended`, `tool_result_persist`) |
+| 4242--4274 | First-run onboarding |
+| 4276--4586 | Gateway methods (`memoryrelay.logs`, `.health`, `.metrics`, `.heartbeat`, `.onboarding`, `.stats`, `.test`) |
+| 4588--4790 | Direct commands: `/memory-status`, `/memory-stats`, `/memory-health`, `/memory-logs`, `/memory-metrics` |
+| 4792--4839 | Stale session cleanup service (`memoryrelay-session-cleanup` via `api.registerService`) |
 
 ## Tool Registration Pattern
 
@@ -46,7 +47,7 @@ if (isToolEnabled("tool_name")) {
 
 Tools are numbered 1--39 with comment markers (e.g., `// 1. memory_store`). Search for `// N.` to jump to a specific tool.
 
-## TOOL_GROUPS (line 1526)
+## TOOL_GROUPS (line 1569)
 
 | Group | Count | Tools |
 |-------|-------|-------|
@@ -92,3 +93,13 @@ Plugin config (openclaw.json) -> Env vars -> Defaults
 | `DebugLoggerConfig` | L66 | Logger settings (enabled, verbose, maxEntries) |
 | `ConnectionStatus` | L140 | API connection state (status, endpoint, responseTime) |
 | `ToolStatus` | L127 | Per-group tool health (enabled, available, failed) |
+
+## Key Helpers
+
+| Function | Location | Purpose |
+|----------|----------|---------|
+| `redactSensitive` | L591 | Replace blocklist patterns with `[REDACTED]` |
+| `extractRescueContent` | L608 | Salvage assistant messages before compaction/reset |
+| `touchSession` | L1444 | Update `lastActivityAt` timestamp in session cache |
+| `isToolEnabled` | L1605 | Check if a tool's group is in the enabled set |
+| `shouldCapture` | L1310 | Test text against `CAPTURE_PATTERNS` for auto-capture |

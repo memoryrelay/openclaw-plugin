@@ -19,6 +19,8 @@ AI-powered long-term memory for OpenClaw agents. Gives your AI assistant persist
 - **Pattern Library** - Create, search, and adopt reusable conventions across projects
 - **Session Tracking** - Track work sessions with summaries for continuity
 - **External Session IDs** - Multi-agent collaboration and conversation-spanning sessions
+- **Stale Session Cleanup** - Background service automatically closes inactive sessions after a configurable timeout
+- **Sender Identity Tagging** - Multi-agent traceability via auto-injected `sender_id` metadata
 - **Tool Group Filtering** - Enable only the tool groups you need
 
 ## Installation
@@ -73,6 +75,8 @@ openclaw gateway restart
 | `verbose` | boolean | `false` | Include request/response bodies in debug logs |
 | `logFile` | string | — | Optional file path for persistent debug logs |
 | `maxLogEntries` | number | `100` | Circular buffer size for in-memory logs |
+| `sessionTimeoutMinutes` | number | `120` | Idle time before a session is automatically closed by the cleanup service |
+| `sessionCleanupIntervalMinutes` | number | `30` | How often the background cleanup service checks for stale sessions |
 
 ## Smart Auto-Capture
 
@@ -194,6 +198,18 @@ For new projects, the agent is guided to call `project_register()` first.
 |------|-------------|
 | `memory_health` | Check API connectivity and health status |
 
+## Direct Commands
+
+These slash commands bypass the LLM and execute immediately in the CLI:
+
+| Command | Description |
+|---------|-------------|
+| `/memory-status` | Show connection status, tool counts, and memory stats |
+| `/memory-stats` | Show memory growth, categories, and daily statistics |
+| `/memory-health` | Run health check against the MemoryRelay API |
+| `/memory-logs` | Show recent debug log entries |
+| `/memory-metrics` | Show per-tool performance metrics (call count, success rate, latency) |
+
 ## Tool Group Filtering
 
 Only enable the groups you need:
@@ -271,6 +287,8 @@ When debug mode is enabled, each API call is logged with timestamp, tool name, d
 - **Agent Isolation** — Memories scoped per agent ID
 - **Channel Filtering** — Exclude sensitive channels from auto-recall
 - **Privacy Blocklist** — Auto-capture filters sensitive data (passwords, SSNs, credit cards, API keys)
+- **Privacy Redaction Hooks** — Sensitive data is also redacted from messages (`before_message_write`) and tool results (`tool_result_persist`) before persistence
+- **Sender Identity** — `memory_store`, `memory_batch_store`, and `decision_record` auto-inject `sender_id` from tool context into metadata for multi-agent traceability
 - **Never store secrets** — Do not store API keys, passwords, or tokens as memories
 
 ## Troubleshooting
@@ -312,6 +330,15 @@ openclaw gateway logs -f | grep memory-memoryrelay
 
 - `memory_batch_store`: May return 500 errors (use individual `memory_store` as workaround)
 - `memory_context`: Returns 405 Method Not Allowed (use `memory_recall` instead)
+
+## Skills
+
+The plugin ships with 8 skills in `skills/` — 5 agent-facing and 3 developer-facing:
+
+- **Agent-facing**: `memory-workflow`, `decision-tracking`, `pattern-management`, `project-orchestration`, `entity-and-context`
+- **Developer-facing**: `codebase-navigation`, `testing-memoryrelay`, `release-process`
+
+Skills are loaded via OpenClaw's skill system and provide guided workflows on top of the raw tools.
 
 ## Development
 

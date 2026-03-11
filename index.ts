@@ -1,11 +1,11 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.12.11 (External Session IDs)
+ * Version: 0.13.0 (SDK Enhancements)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
- * New in v0.12.11: External session IDs, get-or-create sessions, multi-agent collaboration
+ * New in v0.13.0: External session IDs, get-or-create sessions, multi-agent collaboration
  * New in v0.12.7: OpenClaw session context integration for session tracking
  * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
  *
@@ -585,6 +585,44 @@ function isBlocklisted(content: string, blocklist: string[]): boolean {
 }
 
 /**
+ * Redact sensitive patterns from content using the blocklist.
+ * Returns the content with matches replaced by [REDACTED].
+ */
+function redactSensitive(content: string, blocklist: string[]): string {
+  let redacted = content;
+  for (const pattern of blocklist) {
+    try {
+      redacted = redacted.replace(new RegExp(pattern, "gi"), "[REDACTED]");
+    } catch {
+      // Invalid regex, skip
+    }
+  }
+  return redacted;
+}
+
+/**
+ * Extract storable content from messages about to be lost (compaction/reset).
+ * Only keeps assistant messages longer than 200 chars.
+ * Respects the privacy blocklist.
+ */
+function extractRescueContent(
+  messages: unknown[],
+  blocklist: string[]
+): string[] {
+  const rescued: string[] = [];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") continue;
+    const m = msg as Record<string, unknown>;
+    if (m.role !== "assistant") continue;
+    const content = typeof m.content === "string" ? m.content : "";
+    if (content.length < 200) continue;
+    if (isBlocklisted(content, blocklist)) continue;
+    rescued.push(content.slice(0, 500));
+  }
+  return rescued.slice(0, 3);
+}
+
+/**
  * Mask sensitive data in content (API keys, tokens, etc.)
  */
 function maskSensitiveData(content: string): string {
@@ -671,7 +709,7 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.12.11",
+            "User-Agent": "openclaw-memory-memoryrelay/0.13.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -1021,6 +1059,7 @@ class MemoryRelayClient {
     project?: string,
     tags?: string[],
     status?: string,
+    metadata?: Record<string, string>,
   ): Promise<any> {
     return this.request("POST", "/v1/decisions", {
       title,
@@ -1029,6 +1068,7 @@ class MemoryRelayClient {
       project_slug: project,
       tags,
       status,
+      metadata,
       agent_id: this.agentId,
     });
   }
@@ -1315,7 +1355,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const verboseEnabled = cfg?.verbose || false;
   const logFile = cfg?.logFile;
   const maxLogEntries = cfg?.maxLogEntries || 100;
-  
+  const sessionTimeoutMs = ((cfg?.sessionTimeoutMinutes as number) || 120) * 60 * 1000;
+  const sessionCleanupIntervalMs = ((cfg?.sessionCleanupIntervalMinutes as number) || 30) * 60 * 1000;
+
   let debugLogger: DebugLogger | undefined;
   let statusReporter: StatusReporter | undefined;
   
@@ -1334,14 +1376,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const client = new MemoryRelayClient(apiKey, agentId, apiUrl, debugLogger, statusReporter);
 
   // ========================================================================
-  // Session Cache for External Session IDs (v0.12.11)
+  // Session Cache for External Session IDs (v0.13.0)
   // ========================================================================
   
   /**
    * Cache mapping: external_id → MemoryRelay session_id
    * Enables multi-agent collaboration and conversation-spanning sessions
    */
-  const sessionCache = new Map<string, string>();
+  const sessionCache = new Map<string, { sessionId: string; lastActivityAt: number }>();
   
   /**
    * Get or create MemoryRelay session for current workspace/project context.
@@ -1370,10 +1412,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     
     // Check cache first
     if (sessionCache.has(externalId)) {
-      if (debugLogger) {
-        debugLogger.log(`Session: Cache hit for external_id="${externalId}"`, "info");
-      }
-      return sessionCache.get(externalId)!;
+      api.logger.debug?.(`Session: Cache hit for external_id="${externalId}"`);
+      touchSession(externalId);
+      return sessionCache.get(externalId)!.sessionId;
     }
     
     try {
@@ -1387,21 +1428,23 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       );
       
       // Cache the mapping
-      sessionCache.set(externalId, response.id);
+      sessionCache.set(externalId, { sessionId: response.id, lastActivityAt: Date.now() });
       
-      if (debugLogger) {
-        debugLogger.log(
-          `Session: ${response.created ? 'Created' : 'Retrieved'} session ${response.id} for external_id="${externalId}"`,
-          "info"
-        );
-      }
+      api.logger.debug?.(
+        `Session: ${response.created ? 'Created' : 'Retrieved'} session ${response.id} for external_id="${externalId}"`
+      );
       
       return response.id;
     } catch (err) {
-      if (debugLogger) {
-        debugLogger.log(`Session: Failed to get-or-create session for ${externalId}: ${String(err)}`, "error");
-      }
+      api.logger.debug?.(`Session: Failed to get-or-create session for ${externalId}: ${String(err)}`);
       return null;
+    }
+  }
+
+  function touchSession(externalId: string): void {
+    const entry = sessionCache.get(externalId);
+    if (entry) {
+      entry.lastActivityAt = Date.now();
     }
   }
 
@@ -1633,8 +1676,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           },
         ) => {
           try {
-            const { content, metadata, session_id: explicitSessionId, ...opts } = args;
-            
+            const { content, metadata: rawMetadata, session_id: explicitSessionId, ...opts } = args;
+
+            // Auto-tag with sender identity from tool context
+            const metadata = rawMetadata || {};
+            if (ctx.requesterSenderId && !metadata.sender_id) {
+              metadata.sender_id = ctx.requesterSenderId;
+            }
+
             // Apply defaultProject fallback before session resolution
             if (!opts.project && defaultProject) opts.project = defaultProject;
 
@@ -2052,6 +2101,17 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           args: { memories: Array<{ content: string; metadata?: Record<string, string> }> },
         ) => {
           try {
+            // Auto-tag each memory with sender identity from tool context
+            if (ctx.requesterSenderId) {
+              for (const mem of args.memories) {
+                const metadata = mem.metadata || {};
+                if (!metadata.sender_id) {
+                  metadata.sender_id = ctx.requesterSenderId;
+                }
+                mem.metadata = metadata;
+              }
+            }
+
             const result = await client.batchStore(args.memories);
             return {
               content: [
@@ -2733,6 +2793,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               description: "Decision status.",
               enum: ["active", "experimental"],
             },
+            metadata: {
+              type: "object",
+              description: "Optional key-value metadata to attach to the decision.",
+              additionalProperties: { type: "string" },
+            },
           },
           required: ["title", "rationale"],
         },
@@ -2745,10 +2810,18 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             project?: string;
             tags?: string[];
             status?: string;
+            metadata?: Record<string, string>;
           },
         ) => {
           try {
             const project = args.project ?? defaultProject;
+
+            // Merge user-provided metadata with sender identity from tool context
+            const metadata: Record<string, string> = { ...(args.metadata ?? {}) };
+            if (ctx.requesterSenderId) {
+              metadata.sender_id = ctx.requesterSenderId;
+            }
+
             const result = await client.recordDecision(
               args.title,
               args.rationale,
@@ -2756,6 +2829,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               project,
               args.tags,
               args.status,
+              Object.keys(metadata).length > 0 ? metadata : undefined,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -3970,8 +4044,199 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     });
   }
 
+  // Session sync: auto-create MemoryRelay session when OpenClaw session starts
+  api.on("session_start", async (event, _ctx) => {
+    try {
+      const externalId = event.sessionKey || event.sessionId;
+      if (!externalId) return;
+
+      const response = await client.getOrCreateSession(
+        externalId,
+        agentId,
+        `OpenClaw session ${externalId}`,
+        defaultProject || undefined,
+        { source: "openclaw-plugin", agent: agentId, trigger: "session_start_hook" },
+      );
+
+      sessionCache.set(externalId, {
+        sessionId: response.id,
+        lastActivityAt: Date.now(),
+      });
+
+      api.logger.debug?.(`memory-memoryrelay: auto-created session ${response.id} for OpenClaw session ${externalId}`);
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: session_start hook failed: ${String(err)}`);
+    }
+  });
+
+  // Session sync: auto-end MemoryRelay session when OpenClaw session ends
+  api.on("session_end", async (event, _ctx) => {
+    try {
+      const externalId = event.sessionKey || event.sessionId;
+      if (!externalId) return;
+
+      const entry = sessionCache.get(externalId);
+      if (!entry) return;
+
+      await client.endSession(entry.sessionId, `Session ended after ${event.messageCount} messages`);
+      sessionCache.delete(externalId);
+
+      api.logger.debug?.(`memory-memoryrelay: auto-ended session ${entry.sessionId}`);
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: session_end hook failed: ${String(err)}`);
+    }
+  });
+
+  // ==========================================================================
+  // Tool Observation Hooks
+  // ==========================================================================
+
+  // Tool observation: no-op, registered for future extensibility
+  api.on("before_tool_call", (_event, _ctx) => {
+    // Reserved for future: tool blocking, param injection, audit
+  });
+
+  // Tool observation: update session activity + log metrics
+  api.on("after_tool_call", (event, _ctx) => {
+    // Update activity timestamp on all active sessions
+    for (const entry of sessionCache.values()) {
+      entry.lastActivityAt = Date.now();
+    }
+
+    // Log to debug logger if enabled
+    if (debugLogger) {
+      debugLogger.log({
+        timestamp: new Date().toISOString(),
+        tool: event.toolName,
+        method: "tool_call",
+        path: "",
+        duration: event.durationMs || 0,
+        status: event.error ? "error" : "success",
+        error: event.error,
+      });
+    }
+  });
+
+  // Compaction rescue: save key context before it's lost
+  api.on("before_compaction", async (event, _ctx) => {
+    if (!event.messages || event.messages.length === 0) return;
+    try {
+      const rescued = extractRescueContent(event.messages, autoCaptureConfig.blocklist || []);
+      for (const content of rescued) {
+        await client.store(content, {
+          category: "compaction-rescue",
+          source: "auto-compaction",
+          agent: agentId,
+        });
+      }
+      if (rescued.length > 0) {
+        api.logger.info?.(`memory-memoryrelay: rescued ${rescued.length} memories before compaction`);
+      }
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: compaction rescue failed: ${String(err)}`);
+    }
+  });
+
+  // Session reset rescue: save key context before session is cleared
+  api.on("before_reset", async (event, _ctx) => {
+    if (!event.messages || event.messages.length === 0) return;
+    try {
+      const rescued = extractRescueContent(event.messages, autoCaptureConfig.blocklist || []);
+      for (const content of rescued) {
+        await client.store(content, {
+          category: "session-reset-rescue",
+          source: "auto-reset",
+          agent: agentId,
+        });
+      }
+      if (rescued.length > 0) {
+        api.logger.info?.(`memory-memoryrelay: rescued ${rescued.length} memories before reset`);
+      }
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: reset rescue failed: ${String(err)}`);
+    }
+  });
+
+  // Message processing hooks: activity tracking and privacy redaction
+  api.on("message_received", (_event, _ctx) => {
+    // Update activity timestamps on active sessions
+    for (const entry of sessionCache.values()) {
+      entry.lastActivityAt = Date.now();
+    }
+  });
+
+  api.on("message_sending", (_event, _ctx) => {
+    // No-op: registered for future extensibility
+  });
+
+  api.on("before_message_write", (event, _ctx) => {
+    const blocklist = autoCaptureConfig.blocklist || [];
+    if (blocklist.length === 0) return;
+
+    const msg = event.message;
+    if (!msg || typeof msg !== "object") return;
+
+    const m = msg as Record<string, unknown>;
+    if (typeof m.content === "string" && isBlocklisted(m.content, blocklist)) {
+      return {
+        message: {
+          ...msg,
+          content: redactSensitive(m.content as string, blocklist),
+        } as typeof msg,
+      };
+    }
+  });
+
+  // Subagent lifecycle hooks: track multi-agent collaboration
+  api.on("subagent_spawned", async (event, _ctx) => {
+    try {
+      api.logger.debug?.(
+        `memory-memoryrelay: subagent spawned: ${event.agentId} (session: ${event.childSessionKey}, label: ${event.label || "none"})`
+      );
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: subagent_spawned hook failed: ${String(err)}`);
+    }
+  });
+
+  api.on("subagent_ended", async (event, _ctx) => {
+    try {
+      const outcome = event.outcome || "unknown";
+      const summary = `Subagent ${event.targetSessionKey} ended: ${event.reason} (outcome: ${outcome})`;
+
+      await client.store(summary, {
+        category: "subagent-activity",
+        source: "subagent_ended_hook",
+        agent: agentId,
+        outcome,
+      });
+
+      api.logger.debug?.(`memory-memoryrelay: stored subagent completion: ${summary}`);
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: subagent_ended hook failed: ${String(err)}`);
+    }
+  });
+
+  // Tool result redaction: apply privacy blocklist before persistence
+  api.on("tool_result_persist", (event, _ctx) => {
+    const blocklist = autoCaptureConfig.blocklist || [];
+    if (blocklist.length === 0) return;
+
+    const msg = event.message;
+    if (!msg || typeof msg !== "object") return;
+
+    const m = msg as Record<string, unknown>;
+    if (typeof m.content === "string" && isBlocklisted(m.content, blocklist)) {
+      return {
+        message: {
+          ...msg,
+          content: redactSensitive(m.content as string, blocklist),
+        } as typeof msg,
+      };
+    }
+  });
+
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.12.11 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.13.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -4031,7 +4296,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           logs = debugLogger.getRecentLogs(limit);
         }
 
-        const formatted = DebugLogger.formatTable(logs);
+        const formatted = logs.map((l) =>
+          `[${new Date(l.timestamp).toISOString()}] ${l.level.toUpperCase()} ${l.tool ?? "-"}: ${l.message}`
+        ).join("\n");
         respond(true, {
           logs,
           formatted,
@@ -4316,5 +4583,257 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     } catch (err) {
       respond(false, { error: String(err) });
     }
+  });
+
+  // ========================================================================
+  // Direct Commands (5 total) — bypass LLM, execute immediately
+  // ========================================================================
+
+  // /memory-status — Show full plugin status report
+  api.registerCommand?.({
+    name: "memory-status",
+    description: "Show MemoryRelay connection status, tool counts, and memory stats",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        // Get connection status via health check
+        const startTime = Date.now();
+        const healthResult = await client.health();
+        const responseTime = Date.now() - startTime;
+
+        const healthStatus = String(healthResult.status).toLowerCase();
+        const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
+
+        const connectionStatus = {
+          status: isConnected ? "connected" as const : "disconnected" as const,
+          endpoint: apiUrl,
+          lastCheck: new Date().toISOString(),
+          responseTime,
+        };
+
+        // Get memory stats
+        let memoryCount = 0;
+        try {
+          const stats = await client.stats();
+          memoryCount = stats.total_memories;
+        } catch (_statsErr) {
+          // stats endpoint may be unavailable
+        }
+
+        const memoryStats = { total_memories: memoryCount };
+
+        const pluginConfig = {
+          agentId,
+          autoRecall: cfg?.autoRecall ?? true,
+          autoCapture: autoCaptureConfig,
+          recallLimit: cfg?.recallLimit ?? 5,
+          recallThreshold: cfg?.recallThreshold ?? 0.3,
+          excludeChannels: cfg?.excludeChannels ?? [],
+          defaultProject,
+        };
+
+        if (statusReporter) {
+          const report = statusReporter.buildReport(
+            connectionStatus,
+            pluginConfig,
+            memoryStats,
+            TOOL_GROUPS,
+          );
+          const formatted = StatusReporter.formatReport(report);
+          return { text: formatted };
+        }
+
+        // Fallback: simple text status
+        return {
+          text: `MemoryRelay: ${isConnected ? "connected" : "disconnected"} | Endpoint: ${apiUrl} | Memories: ${memoryCount} | Agent: ${agentId}`,
+        };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-stats — Show daily memory statistics
+  api.registerCommand?.({
+    name: "memory-stats",
+    description: "Show daily memory statistics (total, today, weekly growth, top categories)",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        const memories = await client.list(1000);
+        const stats = await calculateStats(
+          async () => memories,
+          () => 0,
+        );
+        const formatted = formatStatsForDisplay(stats);
+        return { text: formatted };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-health — Quick health check with response time
+  api.registerCommand?.({
+    name: "memory-health",
+    description: "Check MemoryRelay API health and response time",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        const startTime = Date.now();
+        const healthResult = await client.health();
+        const responseTime = Date.now() - startTime;
+
+        const healthStatus = String(healthResult.status).toLowerCase();
+        const isHealthy = VALID_HEALTH_STATUSES.includes(healthStatus);
+        const symbol = isHealthy ? "OK" : "DEGRADED";
+
+        return {
+          text: `MemoryRelay Health: ${symbol}\n  Status:        ${healthResult.status}\n  Response Time: ${responseTime}ms\n  Endpoint:      ${apiUrl}`,
+        };
+      } catch (err) {
+        return { text: `MemoryRelay Health: UNREACHABLE\n  Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-logs — Show recent debug log entries
+  api.registerCommand?.({
+    name: "memory-logs",
+    description: "Show recent MemoryRelay debug log entries",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        if (!debugLogger) {
+          return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
+        }
+
+        const logs = debugLogger.getRecentLogs(10);
+        if (logs.length === 0) {
+          return { text: "No recent log entries." };
+        }
+
+        const lines: string[] = ["Recent MemoryRelay Logs", "━".repeat(50)];
+        for (const entry of logs) {
+          const statusSymbol = entry.status === "success" ? "OK" : "ERR";
+          lines.push(
+            `[${entry.timestamp}] ${statusSymbol} ${entry.method} ${entry.path} (${entry.duration}ms)` +
+            (entry.error ? ` - ${entry.error}` : ""),
+          );
+        }
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-metrics — Show per-tool performance metrics
+  api.registerCommand?.({
+    name: "memory-metrics",
+    description: "Show per-tool call counts, success rates, and latency metrics",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        if (!debugLogger) {
+          return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
+        }
+
+        const allLogs = debugLogger.getAllLogs();
+        if (allLogs.length === 0) {
+          return { text: "No metrics data available yet." };
+        }
+
+        // Build per-tool metrics
+        const toolMetrics = new Map<string, { calls: number; successes: number; durations: number[] }>();
+        for (const entry of allLogs) {
+          let metrics = toolMetrics.get(entry.tool);
+          if (!metrics) {
+            metrics = { calls: 0, successes: 0, durations: [] };
+            toolMetrics.set(entry.tool, metrics);
+          }
+          metrics.calls++;
+          if (entry.status === "success") metrics.successes++;
+          metrics.durations.push(entry.duration);
+        }
+
+        // Format table
+        const lines: string[] = [
+          "MemoryRelay Tool Metrics",
+          "━".repeat(65),
+          `${"Tool".padEnd(22)} ${"Calls".padStart(6)} ${"Success%".padStart(9)} ${"Avg(ms)".padStart(8)} ${"P95(ms)".padStart(8)}`,
+          "─".repeat(65),
+        ];
+
+        for (const [tool, m] of Array.from(toolMetrics.entries()).sort((a, b) => b[1].calls - a[1].calls)) {
+          const successRate = m.calls > 0 ? ((m.successes / m.calls) * 100).toFixed(1) : "0.0";
+          const avg = m.durations.length > 0
+            ? Math.round(m.durations.reduce((s, d) => s + d, 0) / m.durations.length)
+            : 0;
+          const sorted = [...m.durations].sort((a, b) => a - b);
+          const p95idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+          const p95 = sorted.length > 0 ? sorted[Math.max(0, p95idx)] : 0;
+
+          lines.push(
+            `${tool.padEnd(22)} ${String(m.calls).padStart(6)} ${(successRate + "%").padStart(9)} ${String(avg).padStart(8)} ${String(p95).padStart(8)}`,
+          );
+        }
+
+        lines.push("─".repeat(65));
+        lines.push(`Total entries: ${allLogs.length}`);
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // ========================================================================
+  // Stale Session Cleanup Service (v0.13.0)
+  // ========================================================================
+
+  let sessionCleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+  api.registerService({
+    id: "memoryrelay-session-cleanup",
+    start: async (_ctx) => {
+      sessionCleanupInterval = setInterval(async () => {
+        const now = Date.now();
+        const staleEntries: string[] = [];
+
+        for (const [externalId, entry] of sessionCache.entries()) {
+          if (now - entry.lastActivityAt > sessionTimeoutMs) {
+            staleEntries.push(externalId);
+          }
+        }
+
+        for (const externalId of staleEntries) {
+          const entry = sessionCache.get(externalId);
+          if (!entry) continue;
+
+          try {
+            await client.endSession(
+              entry.sessionId,
+              `Auto-closed: inactive for >${Math.round(sessionTimeoutMs / 60000)} minutes`
+            );
+            sessionCache.delete(externalId);
+            api.logger.info?.(
+              `memory-memoryrelay: auto-closed stale session ${entry.sessionId} (external: ${externalId})`
+            );
+          } catch (err) {
+            api.logger.warn?.(
+              `memory-memoryrelay: failed to auto-close session ${entry.sessionId}: ${String(err)}`
+            );
+          }
+        }
+      }, sessionCleanupIntervalMs);
+    },
+    stop: async (_ctx) => {
+      if (sessionCleanupInterval) {
+        clearInterval(sessionCleanupInterval);
+        sessionCleanupInterval = null;
+      }
+    },
   });
 }
