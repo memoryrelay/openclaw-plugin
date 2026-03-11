@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.12.11 (External Session IDs)
+ * Version: 0.13.0 (SDK Enhancements)
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.

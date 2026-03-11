@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-03-10
+
+### Added
+- **Direct Commands**: `/memory-status`, `/memory-stats`, `/memory-health`, `/memory-logs`, `/memory-metrics` for instant status without LLM
+- **Session Sync Hooks**: Auto-create/end MemoryRelay sessions when OpenClaw sessions start/end
+- **Compaction Rescue**: Automatically save key context before messages are lost to compaction
+- **Session Reset Rescue**: Save context before session reset/clear
+- **Tool Observation Hooks**: Track tool call activity for session freshness and debug metrics
+- **Message Privacy Redaction**: Auto-redact sensitive data (passwords, credit cards, SSNs) before message persistence
+- **Tool Result Redaction**: Apply privacy blocklist to tool results before persistence
+- **Subagent Tracking**: Store memories when subagents complete, tracking multi-agent collaboration
+- **Sender Identity Tagging**: Auto-inject `sender_id` into memory metadata from tool context
+- **Stale Session Cleanup Service**: Background service auto-closes inactive sessions (configurable timeout)
+- **Config Options**: `sessionTimeoutMinutes`, `sessionCleanupIntervalMinutes` for session management
+- **Plugin Skills**: 8 specialized skills for agent workflow guidance and developer onboarding
+
+### Changed
+- Session cache upgraded from simple string map to track `lastActivityAt` timestamps
+- OpenClaw SDK alignment: now uses 12 lifecycle hooks (up from 2), 5 direct commands, 1 background service
+
 ## [0.12.11] - 2026-03-07
 
 ### Added
@@ -113,7 +133,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.11...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.11...v0.13.0
 [0.12.11]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.10...v0.12.11
 [0.12.10]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.9...v0.12.10
 [0.12.9]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.8...v0.12.9
