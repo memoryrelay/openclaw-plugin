@@ -1341,7 +1341,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
    * Cache mapping: external_id → MemoryRelay session_id
    * Enables multi-agent collaboration and conversation-spanning sessions
    */
-  const sessionCache = new Map<string, string>();
+  const sessionCache = new Map<string, { sessionId: string; lastActivityAt: number }>();
   
   /**
    * Get or create MemoryRelay session for current workspace/project context.
@@ -1373,7 +1373,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       if (debugLogger) {
         debugLogger.log(`Session: Cache hit for external_id="${externalId}"`, "info");
       }
-      return sessionCache.get(externalId)!;
+      return sessionCache.get(externalId)!.sessionId;
     }
     
     try {
@@ -1387,7 +1387,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       );
       
       // Cache the mapping
-      sessionCache.set(externalId, response.id);
+      sessionCache.set(externalId, { sessionId: response.id, lastActivityAt: Date.now() });
       
       if (debugLogger) {
         debugLogger.log(
@@ -1402,6 +1402,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         debugLogger.log(`Session: Failed to get-or-create session for ${externalId}: ${String(err)}`, "error");
       }
       return null;
+    }
+  }
+
+  function touchSession(externalId: string): void {
+    const entry = sessionCache.get(externalId);
+    if (entry) {
+      entry.lastActivityAt = Date.now();
     }
   }
 
