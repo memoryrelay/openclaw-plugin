@@ -1021,6 +1021,7 @@ class MemoryRelayClient {
     project?: string,
     tags?: string[],
     status?: string,
+    metadata?: Record<string, string>,
   ): Promise<any> {
     return this.request("POST", "/v1/decisions", {
       title,
@@ -1029,6 +1030,7 @@ class MemoryRelayClient {
       project_slug: project,
       tags,
       status,
+      metadata,
       agent_id: this.agentId,
     });
   }
@@ -1640,8 +1642,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           },
         ) => {
           try {
-            const { content, metadata, session_id: explicitSessionId, ...opts } = args;
-            
+            const { content, metadata: rawMetadata, session_id: explicitSessionId, ...opts } = args;
+
+            // Auto-tag with sender identity from tool context
+            const metadata = rawMetadata || {};
+            if (ctx.requesterSenderId && !metadata.sender_id) {
+              metadata.sender_id = ctx.requesterSenderId;
+            }
+
             // Apply defaultProject fallback before session resolution
             if (!opts.project && defaultProject) opts.project = defaultProject;
 
@@ -2059,6 +2067,17 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           args: { memories: Array<{ content: string; metadata?: Record<string, string> }> },
         ) => {
           try {
+            // Auto-tag each memory with sender identity from tool context
+            if (ctx.requesterSenderId) {
+              for (const mem of args.memories) {
+                const metadata = mem.metadata || {};
+                if (!metadata.sender_id) {
+                  metadata.sender_id = ctx.requesterSenderId;
+                }
+                mem.metadata = metadata;
+              }
+            }
+
             const result = await client.batchStore(args.memories);
             return {
               content: [
@@ -2756,6 +2775,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         ) => {
           try {
             const project = args.project ?? defaultProject;
+
+            // Auto-tag decision with sender identity from tool context
+            const metadata: Record<string, string> = {};
+            if (ctx.requesterSenderId) {
+              metadata.sender_id = ctx.requesterSenderId;
+            }
+
             const result = await client.recordDecision(
               args.title,
               args.rationale,
@@ -2763,6 +2789,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               project,
               args.tags,
               args.status,
+              Object.keys(metadata).length > 0 ? metadata : undefined,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
