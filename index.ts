@@ -585,6 +585,28 @@ function isBlocklisted(content: string, blocklist: string[]): boolean {
 }
 
 /**
+ * Extract storable content from messages about to be lost (compaction/reset).
+ * Only keeps assistant messages longer than 200 chars.
+ * Respects the privacy blocklist.
+ */
+function extractRescueContent(
+  messages: unknown[],
+  blocklist: string[]
+): string[] {
+  const rescued: string[] = [];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") continue;
+    const m = msg as Record<string, unknown>;
+    if (m.role !== "assistant") continue;
+    const content = typeof m.content === "string" ? m.content : "";
+    if (content.length < 200) continue;
+    if (isBlocklisted(content, blocklist)) continue;
+    rescued.push(content.slice(0, 500));
+  }
+  return rescued.slice(0, 3);
+}
+
+/**
  * Mask sensitive data in content (API keys, tokens, etc.)
  */
 function maskSensitiveData(content: string): string {
@@ -4074,6 +4096,46 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         status: event.error ? "error" : "success",
         error: event.error,
       });
+    }
+  });
+
+  // Compaction rescue: save key context before it's lost
+  api.on("before_compaction", async (event, _ctx) => {
+    if (!event.messages || event.messages.length === 0) return;
+    try {
+      const rescued = extractRescueContent(event.messages, autoCaptureConfig.blocklist || []);
+      for (const content of rescued) {
+        await client.store(content, {
+          category: "compaction-rescue",
+          source: "auto-compaction",
+          agent: agentId,
+        });
+      }
+      if (rescued.length > 0) {
+        api.logger.info?.(`memory-memoryrelay: rescued ${rescued.length} memories before compaction`);
+      }
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: compaction rescue failed: ${String(err)}`);
+    }
+  });
+
+  // Session reset rescue: save key context before session is cleared
+  api.on("before_reset", async (event, _ctx) => {
+    if (!event.messages || event.messages.length === 0) return;
+    try {
+      const rescued = extractRescueContent(event.messages, autoCaptureConfig.blocklist || []);
+      for (const content of rescued) {
+        await client.store(content, {
+          category: "session-reset-rescue",
+          source: "auto-reset",
+          agent: agentId,
+        });
+      }
+      if (rescued.length > 0) {
+        api.logger.info?.(`memory-memoryrelay: rescued ${rescued.length} memories before reset`);
+      }
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: reset rescue failed: ${String(err)}`);
     }
   });
 
