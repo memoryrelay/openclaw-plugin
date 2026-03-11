@@ -4214,6 +4214,25 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     }
   });
 
+  // Tool result redaction: apply privacy blocklist before persistence
+  api.on("tool_result_persist", (event, _ctx) => {
+    const blocklist = autoCaptureConfig.blocklist || [];
+    if (blocklist.length === 0) return;
+
+    const msg = event.message;
+    if (!msg || typeof msg !== "object") return;
+
+    const m = msg as Record<string, unknown>;
+    if (typeof m.content === "string" && isBlocklisted(m.content, blocklist)) {
+      return {
+        message: {
+          ...msg,
+          content: redactSensitive(m.content as string, blocklist),
+        } as typeof msg,
+      };
+    }
+  });
+
   api.logger.info?.(
     `memory-memoryrelay: plugin v0.12.11 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
