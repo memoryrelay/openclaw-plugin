@@ -4004,6 +4004,49 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     });
   }
 
+  // Session sync: auto-create MemoryRelay session when OpenClaw session starts
+  api.on("session_start", async (event, _ctx) => {
+    try {
+      const externalId = event.sessionKey || event.sessionId;
+      if (!externalId) return;
+
+      const response = await client.getOrCreateSession(
+        externalId,
+        agentId,
+        `OpenClaw session ${externalId}`,
+        defaultProject || undefined,
+        { source: "openclaw-plugin", agent: agentId, trigger: "session_start_hook" },
+      );
+
+      sessionCache.set(externalId, {
+        sessionId: response.id,
+        lastActivityAt: Date.now(),
+      });
+
+      api.logger.debug?.(`memory-memoryrelay: auto-created session ${response.id} for OpenClaw session ${externalId}`);
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: session_start hook failed: ${String(err)}`);
+    }
+  });
+
+  // Session sync: auto-end MemoryRelay session when OpenClaw session ends
+  api.on("session_end", async (event, _ctx) => {
+    try {
+      const externalId = event.sessionKey || event.sessionId;
+      if (!externalId) return;
+
+      const entry = sessionCache.get(externalId);
+      if (!entry) return;
+
+      await client.endSession(entry.sessionId, `Session ended after ${event.messageCount} messages`);
+      sessionCache.delete(externalId);
+
+      api.logger.debug?.(`memory-memoryrelay: auto-ended session ${entry.sessionId}`);
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: session_end hook failed: ${String(err)}`);
+    }
+  });
+
   api.logger.info?.(
     `memory-memoryrelay: plugin v0.12.11 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
