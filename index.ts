@@ -5,7 +5,7 @@
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
- * New in v0.12.11: External session IDs, get-or-create sessions, multi-agent collaboration
+ * New in v0.13.0: External session IDs, get-or-create sessions, multi-agent collaboration
  * New in v0.12.7: OpenClaw session context integration for session tracking
  * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
  *
@@ -709,7 +709,7 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.12.11",
+            "User-Agent": "openclaw-memory-memoryrelay/0.13.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -1376,7 +1376,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const client = new MemoryRelayClient(apiKey, agentId, apiUrl, debugLogger, statusReporter);
 
   // ========================================================================
-  // Session Cache for External Session IDs (v0.12.11)
+  // Session Cache for External Session IDs (v0.13.0)
   // ========================================================================
   
   /**
@@ -1412,9 +1412,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     
     // Check cache first
     if (sessionCache.has(externalId)) {
-      if (debugLogger) {
-        debugLogger.log(`Session: Cache hit for external_id="${externalId}"`, "info");
-      }
+      api.logger.debug?.(`Session: Cache hit for external_id="${externalId}"`);
+      touchSession(externalId);
       return sessionCache.get(externalId)!.sessionId;
     }
     
@@ -1431,18 +1430,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       // Cache the mapping
       sessionCache.set(externalId, { sessionId: response.id, lastActivityAt: Date.now() });
       
-      if (debugLogger) {
-        debugLogger.log(
-          `Session: ${response.created ? 'Created' : 'Retrieved'} session ${response.id} for external_id="${externalId}"`,
-          "info"
-        );
-      }
+      api.logger.debug?.(
+        `Session: ${response.created ? 'Created' : 'Retrieved'} session ${response.id} for external_id="${externalId}"`
+      );
       
       return response.id;
     } catch (err) {
-      if (debugLogger) {
-        debugLogger.log(`Session: Failed to get-or-create session for ${externalId}: ${String(err)}`, "error");
-      }
+      api.logger.debug?.(`Session: Failed to get-or-create session for ${externalId}: ${String(err)}`);
       return null;
     }
   }
@@ -2799,6 +2793,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               description: "Decision status.",
               enum: ["active", "experimental"],
             },
+            metadata: {
+              type: "object",
+              description: "Optional key-value metadata to attach to the decision.",
+              additionalProperties: { type: "string" },
+            },
           },
           required: ["title", "rationale"],
         },
@@ -2811,13 +2810,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             project?: string;
             tags?: string[];
             status?: string;
+            metadata?: Record<string, string>;
           },
         ) => {
           try {
             const project = args.project ?? defaultProject;
 
-            // Auto-tag decision with sender identity from tool context
-            const metadata: Record<string, string> = {};
+            // Merge user-provided metadata with sender identity from tool context
+            const metadata: Record<string, string> = { ...(args.metadata ?? {}) };
             if (ctx.requesterSenderId) {
               metadata.sender_id = ctx.requesterSenderId;
             }
@@ -4236,7 +4236,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.12.11 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.13.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -4296,7 +4296,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           logs = debugLogger.getRecentLogs(limit);
         }
 
-        const formatted = DebugLogger.formatTable(logs);
+        const formatted = logs.map((l) =>
+          `[${new Date(l.timestamp).toISOString()}] ${l.level.toUpperCase()} ${l.tool ?? "-"}: ${l.message}`
+        ).join("\n");
         respond(true, {
           logs,
           formatted,
@@ -4620,7 +4622,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
         const memoryStats = { total_memories: memoryCount };
 
-        const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
         const pluginConfig = {
           agentId,
           autoRecall: cfg?.autoRecall ?? true,
@@ -4789,7 +4790,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // ========================================================================
-  // Stale Session Cleanup Service (v0.12.11)
+  // Stale Session Cleanup Service (v0.13.0)
   // ========================================================================
 
   let sessionCleanupInterval: ReturnType<typeof setInterval> | null = null;
