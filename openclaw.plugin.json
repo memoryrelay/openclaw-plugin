@@ -45,6 +45,18 @@
       "label": "Exclude Channels",
       "help": "List of channel IDs to skip auto-recall (e.g., ['whatsapp:group_123', 'telegram:456'])",
       "advanced": true
+    },
+    "sessionTimeoutMinutes": {
+      "label": "Session Timeout (minutes)",
+      "placeholder": "120",
+      "advanced": true,
+      "help": "Auto-close MemoryRelay sessions inactive for this many minutes (default: 120)"
+    },
+    "sessionCleanupIntervalMinutes": {
+      "label": "Cleanup Interval (minutes)",
+      "placeholder": "30",
+      "advanced": true,
+      "help": "How often to check for stale sessions (default: 30)"
     }
   },
   "configSchema": {
@@ -100,6 +112,20 @@
         },
         "default": [],
         "description": "List of channel IDs to exclude from auto-recall"
+      },
+      "sessionTimeoutMinutes": {
+        "type": "number",
+        "default": 120,
+        "minimum": 10,
+        "maximum": 1440,
+        "description": "Auto-close sessions inactive for this many minutes"
+      },
+      "sessionCleanupIntervalMinutes": {
+        "type": "number",
+        "default": 30,
+        "minimum": 5,
+        "maximum": 360,
+        "description": "How often to check for stale sessions (minutes)"
       },
       "debug": {
         "type": "boolean",

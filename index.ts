@@ -1355,7 +1355,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const verboseEnabled = cfg?.verbose || false;
   const logFile = cfg?.logFile;
   const maxLogEntries = cfg?.maxLogEntries || 100;
-  
+  const sessionTimeoutMs = ((cfg?.sessionTimeoutMinutes as number) || 120) * 60 * 1000;
+  const sessionCleanupIntervalMs = ((cfg?.sessionCleanupIntervalMinutes as number) || 30) * 60 * 1000;
+
   let debugLogger: DebugLogger | undefined;
   let statusReporter: StatusReporter | undefined;
   
@@ -4782,6 +4784,54 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // ========================================================================
+  // Stale Session Cleanup Service (v0.12.11)
+  // ========================================================================
+
+  let sessionCleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+  api.registerService({
+    id: "memoryrelay-session-cleanup",
+    start: async (_ctx) => {
+      sessionCleanupInterval = setInterval(async () => {
+        const now = Date.now();
+        const staleEntries: string[] = [];
+
+        for (const [externalId, entry] of sessionCache.entries()) {
+          if (now - entry.lastActivityAt > sessionTimeoutMs) {
+            staleEntries.push(externalId);
+          }
+        }
+
+        for (const externalId of staleEntries) {
+          const entry = sessionCache.get(externalId);
+          if (!entry) continue;
+
+          try {
+            await client.endSession(
+              entry.sessionId,
+              `Auto-closed: inactive for >${Math.round(sessionTimeoutMs / 60000)} minutes`
+            );
+            sessionCache.delete(externalId);
+            api.logger.info?.(
+              `memory-memoryrelay: auto-closed stale session ${entry.sessionId} (external: ${externalId})`
+            );
+          } catch (err) {
+            api.logger.warn?.(
+              `memory-memoryrelay: failed to auto-close session ${entry.sessionId}: ${String(err)}`
+            );
+          }
+        }
+      }, sessionCleanupIntervalMs);
+    },
+    stop: async (_ctx) => {
+      if (sessionCleanupInterval) {
+        clearInterval(sessionCleanupInterval);
+        sessionCleanupInterval = null;
       }
     },
   });
