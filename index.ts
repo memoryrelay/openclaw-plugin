@@ -4848,6 +4848,438 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // ========================================================================
+  // Direct Commands (10 new — v0.14.0)
+  // ========================================================================
+
+  // /memory-search — Semantic memory search
+  api.registerCommand?.({
+    name: "memory-search",
+    description: "Semantic search across stored memories",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      try {
+        const { positional, flags } = parseCommandArgs(ctx.args);
+        const query = positional[0];
+        if (!query) {
+          return { text: "Usage: /memory-search <query> [--limit 10] [--project slug] [--threshold 0.3]" };
+        }
+        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
+        const threshold = flags["threshold"] ? parseFloat(String(flags["threshold"])) : 0.3;
+        const project = flags["project"] ? String(flags["project"]) : undefined;
+
+        const results = await client.search(query, limit, threshold, { project });
+        const items: unknown[] = Array.isArray(results) ? results : (results as { data?: unknown[] }).data ?? [];
+
+        if (items.length === 0) {
+          return { text: `No memories found for: "${query}"` };
+        }
+
+        const lines: string[] = [`Memory Search: "${query}"`, "━".repeat(60)];
+        for (const item of items) {
+          const m = item as Record<string, unknown>;
+          const content = String(m["content"] ?? "").slice(0, 120);
+          const score = typeof m["similarity"] === "number" ? `${Math.round(m["similarity"] as number * 100)}%` : "N/A";
+          const category = String(m["category"] ?? "general");
+          const date = m["created_at"] ? new Date(String(m["created_at"])).toLocaleDateString() : "unknown";
+          const id = String(m["id"] ?? "");
+          lines.push(`[${score}] ${content}`);
+          lines.push(`  Category: ${category} | Date: ${date} | ID: ${id}`);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-validate — Production readiness check
+  api.registerCommand?.({
+    name: "memory-validate",
+    description: "Run production readiness checks for the MemoryRelay plugin",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        const results: Array<{ label: string; status: "PASS" | "FAIL" | "WARN"; detail: string }> = [];
+
+        // 1. API connectivity
+        try {
+          await client.health();
+          results.push({ label: "API connectivity", status: "PASS", detail: "Health endpoint reachable" });
+        } catch (err) {
+          results.push({ label: "API connectivity", status: "FAIL", detail: String(err) });
+        }
+
+        // 2. API health status
+        try {
+          const h = await client.health();
+          const statusStr = String(h.status).toLowerCase();
+          if (VALID_HEALTH_STATUSES.includes(statusStr)) {
+            results.push({ label: "API health", status: "PASS", detail: `Status: ${h.status}` });
+          } else {
+            results.push({ label: "API health", status: "WARN", detail: `Unexpected status: ${h.status}` });
+          }
+        } catch (err) {
+          results.push({ label: "API health", status: "FAIL", detail: String(err) });
+        }
+
+        // 3. Core tools
+        const allTools = Object.values(TOOL_GROUPS).flat();
+        const coreTools = ["memory_store", "memory_recall", "memory_list"];
+        const missing = coreTools.filter((t) => !allTools.includes(t));
+        if (missing.length === 0) {
+          results.push({ label: "Core tools", status: "PASS", detail: "memory_store, memory_recall, memory_list present" });
+        } else {
+          results.push({ label: "Core tools", status: "FAIL", detail: `Missing: ${missing.join(", ")}` });
+        }
+
+        // 4. Auto-recall enabled
+        const autoRecall = cfg?.autoRecall ?? true;
+        results.push({
+          label: "Auto-recall enabled",
+          status: autoRecall ? "PASS" : "WARN",
+          detail: autoRecall ? "Enabled" : "Disabled in config",
+        });
+
+        // 5. Auto-capture enabled
+        results.push({
+          label: "Auto-capture enabled",
+          status: autoCaptureConfig.enabled ? "PASS" : "WARN",
+          detail: autoCaptureConfig.enabled ? `Enabled (tier: ${autoCaptureConfig.tier})` : "Disabled in config",
+        });
+
+        // 6. Memory storage
+        try {
+          await client.list(1);
+          results.push({ label: "Memory storage", status: "PASS", detail: "Storage accessible" });
+        } catch (err) {
+          results.push({ label: "Memory storage", status: "FAIL", detail: String(err) });
+        }
+
+        // 7. Agent ID configured
+        const agentIdOk = agentId && agentId !== "" && agentId !== "default";
+        results.push({
+          label: "Agent ID configured",
+          status: agentIdOk ? "PASS" : "WARN",
+          detail: agentIdOk ? `ID: ${agentId}` : `Agent ID is "${agentId}" — consider setting a unique ID`,
+        });
+
+        const passes = results.filter((r) => r.status === "PASS").length;
+        const failures = results.filter((r) => r.status === "FAIL").length;
+        let grade: string;
+        if (passes === 7) grade = "A+";
+        else if (passes === 6) grade = "A";
+        else if (passes === 5) grade = "B+";
+        else if (passes === 4) grade = "B";
+        else grade = "F";
+
+        const lines: string[] = ["MemoryRelay Production Readiness", "━".repeat(50)];
+        for (const r of results) {
+          lines.push(`[${r.status.padEnd(4)}] ${r.label}: ${r.detail}`);
+        }
+        lines.push("─".repeat(50));
+        lines.push(`Checks passed: ${passes}/7 | Grade: ${grade} | Production ready: ${failures === 0 ? "Yes" : "No"}`);
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-config — Read-only config display
+  api.registerCommand?.({
+    name: "memory-config",
+    description: "Display current MemoryRelay plugin configuration",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      try {
+        const lines: string[] = ["MemoryRelay Configuration", "━".repeat(50)];
+        lines.push(`API URL:             ${apiUrl}`);
+        lines.push(`Agent ID:            ${agentId}`);
+        lines.push(`Default Project:     ${defaultProject || "(none)"}`);
+        lines.push(`Enabled Tools:       ${cfg?.enabledTools ?? "all"}`);
+        lines.push(`Auto-Recall:         ${cfg?.autoRecall ?? true}`);
+        lines.push(`Auto-Capture:        ${autoCaptureConfig.enabled} (tier: ${autoCaptureConfig.tier})`);
+        lines.push(`Recall Limit:        ${cfg?.recallLimit ?? 5}`);
+        lines.push(`Recall Threshold:    ${cfg?.recallThreshold ?? 0.3}`);
+        lines.push(`Exclude Channels:    ${(cfg?.excludeChannels ?? []).join(", ") || "(none)"}`);
+        lines.push(`Session Timeout:     ${cfg?.sessionTimeout ?? 120} min`);
+        lines.push(`Cleanup Interval:    ${cfg?.cleanupInterval ?? 30} min`);
+        lines.push(`Debug:               ${cfg?.debug ?? false}`);
+        lines.push(`Verbose:             ${cfg?.verbose ?? false}`);
+        lines.push(`Max Log Entries:     ${cfg?.maxLogEntries ?? 100}`);
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-sessions — List sessions
+  api.registerCommand?.({
+    name: "memory-sessions",
+    description: "List MemoryRelay sessions",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      try {
+        const { flags } = parseCommandArgs(ctx.args);
+        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
+        const project = flags["project"] ? String(flags["project"]) : undefined;
+        let status: string | undefined = flags["status"] ? String(flags["status"]) : undefined;
+        if (flags["active"]) status = "active";
+
+        const raw = await client.listSessions(limit, project, status);
+        const sessions: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+
+        if (sessions.length === 0) {
+          return { text: "No sessions found." };
+        }
+
+        const lines: string[] = ["MemoryRelay Sessions", "━".repeat(60)];
+        for (const session of sessions) {
+          const s = session as Record<string, unknown>;
+          const sid = String(s["id"] ?? "");
+          const sessionStatus = String(s["status"] ?? "unknown").toUpperCase();
+          const startedAt = s["started_at"] ? new Date(String(s["started_at"])).toLocaleString() : "unknown";
+          let duration = "ongoing";
+          if (s["started_at"] && s["ended_at"]) {
+            const diffMs = new Date(String(s["ended_at"])).getTime() - new Date(String(s["started_at"])).getTime();
+            const diffMin = Math.round(diffMs / 60000);
+            duration = `${diffMin}m`;
+          }
+          const summary = String(s["summary"] ?? "").slice(0, 80);
+          lines.push(`[${sessionStatus}] ${sid}`);
+          lines.push(`  Started: ${startedAt} | Duration: ${duration}`);
+          if (summary) lines.push(`  ${summary}`);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-decisions — List decisions
+  api.registerCommand?.({
+    name: "memory-decisions",
+    description: "List architectural decisions stored in MemoryRelay",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      try {
+        const { flags } = parseCommandArgs(ctx.args);
+        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
+        const project = flags["project"] ? String(flags["project"]) : undefined;
+        const status = flags["status"] ? String(flags["status"]) : undefined;
+        const tags = flags["tags"] ? String(flags["tags"]) : undefined;
+
+        const raw = await client.listDecisions(limit, project, status, tags);
+        const decisions: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+
+        if (decisions.length === 0) {
+          return { text: "No decisions found." };
+        }
+
+        const lines: string[] = ["MemoryRelay Decisions", "━".repeat(60)];
+        for (const decision of decisions) {
+          const d = decision as Record<string, unknown>;
+          const decisionStatus = String(d["status"] ?? "unknown").toUpperCase();
+          const title = String(d["title"] ?? "(untitled)");
+          const date = d["created_at"] ? new Date(String(d["created_at"])).toLocaleDateString() : "unknown";
+          const rationale = String(d["rationale"] ?? "").slice(0, 100);
+          lines.push(`[${decisionStatus}] ${title} (${date})`);
+          if (rationale) lines.push(`  ${rationale}`);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-patterns — List/search patterns
+  api.registerCommand?.({
+    name: "memory-patterns",
+    description: "List or search memory patterns",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      try {
+        const { positional, flags } = parseCommandArgs(ctx.args);
+        const query = positional[0] ?? "";
+        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
+        const category = flags["category"] ? String(flags["category"]) : undefined;
+        const project = flags["project"] ? String(flags["project"]) : undefined;
+
+        const raw = await client.searchPatterns(query, category, project, limit);
+        const patterns: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+
+        if (patterns.length === 0) {
+          return { text: query ? `No patterns found for: "${query}"` : "No patterns found." };
+        }
+
+        const lines: string[] = ["MemoryRelay Patterns", "━".repeat(60)];
+        for (const pattern of patterns) {
+          const p = pattern as Record<string, unknown>;
+          const name = String(p["name"] ?? "(unnamed)");
+          const cat = String(p["category"] ?? "general");
+          const description = String(p["description"] ?? "").slice(0, 100);
+          lines.push(`${name} [${cat}]`);
+          if (description) lines.push(`  ${description}`);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-entities — List entities
+  api.registerCommand?.({
+    name: "memory-entities",
+    description: "List entities stored in MemoryRelay",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      try {
+        const { flags } = parseCommandArgs(ctx.args);
+        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 20;
+
+        const raw = await client.listEntities(limit);
+        const entities: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+
+        if (entities.length === 0) {
+          return { text: "No entities found." };
+        }
+
+        const lines: string[] = ["MemoryRelay Entities", "━".repeat(60)];
+        for (const entity of entities) {
+          const e = entity as Record<string, unknown>;
+          const name = String(e["name"] ?? "(unnamed)");
+          const type = String(e["type"] ?? "unknown");
+          const relationships = Array.isArray(e["relationships"]) ? e["relationships"].length : (typeof e["relationship_count"] === "number" ? e["relationship_count"] : 0);
+          lines.push(`${name} [${type}] (${relationships} relationships)`);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-projects — List projects
+  api.registerCommand?.({
+    name: "memory-projects",
+    description: "List projects in MemoryRelay",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      try {
+        const { flags } = parseCommandArgs(ctx.args);
+        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 20;
+
+        const raw = await client.listProjects(limit);
+        const projects: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+
+        if (projects.length === 0) {
+          return { text: "No projects found." };
+        }
+
+        const lines: string[] = ["MemoryRelay Projects", "━".repeat(60)];
+        for (const project of projects) {
+          const p = project as Record<string, unknown>;
+          const slug = String(p["slug"] ?? "(no-slug)");
+          const description = String(p["description"] ?? "").slice(0, 80);
+          const memoryCount = typeof p["memory_count"] === "number" ? p["memory_count"] : 0;
+          lines.push(`${slug} — ${description || "(no description)"} (${memoryCount} memories)`);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-agents — List agents
+  api.registerCommand?.({
+    name: "memory-agents",
+    description: "List agents registered in MemoryRelay",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      try {
+        const { flags } = parseCommandArgs(ctx.args);
+        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 20;
+
+        const raw = await client.listAgents(limit);
+        const agents: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+
+        if (agents.length === 0) {
+          return { text: "No agents found." };
+        }
+
+        const lines: string[] = ["MemoryRelay Agents", "━".repeat(60)];
+        for (const agent of agents) {
+          const a = agent as Record<string, unknown>;
+          const id = String(a["id"] ?? "(no-id)");
+          const name = String(a["name"] ?? "");
+          const description = String(a["description"] ?? "");
+          lines.push(`${id}${name ? ` (${name})` : ""}${description ? `, ${description}` : ""}`);
+        }
+
+        return { text: lines.join("\n") };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-forget — Delete a memory by ID
+  api.registerCommand?.({
+    name: "memory-forget",
+    description: "Delete a specific memory by ID",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      const { positional } = parseCommandArgs(ctx.args);
+      const memoryId = positional[0];
+      if (!memoryId) {
+        return { text: "Usage: /memory-forget <memory-id>" };
+      }
+      try {
+        let preview = "";
+        try {
+          const existing = await client.get(memoryId);
+          const m = existing as Record<string, unknown>;
+          preview = String(m["content"] ?? "").slice(0, 120);
+        } catch (_) {
+          // preview unavailable — proceed with delete
+        }
+
+        await client.delete(memoryId);
+
+        const lines = [`Memory deleted: ${memoryId}`];
+        if (preview) lines.push(`Content: ${preview}`);
+        return { text: lines.join("\n") };
+      } catch (err) {
+        const msg = String(err);
+        if (msg.toLowerCase().includes("not found") || msg.includes("404")) {
+          return { text: `Memory not found: ${memoryId}`, isError: true };
+        }
+        return { text: `Error: ${msg}`, isError: true };
+      }
+    },
+  });
+
+  // ========================================================================
   // Stale Session Cleanup Service (v0.13.0)
   // ========================================================================
 
