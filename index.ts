@@ -4644,7 +4644,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // ========================================================================
-  // Direct Commands (5 total) — bypass LLM, execute immediately
+  // Direct Commands (15 total) — bypass LLM, execute immediately
   // ========================================================================
 
   // /memory-status — Show full plugin status report
@@ -5005,8 +5005,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         lines.push(`Recall Limit:        ${cfg?.recallLimit ?? 5}`);
         lines.push(`Recall Threshold:    ${cfg?.recallThreshold ?? 0.3}`);
         lines.push(`Exclude Channels:    ${(cfg?.excludeChannels ?? []).join(", ") || "(none)"}`);
-        lines.push(`Session Timeout:     ${cfg?.sessionTimeout ?? 120} min`);
-        lines.push(`Cleanup Interval:    ${cfg?.cleanupInterval ?? 30} min`);
+        lines.push(`Session Timeout:     ${cfg?.sessionTimeoutMinutes ?? 120} min`);
+        lines.push(`Cleanup Interval:    ${cfg?.sessionCleanupIntervalMinutes ?? 30} min`);
         lines.push(`Debug:               ${cfg?.debug ?? false}`);
         lines.push(`Verbose:             ${cfg?.verbose ?? false}`);
         lines.push(`Max Log Entries:     ${cfg?.maxLogEntries ?? 100}`);
