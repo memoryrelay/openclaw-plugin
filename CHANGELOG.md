@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-03-17
+
+### Added
+- 10 new direct commands: `/memory-search`, `/memory-validate`, `/memory-config`, `/memory-sessions`, `/memory-decisions`, `/memory-patterns`, `/memory-entities`, `/memory-projects`, `/memory-agents`, `/memory-forget`
+- Total direct commands: 15 (was 5)
+- Competitive positioning in README (vs Mem0, vs OpenClaw-Projects)
+- Use case documentation (Tech Lead, DevOps, Solo Dev, Coding Agent)
+- Full command reference with examples
+- Architecture and privacy documentation
+
+### Fixed
+- Config schema `autoCapture` now supports full object shape (was boolean-only)
+- Config schema `autoCapture` default corrected to `true` (was `false`, mismatched code)
+- Added missing uiHints for `recallLimit`, `recallThreshold`, `debug`, `verbose`, `maxLogEntries`
+
+### Changed
+- README rewritten with competitive analysis, quick start, and complete feature reference
+- Plugin description updated to reflect 15 commands
+- Version bumped to 0.14.0
+
 ## [0.13.0] - 2026-03-10
 
 ### Added
