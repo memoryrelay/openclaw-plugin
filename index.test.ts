@@ -1127,3 +1127,69 @@ describe("parseCommandArgs", () => {
     expect(result.flags).toEqual({ limit: "10", active: true });
   });
 });
+
+describe("Direct Commands (v0.14.0)", () => {
+  // Argument parsing integration tests for each command type
+
+  test("/memory-search requires query", () => {
+    const args = parseCommandArgs("");
+    expect(args.positional.length).toBe(0);
+  });
+
+  test("/memory-search parses all flags", () => {
+    const args = parseCommandArgs('"deploy config" --limit 5 --project my-api --threshold 0.5');
+    expect(args.positional).toEqual(["deploy config"]);
+    expect(args.flags.limit).toBe("5");
+    expect(args.flags.project).toBe("my-api");
+    expect(args.flags.threshold).toBe("0.5");
+  });
+
+  test("/memory-sessions --active is boolean flag", () => {
+    const args = parseCommandArgs("--active --limit 20 --project api");
+    expect(args.flags.active).toBe(true);
+    expect(args.flags.limit).toBe("20");
+    expect(args.flags.project).toBe("api");
+  });
+
+  test("/memory-sessions --status takes a value", () => {
+    const args = parseCommandArgs("--status ended --limit 5");
+    expect(args.flags.status).toBe("ended");
+    expect(args.flags.limit).toBe("5");
+  });
+
+  test("/memory-decisions parses all flags", () => {
+    const args = parseCommandArgs("--limit 10 --project api --status active --tags auth,security");
+    expect(args.flags.limit).toBe("10");
+    expect(args.flags.project).toBe("api");
+    expect(args.flags.status).toBe("active");
+    expect(args.flags.tags).toBe("auth,security");
+  });
+
+  test("/memory-patterns with optional query", () => {
+    const args = parseCommandArgs("authentication --category code --project api");
+    expect(args.positional).toEqual(["authentication"]);
+    expect(args.flags.category).toBe("code");
+    expect(args.flags.project).toBe("api");
+  });
+
+  test("/memory-patterns without query", () => {
+    const args = parseCommandArgs("--limit 20");
+    expect(args.positional.length).toBe(0);
+    expect(args.flags.limit).toBe("20");
+  });
+
+  test("/memory-entities parses limit", () => {
+    const args = parseCommandArgs("--limit 50");
+    expect(args.flags.limit).toBe("50");
+  });
+
+  test("/memory-forget requires ID", () => {
+    const args = parseCommandArgs("mem_abc123xyz");
+    expect(args.positional[0]).toBe("mem_abc123xyz");
+  });
+
+  test("/memory-forget with no args returns empty", () => {
+    const args = parseCommandArgs(undefined);
+    expect(args.positional.length).toBe(0);
+  });
+});
