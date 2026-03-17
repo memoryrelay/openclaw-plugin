@@ -1,125 +1,83 @@
-# MemoryRelay AI - OpenClaw Memory Plugin
+# MemoryRelay AI
+
+**Engineering Knowledge Platform for OpenClaw**
+
+Persistent memory, architectural decisions, reusable patterns, and project orchestration for AI agents.
 
 [![npm version](https://img.shields.io/npm/v/@memoryrelay/plugin-memoryrelay-ai.svg)](https://www.npmjs.com/package/@memoryrelay/plugin-memoryrelay-ai)
 [![OpenClaw Compatible](https://img.shields.io/badge/OpenClaw-2026.2.26+-blue.svg)](https://openclaw.ai)
 
-AI-powered long-term memory for OpenClaw agents. Gives your AI assistant persistent memory, project context, architectural decision records, reusable patterns, and session tracking across conversations.
+## Why MemoryRelay?
 
-## Features
+MemoryRelay is designed for engineering teams managing complex, long-running projects. It is not general-purpose Q&A memory.
 
-- **39 Tools** covering memories, entities, sessions, decisions, patterns, and projects
-- **8 Gateway Methods** for stats, debugging, and onboarding
-- **Smart Auto-Capture** - Tier-based privacy system with automatic filtering
-- **Daily Memory Stats** - Morning/evening summaries with growth metrics
-- **Debug & Monitoring** - Comprehensive logging, health checks, and performance metrics
-- **Semantic Search** - Vector-based retrieval finds relevant context by meaning
-- **Auto-Recall** - Automatically injects relevant memories into agent context
-- **Project-First Workflow** - Agents receive workflow instructions to start with project context
-- **Decision Records** - Track and check architectural decisions before making new ones
-- **Pattern Library** - Create, search, and adopt reusable conventions across projects
-- **Session Tracking** - Track work sessions with summaries for continuity
-- **External Session IDs** - Multi-agent collaboration and conversation-spanning sessions
-- **Stale Session Cleanup** - Background service automatically closes inactive sessions after a configurable timeout
-- **Sender Identity Tagging** - Multi-agent traceability via auto-injected `sender_id` metadata
-- **Tool Group Filtering** - Enable only the tool groups you need
+| Feature | MemoryRelay | Mem0 | OpenClaw-Projects |
+|---------|------------|------|-------------------|
+| Semantic search | Yes (pgvector) | Yes | No |
+| Sessions | Yes (auto-sync with OpenClaw sessions) | No | No |
+| Architectural Decision Records | Yes (record, check, supersede) | No | No |
+| Reusable patterns | Yes (create, adopt, suggest) | No | No |
+| Project orchestration | Yes (10 tools, dependency graphs) | No | Basic |
+| Entities / knowledge graph | Yes (create, link, graph) | Yes | No |
+| Multi-agent collaboration | Yes (agent scoping, subagent tracking) | Limited | No |
+| Auto-capture with privacy tiers | Yes (off/conservative/smart/aggressive) | Basic | No |
+| Direct commands | 15 | ~5 | 0 |
+| Lifecycle hooks | 13 | 0 | 0 |
+| Tools | 39 | ~10 | 0 |
 
-## Installation
+## Quick Start
 
-### Requirements
-
-- OpenClaw >= 2026.2.26
-- Node.js >= 20.0.0
-- MemoryRelay API key ([get one at memoryrelay.ai](https://memoryrelay.ai))
-
-### Install via OpenClaw CLI
+**1. Install the plugin**
 
 ```bash
 openclaw plugins install @memoryrelay/plugin-memoryrelay-ai
 ```
 
-### Configuration
+**2. Set your API key**
 
 ```bash
-openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
-  "apiKey": "mem_prod_your_key_here",
-  "agentId": "your-agent-name",
-  "defaultProject": "my-project",
-  "autoRecall": true,
-  "autoCapture": false
-}'
-
-# Or use environment variables
 export MEMORYRELAY_API_KEY="mem_prod_your_key_here"
-export MEMORYRELAY_AGENT_ID="your-agent-name"
-export MEMORYRELAY_DEFAULT_PROJECT="my-project"
-
-# Restart gateway
-openclaw gateway restart
 ```
 
-## Configuration Options
+Or configure inline:
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `apiKey` | string | — | MemoryRelay API key (or `MEMORYRELAY_API_KEY` env var) |
-| `agentId` | string | — | Unique agent identifier (or `MEMORYRELAY_AGENT_ID` env var, or agent name) |
-| `apiUrl` | string | `https://api.memoryrelay.net` | API endpoint (or `MEMORYRELAY_API_URL` env var) |
-| `defaultProject` | string | — | Default project slug applied to sessions, decisions, and memories |
-| `enabledTools` | string | `all` | Comma-separated tool groups: `memory`, `entity`, `agent`, `session`, `decision`, `pattern`, `project`, `health` |
-| `autoRecall` | boolean | `true` | Inject relevant memories into context each turn |
-| `autoCapture` | boolean\|object | `false` | Auto-capture config. Boolean for backward compat, object for tier system: `{enabled, tier, confirmFirst}`. Tiers: `off`, `conservative`, `smart`, `aggressive`. |
-| `recallLimit` | number | `5` | Max memories to inject per turn (1-20) |
-| `recallThreshold` | number | `0.3` | Minimum similarity score for recall (0-1) |
-| `excludeChannels` | string[] | `[]` | Channel IDs to skip auto-recall |
-| `debug` | boolean | `false` | Enable debug logging of API calls |
-| `verbose` | boolean | `false` | Include request/response bodies in debug logs |
-| `logFile` | string | — | Optional file path for persistent debug logs |
-| `maxLogEntries` | number | `100` | Circular buffer size for in-memory logs |
-| `sessionTimeoutMinutes` | number | `120` | Idle time before a session is automatically closed by the cleanup service |
-| `sessionCleanupIntervalMinutes` | number | `30` | How often the background cleanup service checks for stale sessions |
-
-## Smart Auto-Capture
-
-Four capture modes with built-in privacy protection:
-
-| Tier | When to Use | Privacy Level |
-|------|-------------|---------------|
-| `off` | Manual storage only | N/A |
-| `conservative` | Low-risk conversations only | High (blocks most patterns) |
-| `smart` | Balanced automation | Medium (blocks sensitive data) |
-| `aggressive` | Maximum capture | Low (minimal blocking) |
-
-**Privacy Blocklist** — Automatically filters passwords, API keys, credit card numbers, SSNs, and other sensitive data.
-
-```json
-{
-  "autoCapture": {
-    "enabled": true,
-    "tier": "smart",
-    "confirmFirst": 5
-  }
-}
+```bash
+openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{"apiKey": "mem_prod_..."}'
 ```
 
-With `confirmFirst`, the first N captures show confirmation prompts before running silently.
+**3. Verify**
 
-## Agent Workflow
+```
+/memory-health
+```
 
-The plugin injects workflow instructions into every agent conversation via the `before_agent_start` hook, guiding the AI to follow a project-first approach:
+Auto-recall and smart auto-capture are enabled by default. The plugin injects relevant memories into context every turn and captures important information automatically.
 
-1. **Load context** — `project_context(project)` loads hot-tier memories, active decisions, and adopted patterns
-2. **Start session** — `session_start(title, project)` begins tracking work
-3. **Check decisions** — `decision_check(query, project)` before architectural choices
-4. **Find patterns** — `pattern_search(query)` to find established conventions
-5. **Store findings** — `memory_store(content)` for important information
-6. **Record decisions** — `decision_record(title, rationale)` for significant choices
-7. **End session** — `session_end(session_id, summary)` with accomplishment summary
+## Use Cases
 
-For new projects, the agent is guided to call `project_register()` first.
+**Tech Lead** managing 3+ projects:
+- Record architectural decisions with `decision_record` so future agents (and teammates) check before re-deciding
+- Create reusable patterns (`pattern_create`) and adopt them across projects
+- Use `project_impact` to understand blast radius before cross-cutting changes
 
-## Tool Reference
+**DevOps Engineer**:
+- Store infrastructure decisions as ADRs: "Why we chose Fargate over ECS on EC2"
+- Capture runbooks and operational procedures as patterns
+- Track dependencies between services with `project_add_relationship`
 
-### Memory Tools (9 tools) — group: `memory`
+**Solo Developer**:
+- Build a personal knowledge base of memories, entities, and decisions
+- Use `memory_recall` for semantic search across everything you have stored
+- Link entities to memories for a navigable knowledge graph
+
+**Coding Agent**:
+- Auto-capture learns from conversations without explicit tool calls
+- Pattern adoption ensures consistent code style across sessions
+- Session tracking provides continuity when context windows reset
+
+## Features -- 39 Tools by Category
+
+### Memory (9 tools) -- group: `memory`
 
 | Tool | Description |
 |------|-------------|
@@ -133,7 +91,7 @@ For new projects, the agent is guided to call `project_register()` first.
 | `memory_context` | Build a token-budget-aware context window from relevant memories |
 | `memory_promote` | Update a memory's importance score and tier |
 
-### Entity Tools (4 tools) — group: `entity`
+### Entity (4 tools) -- group: `entity`
 
 | Tool | Description |
 |------|-------------|
@@ -142,7 +100,7 @@ For new projects, the agent is guided to call `project_register()` first.
 | `entity_list` | List entities with pagination |
 | `entity_graph` | Explore an entity's neighborhood in the knowledge graph |
 
-### Agent Tools (3 tools) — group: `agent`
+### Agent (3 tools) -- group: `agent`
 
 | Tool | Description |
 |------|-------------|
@@ -150,7 +108,7 @@ For new projects, the agent is guided to call `project_register()` first.
 | `agent_create` | Create a new agent (memory namespace) |
 | `agent_get` | Get agent details by ID |
 
-### Session Tools (4 tools) — group: `session`
+### Session (4 tools) -- group: `session`
 
 | Tool | Description |
 |------|-------------|
@@ -159,7 +117,7 @@ For new projects, the agent is guided to call `project_register()` first.
 | `session_recall` | Get session details and timeline |
 | `session_list` | List sessions filtered by project or status |
 
-### Decision Tools (4 tools) — group: `decision`
+### Decision (4 tools) -- group: `decision`
 
 | Tool | Description |
 |------|-------------|
@@ -168,7 +126,7 @@ For new projects, the agent is guided to call `project_register()` first.
 | `decision_supersede` | Replace a decision with a new one (old is marked superseded) |
 | `decision_check` | Semantic search for existing decisions before making new ones |
 
-### Pattern Tools (4 tools) — group: `pattern`
+### Pattern (4 tools) -- group: `pattern`
 
 | Tool | Description |
 |------|-------------|
@@ -177,7 +135,7 @@ For new projects, the agent is guided to call `project_register()` first.
 | `pattern_adopt` | Adopt an existing pattern for a project |
 | `pattern_suggest` | Get pattern suggestions based on project stack |
 
-### Project Tools (10 tools) — group: `project`
+### Project (10 tools) -- group: `project`
 
 | Tool | Description |
 |------|-------------|
@@ -192,7 +150,7 @@ For new projects, the agent is guided to call `project_register()` first.
 | `project_shared_patterns` | Find patterns shared between two projects |
 | `project_context` | Load full project context (memories, decisions, patterns, sessions) |
 
-### Health Tools (1 tool) — group: `health`
+### Health (1 tool) -- group: `health`
 
 | Tool | Description |
 |------|-------------|
@@ -200,145 +158,200 @@ For new projects, the agent is guided to call `project_register()` first.
 
 ## Direct Commands
 
-These slash commands bypass the LLM and execute immediately in the CLI:
+These slash commands bypass the LLM and execute immediately.
+
+### Inspection Commands
 
 | Command | Description |
 |---------|-------------|
-| `/memory-status` | Show connection status, tool counts, and memory stats |
-| `/memory-stats` | Show memory growth, categories, and daily statistics |
-| `/memory-health` | Run health check against the MemoryRelay API |
-| `/memory-logs` | Show recent debug log entries |
-| `/memory-metrics` | Show per-tool performance metrics (call count, success rate, latency) |
+| `/memory-search <query>` | Semantic search across stored memories |
+| `/memory-sessions` | List sessions (optional: `active`, `closed`, or project slug) |
+| `/memory-decisions` | List architectural decisions (optional: project slug) |
+| `/memory-patterns` | List or search patterns (optional: search query) |
+| `/memory-entities` | List entities (optional: entity type filter) |
+| `/memory-projects` | List registered projects |
+| `/memory-agents` | List registered agents |
 
-## Tool Group Filtering
+### Diagnostic Commands
 
-Only enable the groups you need:
+| Command | Description |
+|---------|-------------|
+| `/memory-status` | Connection status, tool counts, and memory stats |
+| `/memory-stats` | Daily statistics (total, growth, top categories) |
+| `/memory-health` | API health check with response time |
+| `/memory-logs` | Recent debug log entries (optional: limit, tool filter) |
+| `/memory-metrics` | Per-tool call counts, success rates, and latency |
+| `/memory-validate` | Production readiness checks |
+| `/memory-config` | Display current plugin configuration |
 
-```json
-{
-  "enabledTools": "memory,session,decision"
-}
-```
+### Management Commands
 
-This enables only the memory (9), session (4), and decision (4) tools — 17 tools instead of 39. Useful for reducing tool clutter when you don't need project graphs or pattern management.
+| Command | Description |
+|---------|-------------|
+| `/memory-forget <id>` | Delete a specific memory by ID |
 
-Available groups: `memory`, `entity`, `agent`, `session`, `decision`, `pattern`, `project`, `health`
-
-Set to `all` (or omit) to enable everything.
-
-## Auto-Recall
-
-When `autoRecall: true`, relevant memories are automatically injected into agent context each turn:
-
-```
-User: "How should I handle authentication in this project?"
-
-[Plugin searches memories for "authentication"]
-[Injects workflow instructions + top 5 relevant memories into context]
-Agent uses past decisions and patterns to inform its response
-```
-
-## Channel Exclusions
-
-Exclude specific channels from auto-recall and workflow injection:
-
-```json
-{
-  "excludeChannels": [
-    "telegram:group_123456",
-    "discord:channel_789012"
-  ]
-}
-```
-
-## Debug & Monitoring
-
-### Enable Debug Mode
-
-```json
-{
-  "debug": true,
-  "verbose": false,
-  "maxLogEntries": 1000
-}
-```
-
-### Gateway Methods
-
-| Method | Purpose | Example |
-|--------|---------|---------|
-| `memoryrelay.logs` | View debug logs | `openclaw gateway-call memoryrelay.logs '{"limit": 50}'` |
-| `memoryrelay.health` | Run health check | `openclaw gateway-call memoryrelay.health` |
-| `memoryrelay.test` | Test individual tools | `openclaw gateway-call memoryrelay.test '{"tool": "memory_store"}'` |
-| `memoryrelay.metrics` | View performance stats | `openclaw gateway-call memoryrelay.metrics` |
-| `memoryrelay.heartbeat` | Daily stats check | `openclaw gateway-call memoryrelay.heartbeat` |
-| `memoryrelay.stats` | CLI stats command | `openclaw gateway-call memoryrelay.stats '{"format": "json"}'` |
-| `memoryrelay.onboarding` | Show onboarding | `openclaw gateway-call memoryrelay.onboarding` |
-| `memory.status` | Plugin status report | `openclaw gateway-call memory.status` |
-
-### Debug Log Format
-
-When debug mode is enabled, each API call is logged with timestamp, tool name, duration, and status. Verbose mode additionally captures request/response bodies for deep troubleshooting.
-
-## Privacy & Security
-
-- **Cloud-Backed** — Memories stored on MemoryRelay servers (HTTPS-encrypted in transit)
-- **API Key Auth** — Bearer token authentication
-- **Agent Isolation** — Memories scoped per agent ID
-- **Channel Filtering** — Exclude sensitive channels from auto-recall
-- **Privacy Blocklist** — Auto-capture filters sensitive data (passwords, SSNs, credit cards, API keys)
-- **Privacy Redaction Hooks** — Sensitive data is also redacted from messages (`before_message_write`) and tool results (`tool_result_persist`) before persistence
-- **Sender Identity** — `memory_store`, `memory_batch_store`, and `decision_record` auto-inject `sender_id` from tool context into metadata for multi-agent traceability
-- **Never store secrets** — Do not store API keys, passwords, or tokens as memories
-
-## Troubleshooting
-
-### Plugin Not Loading
+## Configuration Reference
 
 ```bash
-# Check if installed
-npm list -g @memoryrelay/plugin-memoryrelay-ai
-
-# Reinstall if needed
-openclaw plugins install @memoryrelay/plugin-memoryrelay-ai --force
-
-# Restart gateway
-openclaw gateway restart
-
-# Check logs for errors
-openclaw gateway logs | grep memoryrelay
+openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
+  "apiKey": "mem_prod_...",
+  "agentId": "iris",
+  "defaultProject": "my-api",
+  "autoRecall": true,
+  "autoCapture": { "enabled": true, "tier": "smart", "confirmFirst": 5 }
+}'
 ```
 
-### API Connection Issues
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `apiKey` | string | -- | MemoryRelay API key |
+| `agentId` | string | -- | Unique agent identifier |
+| `apiUrl` | string | `https://api.memoryrelay.net` | API endpoint |
+| `defaultProject` | string | -- | Default project slug for sessions, decisions, and memories |
+| `enabledTools` | string | `all` | Comma-separated tool groups to enable |
+| `autoRecall` | boolean | `true` | Inject relevant memories into context each turn |
+| `autoCapture` | boolean \| object | `true` | Auto-capture config (see tiers below) |
+| `recallLimit` | number | `5` | Max memories injected per turn (1-20) |
+| `recallThreshold` | number | `0.3` | Minimum similarity score for recall (0-1) |
+| `excludeChannels` | string[] | `[]` | Channel IDs to skip auto-recall |
+| `sessionTimeoutMinutes` | number | `120` | Idle time before session auto-close (10-1440) |
+| `sessionCleanupIntervalMinutes` | number | `30` | Stale session check interval (5-360) |
+| `debug` | boolean | `false` | Enable debug logging of API calls |
+| `verbose` | boolean | `false` | Include request/response bodies in logs |
+| `maxLogEntries` | number | `100` | Circular buffer size for in-memory logs (10-10000) |
 
-```bash
-# Test API directly
-curl -H "X-API-Key: YOUR_KEY" https://api.memoryrelay.net/v1/health
+### Environment Variables
 
-# Check gateway logs
-openclaw gateway logs -f | grep memory-memoryrelay
+| Variable | Maps to |
+|----------|---------|
+| `MEMORYRELAY_API_KEY` | `apiKey` |
+| `MEMORYRELAY_AGENT_ID` | `agentId` |
+| `MEMORYRELAY_API_URL` | `apiUrl` |
+| `MEMORYRELAY_DEFAULT_PROJECT` | `defaultProject` |
+
+### Auto-Capture Tiers
+
+| Tier | Behavior | Use When |
+|------|----------|----------|
+| `off` | Manual `memory_store` only | Full control, no surprises |
+| `conservative` | Captures only low-risk technical facts | Sensitive environments |
+| `smart` (default) | Balanced automation with privacy blocklist | Most teams |
+| `aggressive` | Maximum capture, minimal filtering | Solo prototyping |
+
+The `confirmFirst` setting (default: `5`) prompts for confirmation on the first N captures before running silently. The `blocklist` array accepts regex patterns for content that should never be captured.
+
+```json
+{
+  "autoCapture": {
+    "enabled": true,
+    "tier": "smart",
+    "confirmFirst": 5,
+    "blocklist": ["password", "secret", "Bearer\\s+\\S+"],
+    "categories": {
+      "credentials": true,
+      "preferences": true,
+      "technical": true,
+      "personal": false
+    }
+  }
+}
 ```
 
-### Auto-Recall Not Working
+## Architecture & Privacy
 
-1. Verify `autoRecall: true` in config
-2. Check memories exist: `openclaw gateway-call memory_list '{"limit": 10}'`
-3. Lower `recallThreshold` (try 0.1) for more results
-4. Check channel not in `excludeChannels`
+### Data Flow
 
-### Known Limitations
+```
+Agent <-> Plugin <-> MemoryRelay API (HTTPS) <-> PostgreSQL + pgvector
+```
 
-- `memory_batch_store`: May return 500 errors (use individual `memory_store` as workaround)
-- `memory_context`: Returns 405 Method Not Allowed (use `memory_recall` instead)
+All data in transit is encrypted via HTTPS. The plugin communicates with `api.memoryrelay.net` using bearer token authentication.
 
-## Skills
+### Privacy Controls
 
-The plugin ships with 8 skills in `skills/` — 5 agent-facing and 3 developer-facing:
+- **Blocklist regex patterns** in auto-capture config filter passwords, API keys, credit card numbers, SSNs, and other sensitive data before storage
+- **Redaction hooks** on `before_message_write` and `tool_result_persist` apply blocklist patterns to messages and tool results before persistence
+- **No credential storage** by default -- the `personal` category requires explicit opt-in
+- **Channel exclusions** prevent auto-recall on sensitive channels
+
+### Multi-Agent Support
+
+- Each agent has its own memory namespace via `agentId`
+- Projects, decisions, and patterns are shared across agents
+- Subagent spawning and completion are tracked via lifecycle hooks (`subagent_spawned`, `subagent_ended`)
+- Sender identity is auto-injected into memory metadata for traceability
+
+### Lifecycle Hooks
+
+The plugin registers 14 lifecycle hooks:
+
+| Hook | Purpose |
+|------|---------|
+| `before_agent_start` | Auto-recall and workflow injection |
+| `agent_end` | Auto-capture from completed conversations |
+| `session_start` | Auto-create MemoryRelay session from OpenClaw session |
+| `session_end` | Auto-end MemoryRelay session |
+| `before_tool_call` | Reserved for future tool blocking/audit |
+| `after_tool_call` | Session activity tracking and metrics |
+| `before_compaction` | Save key context before compaction |
+| `before_reset` | Save key context before session reset |
+| `message_received` | Activity timestamp updates |
+| `message_sending` | Reserved for future extensibility |
+| `before_message_write` | Privacy redaction |
+| `subagent_spawned` | Track multi-agent collaboration |
+| `subagent_ended` | Store subagent completion summaries |
+| `tool_result_persist` | Privacy redaction on tool results |
+
+### Skills
+
+The plugin ships with 8 skills providing guided workflows on top of the raw tools:
 
 - **Agent-facing**: `memory-workflow`, `decision-tracking`, `pattern-management`, `project-orchestration`, `entity-and-context`
 - **Developer-facing**: `codebase-navigation`, `testing-memoryrelay`, `release-process`
 
-Skills are loaded via OpenClaw's skill system and provide guided workflows on top of the raw tools.
+## Troubleshooting
+
+### Connection refused / API key issues
+
+```bash
+# Test the API directly
+curl -H "X-API-Key: $MEMORYRELAY_API_KEY" https://api.memoryrelay.net/v1/health
+
+# Check plugin status
+/memory-health
+
+# Run full validation
+/memory-validate
+```
+
+If `/memory-health` shows `connected: false`, verify your API key is set correctly via environment variable or config. Keys start with `mem_prod_`.
+
+### Auto-recall not working
+
+1. Confirm `autoRecall` is `true` (it is by default)
+2. Verify memories exist: run `/memory-search test` to check
+3. Lower `recallThreshold` to `0.1` for broader matching
+4. Check your channel is not in `excludeChannels`
+5. Run `/memory-status` to see the full plugin state
+
+### Debug logging
+
+Enable debug mode to see all API calls:
+
+```json
+{
+  "debug": true,
+  "verbose": true,
+  "maxLogEntries": 1000
+}
+```
+
+Then inspect with `/memory-logs` or `/memory-metrics` to identify slow or failing calls.
+
+### Known Limitations
+
+- `memory_batch_store`: May return 500 errors on large batches (use individual `memory_store` as workaround)
+- `memory_context`: Returns 405 Method Not Allowed on some API versions (use `memory_recall` instead)
 
 ## Development
 
@@ -347,17 +360,14 @@ git clone https://github.com/memoryrelay/openclaw-plugin.git
 cd openclaw-plugin
 npm install
 npm test
-npm run test:watch
-npm run test:coverage
 ```
-
-## License
-
-MIT License - see [LICENSE](./LICENSE) file
 
 ## Links
 
 - **MemoryRelay**: https://memoryrelay.ai
 - **OpenClaw**: https://docs.openclaw.ai
 - **Repository**: https://github.com/memoryrelay/openclaw-plugin
-- **Issues**: https://github.com/memoryrelay/openclaw-plugin/issues
+
+## License
+
+MIT

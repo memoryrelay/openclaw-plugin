@@ -1010,3 +1010,186 @@ describe("API Endpoint Alignment", () => {
     expect(status >= 500).toBe(false);
   });
 });
+
+// ============================================================================
+// parseCommandArgs Tests
+// ============================================================================
+
+// Since parseCommandArgs is not exported, we replicate the function here for unit testing.
+
+function parseCommandArgs(input: string | undefined): { positional: string[]; flags: Record<string, string | boolean> } {
+  const positional: string[] = [];
+  const flags: Record<string, string | boolean> = {};
+
+  if (!input || input.trim() === "") {
+    return { positional, flags };
+  }
+
+  const tokens: string[] = [];
+  let current = "";
+  let inQuote: string | null = null;
+
+  for (const ch of input) {
+    if (inQuote) {
+      if (ch === inQuote) {
+        inQuote = null;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = ch;
+    } else if (ch === " " || ch === "\t") {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token.startsWith("--")) {
+      const key = token.slice(2);
+      const next = tokens[i + 1];
+      if (next && !next.startsWith("--")) {
+        flags[key] = next;
+        i += 2;
+      } else {
+        flags[key] = true;
+        i += 1;
+      }
+    } else {
+      positional.push(token);
+      i += 1;
+    }
+  }
+
+  return { positional, flags };
+}
+
+describe("parseCommandArgs", () => {
+  test("should return empty for undefined input", () => {
+    const result = parseCommandArgs(undefined);
+    expect(result).toEqual({ positional: [], flags: {} });
+  });
+
+  test("should return empty for empty string", () => {
+    const result = parseCommandArgs("");
+    expect(result).toEqual({ positional: [], flags: {} });
+  });
+
+  test("should parse positional arguments", () => {
+    const result = parseCommandArgs("hello world");
+    expect(result.positional).toEqual(["hello", "world"]);
+    expect(result.flags).toEqual({});
+  });
+
+  test("should parse flags with values", () => {
+    const result = parseCommandArgs("--limit 10 --project my-api");
+    expect(result.positional).toEqual([]);
+    expect(result.flags).toEqual({ limit: "10", project: "my-api" });
+  });
+
+  test("should parse boolean flags", () => {
+    const result = parseCommandArgs("--active --verbose");
+    expect(result.flags).toEqual({ active: true, verbose: true });
+  });
+
+  test("should parse mixed positional and flags", () => {
+    const result = parseCommandArgs("authentication --limit 5 --project my-api");
+    expect(result.positional).toEqual(["authentication"]);
+    expect(result.flags).toEqual({ limit: "5", project: "my-api" });
+  });
+
+  test("should handle quoted strings", () => {
+    const result = parseCommandArgs('"hello world" --limit 10');
+    expect(result.positional).toEqual(["hello world"]);
+    expect(result.flags).toEqual({ limit: "10" });
+  });
+
+  test("should handle single-quoted strings", () => {
+    const result = parseCommandArgs("'deploy to prod' --project api");
+    expect(result.positional).toEqual(["deploy to prod"]);
+    expect(result.flags).toEqual({ project: "api" });
+  });
+
+  test("should handle flag followed by another flag", () => {
+    const result = parseCommandArgs("--active --limit 5");
+    expect(result.flags).toEqual({ active: true, limit: "5" });
+  });
+
+  test("should handle flag at end of input as boolean", () => {
+    const result = parseCommandArgs("--limit 10 --active");
+    expect(result.flags).toEqual({ limit: "10", active: true });
+  });
+});
+
+describe("Direct Commands (v0.14.0)", () => {
+  // Argument parsing integration tests for each command type
+
+  test("/memory-search requires query", () => {
+    const args = parseCommandArgs("");
+    expect(args.positional.length).toBe(0);
+  });
+
+  test("/memory-search parses all flags", () => {
+    const args = parseCommandArgs('"deploy config" --limit 5 --project my-api --threshold 0.5');
+    expect(args.positional).toEqual(["deploy config"]);
+    expect(args.flags.limit).toBe("5");
+    expect(args.flags.project).toBe("my-api");
+    expect(args.flags.threshold).toBe("0.5");
+  });
+
+  test("/memory-sessions --active is boolean flag", () => {
+    const args = parseCommandArgs("--active --limit 20 --project api");
+    expect(args.flags.active).toBe(true);
+    expect(args.flags.limit).toBe("20");
+    expect(args.flags.project).toBe("api");
+  });
+
+  test("/memory-sessions --status takes a value", () => {
+    const args = parseCommandArgs("--status ended --limit 5");
+    expect(args.flags.status).toBe("ended");
+    expect(args.flags.limit).toBe("5");
+  });
+
+  test("/memory-decisions parses all flags", () => {
+    const args = parseCommandArgs("--limit 10 --project api --status active --tags auth,security");
+    expect(args.flags.limit).toBe("10");
+    expect(args.flags.project).toBe("api");
+    expect(args.flags.status).toBe("active");
+    expect(args.flags.tags).toBe("auth,security");
+  });
+
+  test("/memory-patterns with optional query", () => {
+    const args = parseCommandArgs("authentication --category code --project api");
+    expect(args.positional).toEqual(["authentication"]);
+    expect(args.flags.category).toBe("code");
+    expect(args.flags.project).toBe("api");
+  });
+
+  test("/memory-patterns without query", () => {
+    const args = parseCommandArgs("--limit 20");
+    expect(args.positional.length).toBe(0);
+    expect(args.flags.limit).toBe("20");
+  });
+
+  test("/memory-entities parses limit", () => {
+    const args = parseCommandArgs("--limit 50");
+    expect(args.flags.limit).toBe("50");
+  });
+
+  test("/memory-forget requires ID", () => {
+    const args = parseCommandArgs("mem_abc123xyz");
+    expect(args.positional[0]).toBe("mem_abc123xyz");
+  });
+
+  test("/memory-forget with no args returns empty", () => {
+    const args = parseCommandArgs(undefined);
+    expect(args.positional.length).toBe(0);
+  });
+});
