@@ -1010,3 +1010,120 @@ describe("API Endpoint Alignment", () => {
     expect(status >= 500).toBe(false);
   });
 });
+
+// ============================================================================
+// parseCommandArgs Tests
+// ============================================================================
+
+// Since parseCommandArgs is not exported, we replicate the function here for unit testing.
+
+function parseCommandArgs(input: string | undefined): { positional: string[]; flags: Record<string, string | boolean> } {
+  const positional: string[] = [];
+  const flags: Record<string, string | boolean> = {};
+
+  if (!input || input.trim() === "") {
+    return { positional, flags };
+  }
+
+  const tokens: string[] = [];
+  let current = "";
+  let inQuote: string | null = null;
+
+  for (const ch of input) {
+    if (inQuote) {
+      if (ch === inQuote) {
+        inQuote = null;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = ch;
+    } else if (ch === " " || ch === "\t") {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token.startsWith("--")) {
+      const key = token.slice(2);
+      const next = tokens[i + 1];
+      if (next && !next.startsWith("--")) {
+        flags[key] = next;
+        i += 2;
+      } else {
+        flags[key] = true;
+        i += 1;
+      }
+    } else {
+      positional.push(token);
+      i += 1;
+    }
+  }
+
+  return { positional, flags };
+}
+
+describe("parseCommandArgs", () => {
+  test("should return empty for undefined input", () => {
+    const result = parseCommandArgs(undefined);
+    expect(result).toEqual({ positional: [], flags: {} });
+  });
+
+  test("should return empty for empty string", () => {
+    const result = parseCommandArgs("");
+    expect(result).toEqual({ positional: [], flags: {} });
+  });
+
+  test("should parse positional arguments", () => {
+    const result = parseCommandArgs("hello world");
+    expect(result.positional).toEqual(["hello", "world"]);
+    expect(result.flags).toEqual({});
+  });
+
+  test("should parse flags with values", () => {
+    const result = parseCommandArgs("--limit 10 --project my-api");
+    expect(result.positional).toEqual([]);
+    expect(result.flags).toEqual({ limit: "10", project: "my-api" });
+  });
+
+  test("should parse boolean flags", () => {
+    const result = parseCommandArgs("--active --verbose");
+    expect(result.flags).toEqual({ active: true, verbose: true });
+  });
+
+  test("should parse mixed positional and flags", () => {
+    const result = parseCommandArgs("authentication --limit 5 --project my-api");
+    expect(result.positional).toEqual(["authentication"]);
+    expect(result.flags).toEqual({ limit: "5", project: "my-api" });
+  });
+
+  test("should handle quoted strings", () => {
+    const result = parseCommandArgs('"hello world" --limit 10');
+    expect(result.positional).toEqual(["hello world"]);
+    expect(result.flags).toEqual({ limit: "10" });
+  });
+
+  test("should handle single-quoted strings", () => {
+    const result = parseCommandArgs("'deploy to prod' --project api");
+    expect(result.positional).toEqual(["deploy to prod"]);
+    expect(result.flags).toEqual({ project: "api" });
+  });
+
+  test("should handle flag followed by another flag", () => {
+    const result = parseCommandArgs("--active --limit 5");
+    expect(result.flags).toEqual({ active: true, limit: "5" });
+  });
+
+  test("should handle flag at end of input as boolean", () => {
+    const result = parseCommandArgs("--limit 10 --active");
+    expect(result.flags).toEqual({ limit: "10", active: true });
+  });
+});

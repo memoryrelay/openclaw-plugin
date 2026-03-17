@@ -4586,6 +4586,64 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // ========================================================================
+  // Command Argument Parser (v0.14.0)
+  // ========================================================================
+
+  function parseCommandArgs(input: string | undefined): { positional: string[]; flags: Record<string, string | boolean> } {
+    const positional: string[] = [];
+    const flags: Record<string, string | boolean> = {};
+
+    if (!input || input.trim() === "") {
+      return { positional, flags };
+    }
+
+    const tokens: string[] = [];
+    let current = "";
+    let inQuote: string | null = null;
+
+    for (const ch of input) {
+      if (inQuote) {
+        if (ch === inQuote) {
+          inQuote = null;
+        } else {
+          current += ch;
+        }
+      } else if (ch === '"' || ch === "'") {
+        inQuote = ch;
+      } else if (ch === " " || ch === "\t") {
+        if (current) {
+          tokens.push(current);
+          current = "";
+        }
+      } else {
+        current += ch;
+      }
+    }
+    if (current) tokens.push(current);
+
+    let i = 0;
+    while (i < tokens.length) {
+      const token = tokens[i];
+      if (token.startsWith("--")) {
+        const key = token.slice(2);
+        const next = tokens[i + 1];
+        if (next && !next.startsWith("--")) {
+          flags[key] = next;
+          i += 2;
+        } else {
+          flags[key] = true;
+          i += 1;
+        }
+      } else {
+        positional.push(token);
+        i += 1;
+      }
+    }
+
+    return { positional, flags };
+  }
+
+  // ========================================================================
   // Direct Commands (5 total) — bypass LLM, execute immediately
   // ========================================================================
 
