@@ -21,9 +21,10 @@ MemoryRelay is designed for engineering teams managing complex, long-running pro
 | Entities / knowledge graph | Yes (create, link, graph) | Yes | No |
 | Multi-agent collaboration | Yes (agent scoping, subagent tracking) | Limited | No |
 | Auto-capture with privacy tiers | Yes (off/conservative/smart/aggressive) | Basic | No |
-| Direct commands | 15 | ~5 | 0 |
+| V2 Async Storage | Yes | No | No |
+| Direct commands | 16 | ~5 | 0 |
 | Lifecycle hooks | 13 | 0 | 0 |
-| Tools | 39 | ~10 | 0 |
+| Tools | 42 | ~10 | 0 |
 
 ## Quick Start
 
@@ -75,7 +76,7 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 - Pattern adoption ensures consistent code style across sessions
 - Session tracking provides continuity when context windows reset
 
-## Features -- 39 Tools by Category
+## Features -- 42 Tools by Category
 
 ### Memory (9 tools) -- group: `memory`
 
@@ -150,6 +151,14 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 | `project_shared_patterns` | Find patterns shared between two projects |
 | `project_context` | Load full project context (memories, decisions, patterns, sessions) |
 
+### V2 Async (3 tools) -- group: `v2`
+
+| Tool | Description |
+|------|-------------|
+| `memory_store_async` | Store a memory asynchronously and return a job ID |
+| `memory_status` | Check the processing status of an async memory job |
+| `context_build` | Build a ranked context bundle from relevant memories |
+
 ### Health (1 tool) -- group: `health`
 
 | Tool | Description |
@@ -165,6 +174,7 @@ These slash commands bypass the LLM and execute immediately.
 | Command | Description |
 |---------|-------------|
 | `/memory-search <query>` | Semantic search across stored memories |
+| `/memory-context` | Build ranked context bundle from memories |
 | `/memory-sessions` | List sessions (optional: `active`, `closed`, or project slug) |
 | `/memory-decisions` | List architectural decisions (optional: project slug) |
 | `/memory-patterns` | List or search patterns (optional: search query) |
@@ -304,7 +314,7 @@ The plugin registers 14 lifecycle hooks:
 
 ### Skills
 
-The plugin ships with 8 skills providing guided workflows on top of the raw tools:
+The plugin ships with 9 skills providing guided workflows on top of the raw tools:
 
 - **Agent-facing**: `memory-workflow`, `decision-tracking`, `pattern-management`, `project-orchestration`, `entity-and-context`
 - **Developer-facing**: `codebase-navigation`, `testing-memoryrelay`, `release-process`

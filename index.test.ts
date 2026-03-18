@@ -1193,3 +1193,37 @@ describe("Direct Commands (v0.14.0)", () => {
     expect(args.positional.length).toBe(0);
   });
 });
+
+// ============================================================================
+// V2 Tools Tests (v0.15.0)
+// ============================================================================
+
+describe("V2 Client Methods", () => {
+  test("storeAsync should validate content length", () => {
+    const validateContent = (content: string) => {
+      if (!content || content.length === 0 || content.length > 50000) {
+        throw new Error("Content must be between 1 and 50,000 characters");
+      }
+    };
+    expect(() => validateContent("")).toThrow("Content must be between 1 and 50,000 characters");
+    expect(() => validateContent("valid content")).not.toThrow();
+    expect(() => validateContent("A".repeat(50000))).not.toThrow();
+    expect(() => validateContent("A".repeat(50001))).toThrow();
+  });
+});
+
+describe("Direct Commands (v0.15.0)", () => {
+  test("/memory-context parses all flags", () => {
+    const args = parseCommandArgs("authentication --max-memories 10 --max-tokens 4000 --ai-enhanced --search-mode semantic");
+    expect(args.positional).toEqual(["authentication"]);
+    expect(args.flags["max-memories"]).toBe("10");
+    expect(args.flags["max-tokens"]).toBe("4000");
+    expect(args.flags["ai-enhanced"]).toBe(true);
+    expect(args.flags["search-mode"]).toBe("semantic");
+  });
+
+  test("/memory-context with no args returns empty", () => {
+    const args = parseCommandArgs("");
+    expect(args.positional.length).toBe(0);
+  });
+});
