@@ -709,7 +709,7 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.13.0",
+            "User-Agent": "openclaw-memory-memoryrelay/0.15.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -934,6 +934,63 @@ class MemoryRelayClient {
       importance,
       tier,
     });
+  }
+
+  // --------------------------------------------------------------------------
+  // V2 Async API Methods (v0.15.0)
+  // --------------------------------------------------------------------------
+
+  async storeAsync(
+    content: string,
+    metadata?: Record<string, string>,
+    project?: string,
+    importance?: number,
+    tier?: string,
+  ): Promise<{ id: string; status: string; job_id: string; estimated_completion_seconds: number }> {
+    if (!content || content.length === 0 || content.length > 50000) {
+      throw new Error("Content must be between 1 and 50,000 characters");
+    }
+    const body: Record<string, unknown> = {
+      content,
+      agent_id: this.agentId,
+    };
+    if (metadata) body.metadata = metadata;
+    if (project) body.project = project;
+    if (importance != null) body.importance = importance;
+    if (tier) body.tier = tier;
+    return this.request("POST", "/v2/memories", body);
+  }
+
+  async getMemoryStatus(memoryId: string): Promise<{
+    id: string;
+    status: "pending" | "processing" | "ready" | "failed";
+    created_at: string;
+    updated_at: string;
+    error?: string;
+  }> {
+    return this.request("GET", `/v2/memories/${memoryId}/status`);
+  }
+
+  async buildContextV2(
+    query: string,
+    options?: {
+      maxMemories?: number;
+      maxTokens?: number;
+      aiEnhanced?: boolean;
+      searchMode?: "semantic" | "hybrid" | "keyword";
+      excludeMemoryIds?: string[];
+    },
+  ): Promise<any> {
+    const body: Record<string, unknown> = {
+      query,
+      agent_id: this.agentId,
+    };
+    if (options?.maxMemories != null) body.max_memories = options.maxMemories;
+    if (options?.maxTokens != null) body.max_tokens = options.maxTokens;
+    if (options?.aiEnhanced != null) body.ai_enhanced = options.aiEnhanced;
+    if (options?.searchMode) body.search_mode = options.searchMode;
+    if (options?.excludeMemoryIds) body.exclude_memory_ids = options.excludeMemoryIds;
+    return this.request("POST", "/v2/context", body);
   }
 
   // --------------------------------------------------------------------------
@@ -1583,6 +1640,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       "project_related", "project_impact", "project_shared_patterns", "project_context",
     ],
     health: ["memory_health"],
+    v2: ["memory_store_async", "memory_status", "context_build"],
   };
 
   // Build a set of enabled tool names from group names
@@ -3746,6 +3804,202 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     );
   }
 
+  // 40. memory_store_async
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_store_async")) {
+    api.registerTool((_ctx) => ({
+      name: "memory_store_async",
+      description:
+        "Store a memory asynchronously using V2 API. Returns immediately (<50ms) with a job ID. Background workers generate the embedding. Use memory_status to poll for completion. Prefer this over memory_store for high-throughput or latency-sensitive applications." +
+        (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "The memory content to store (1–50,000 characters).",
+          },
+          metadata: {
+            type: "object",
+            description: "Optional key-value metadata to attach to the memory.",
+            additionalProperties: { type: "string" },
+          },
+          project: {
+            type: "string",
+            description: "Project slug to associate with this memory (max 100 characters).",
+            maxLength: 100,
+          },
+          importance: {
+            type: "number",
+            description: "Importance score (0-1). Higher values are retained longer.",
+            minimum: 0,
+            maximum: 1,
+          },
+          tier: {
+            type: "string",
+            description: "Memory tier: hot, warm, or cold.",
+            enum: ["hot", "warm", "cold"],
+          },
+        },
+        required: ["content"],
+      },
+      execute: async (
+        _id,
+        args: {
+          content: string;
+          metadata?: Record<string, string>;
+          project?: string;
+          importance?: number;
+          tier?: string;
+        },
+      ) => {
+        try {
+          const { content, metadata, importance, tier } = args;
+          let project = args.project;
+          if (!project && defaultProject) project = defaultProject;
+          const result = await client.storeAsync(content, metadata, project, importance, tier);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Memory queued for async storage (id: ${result.id}, job_id: ${result.job_id}). Use memory_status to check completion.`,
+              },
+            ],
+            details: result,
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `Failed to queue memory: ${String(err)}` }],
+            details: { error: String(err) },
+          };
+        }
+      },
+    }), { name: "memory_store_async" });
+  }
+
+  // 41. memory_status
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("memory_status")) {
+    api.registerTool((_ctx) => ({
+      name: "memory_status",
+      description:
+        "Check the processing status of a memory created via memory_store_async. Status values: pending (waiting for worker), processing (generating embedding), ready (searchable), failed (error occurred).",
+      parameters: {
+        type: "object",
+        properties: {
+          memory_id: {
+            type: "string",
+            description: "The memory ID returned by memory_store_async.",
+          },
+        },
+        required: ["memory_id"],
+      },
+      execute: async (
+        _id,
+        args: { memory_id: string },
+      ) => {
+        try {
+          const status = await client.getMemoryStatus(args.memory_id);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(status, null, 2),
+              },
+            ],
+            details: status,
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `Failed to get memory status: ${String(err)}` }],
+            details: { error: String(err) },
+          };
+        }
+      },
+    }), { name: "memory_status" });
+  }
+
+  // 42. context_build
+  // --------------------------------------------------------------------------
+  if (isToolEnabled("context_build")) {
+    api.registerTool((_ctx) => ({
+      name: "context_build",
+      description:
+        "Build a ranked context bundle from memories with optional AI summarization. Searches for relevant memories, ranks them by composite score, and optionally generates an AI summary. Useful for building token-efficient context windows.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The query to build context for.",
+          },
+          max_memories: {
+            type: "number",
+            description: "Maximum number of memories to include (1-100).",
+            minimum: 1,
+            maximum: 100,
+          },
+          max_tokens: {
+            type: "number",
+            description: "Maximum tokens for the context bundle (100-128000).",
+            minimum: 100,
+            maximum: 128000,
+          },
+          ai_enhanced: {
+            type: "boolean",
+            description: "If true, generate an AI summary of the retrieved memories.",
+          },
+          search_mode: {
+            type: "string",
+            description: "Search strategy: semantic, hybrid, or keyword.",
+            enum: ["semantic", "hybrid", "keyword"],
+          },
+          exclude_memory_ids: {
+            type: "array",
+            description: "Memory IDs to exclude from results.",
+            items: { type: "string" },
+          },
+        },
+        required: ["query"],
+      },
+      execute: async (
+        _id,
+        args: {
+          query: string;
+          max_memories?: number;
+          max_tokens?: number;
+          ai_enhanced?: boolean;
+          search_mode?: "semantic" | "hybrid" | "keyword";
+          exclude_memory_ids?: string[];
+        },
+      ) => {
+        try {
+          const context = await client.buildContextV2(args.query, {
+            maxMemories: args.max_memories,
+            maxTokens: args.max_tokens,
+            aiEnhanced: args.ai_enhanced,
+            searchMode: args.search_mode,
+            excludeMemoryIds: args.exclude_memory_ids,
+          });
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(context, null, 2),
+              },
+            ],
+            details: context,
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `Failed to build context: ${String(err)}` }],
+            details: { error: String(err) },
+          };
+        }
+      },
+    }), { name: "context_build" });
+  }
+
   // ========================================================================
   // CLI Commands
   // ========================================================================
@@ -4236,7 +4490,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.13.0 loaded (39 tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.15.0 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -4644,7 +4898,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // ========================================================================
-  // Direct Commands (15 total) — bypass LLM, execute immediately
+  // Direct Commands (16 total) — bypass LLM, execute immediately
   // ========================================================================
 
   // /memory-status — Show full plugin status report
@@ -5275,6 +5529,53 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           return { text: `Memory not found: ${memoryId}`, isError: true };
         }
         return { text: `Error: ${msg}`, isError: true };
+      }
+    },
+  });
+
+  // /memory-context — Build a context bundle from memories using V2 API
+  api.registerCommand?.({
+    name: "memory-context",
+    description: "Build a ranked context bundle from memories for a given query",
+    requireAuth: true,
+    acceptsArgs: true,
+    handler: async (ctx) => {
+      const { positional, flags } = parseCommandArgs(ctx.args);
+      const query = positional.join(" ").trim();
+      if (!query) {
+        return {
+          text: [
+            "Usage: /memory-context <query> [options]",
+            "",
+            "Options:",
+            "  --max-memories <n>    Maximum memories to include (1-100)",
+            "  --max-tokens <n>      Maximum tokens for context (100-128000)",
+            "  --ai-enhanced         Generate an AI summary of memories",
+            "  --search-mode <mode>  Search strategy: semantic, hybrid, keyword",
+          ].join("\n"),
+        };
+      }
+      try {
+        const options: {
+          maxMemories?: number;
+          maxTokens?: number;
+          aiEnhanced?: boolean;
+          searchMode?: "semantic" | "hybrid" | "keyword";
+        } = {};
+        if (flags["max-memories"]) options.maxMemories = parseInt(String(flags["max-memories"]), 10);
+        if (flags["max-tokens"]) options.maxTokens = parseInt(String(flags["max-tokens"]), 10);
+        if (flags["ai-enhanced"] === true) options.aiEnhanced = true;
+        if (flags["search-mode"]) options.searchMode = String(flags["search-mode"]) as "semantic" | "hybrid" | "keyword";
+
+        const context = await client.buildContextV2(query, options);
+
+        if (!context || (Array.isArray(context.memories) && context.memories.length === 0)) {
+          return { text: `No memories found for query: "${query}"` };
+        }
+
+        return { text: JSON.stringify(context, null, 2) };
+      } catch (err) {
+        return { text: `Error: ${String(err)}`, isError: true };
       }
     },
   });
