@@ -4898,7 +4898,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // ========================================================================
-  // Direct Commands (16 total) — bypass LLM, execute immediately
+  // Direct Commands (17 total) — bypass LLM, execute immediately
   // ========================================================================
 
   // /memory-status — Show full plugin status report
@@ -5577,6 +5577,33 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
       }
+    },
+  });
+
+  // /memory-update — Show update instructions (v0.15.0)
+  api.registerCommand?.({
+    name: "memory-update",
+    description: "Show how to update the MemoryRelay plugin to the latest version",
+    requireAuth: true,
+    handler: async (_ctx) => {
+      const currentVersion = "0.15.0";
+      const lines: string[] = [
+        "MemoryRelay Plugin Update",
+        "━".repeat(50),
+        `Current version: ${currentVersion}`,
+        "",
+        "To update to the latest version, run:",
+        "",
+        "  openclaw plugins update plugin-memoryrelay-ai",
+        "",
+        "Then restart the gateway:",
+        "",
+        "  openclaw restart",
+        "",
+        "Note: The plugin ID is 'plugin-memoryrelay-ai'",
+        "(not 'memory-memoryrelay').",
+      ];
+      return { text: lines.join("\n") };
     },
   });
 
