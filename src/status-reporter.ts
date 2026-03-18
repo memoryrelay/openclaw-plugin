@@ -34,10 +34,25 @@ export interface MemoryStats {
   search_count_24h?: number;
 }
 
+export type AutoCaptureTier = "off" | "conservative" | "smart" | "aggressive";
+
+export interface AutoCaptureConfig {
+  enabled: boolean;
+  tier: AutoCaptureTier;
+  confirmFirst?: number;
+  categories?: {
+    credentials?: boolean;
+    preferences?: boolean;
+    technical?: boolean;
+    personal?: boolean;
+  };
+  blocklist?: string[];
+}
+
 export interface PluginConfig {
   agentId: string;
   autoRecall: boolean;
-  autoCapture: boolean;
+  autoCapture: AutoCaptureConfig;
   recallLimit: number;
   recallThreshold: number;
   excludeChannels: string[];
@@ -189,7 +204,10 @@ export class StatusReporter {
       ? `✓ Enabled (limit: ${report.config.recallLimit}, threshold: ${report.config.recallThreshold})`
       : "✗ Disabled";
     lines.push(`  Auto-Recall:   ${recallStatus}`);
-    lines.push(`  Auto-Capture:  ${report.config.autoCapture ? "✓ Enabled" : "✗ Disabled"}`);
+    const captureStatus = report.config.autoCapture.enabled
+      ? `✓ Enabled (tier: ${report.config.autoCapture.tier})`
+      : "✗ Disabled";
+    lines.push(`  Auto-Capture:  ${captureStatus}`);
     if (report.config.defaultProject) {
       lines.push(`  Default Project: ${report.config.defaultProject}`);
     }

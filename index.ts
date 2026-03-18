@@ -1,10 +1,11 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.13.0 (SDK Enhancements)
+ * Version: 0.15.1
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
+ * New in v0.15.0: V2 async API, context_build with AI-enhanced search modes
  * New in v0.13.0: External session IDs, get-or-create sessions, multi-agent collaboration
  * New in v0.12.7: OpenClaw session context integration for session tracking
  * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
@@ -67,6 +68,7 @@ interface DebugLoggerConfig {
   enabled: boolean;
   verbose: boolean;
   maxEntries: number;
+  logFile?: string; // Deprecated: File logging removed for security compliance
 }
 
 class DebugLogger {
@@ -1666,7 +1668,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // ========================================================================
-  // Tools (39 total)
+  // Tools (42 total)
   // ========================================================================
 
   // --------------------------------------------------------------------------
@@ -4551,7 +4553,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         }
 
         const formatted = logs.map((l) =>
-          `[${new Date(l.timestamp).toISOString()}] ${l.level.toUpperCase()} ${l.tool ?? "-"}: ${l.message}`
+          `[${new Date(l.timestamp).toISOString()}] ${l.status.toUpperCase()} ${l.tool ?? "-"}: ${l.method} ${l.path} (${l.duration}ms)${l.error ? ` - ${l.error}` : ""}`
         ).join("\n");
         respond(true, {
           logs,
