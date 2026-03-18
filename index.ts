@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.15.1
+ * Version: 0.15.2
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -711,7 +711,7 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.15.1",
+            "User-Agent": "openclaw-memory-memoryrelay/0.15.2",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -4492,7 +4492,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.15.1 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.15.2 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -5588,7 +5588,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     description: "Show how to update the MemoryRelay plugin to the latest version",
     requireAuth: true,
     handler: async (_ctx) => {
-      const currentVersion = "0.15.1";
+      const currentVersion = "0.15.2";
       const lines: string[] = [
         "MemoryRelay Plugin Update",
         "━".repeat(50),
