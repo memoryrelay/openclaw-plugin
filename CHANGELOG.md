@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-03-17
+
+### Added
+- New direct command: `/memory-update` — shows correct plugin update command
+- Total direct commands: 17 (was 16)
+- "Updating" section in README with correct plugin ID and workflow
+
+### Fixed
+- Documented that plugin ID for updates is `plugin-memoryrelay-ai` (not `memory-memoryrelay`)
+
 ## [0.15.0] - 2026-03-17
 
 ### Added
@@ -170,7 +180,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.11...v0.13.0

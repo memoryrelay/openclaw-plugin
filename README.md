@@ -22,7 +22,7 @@ MemoryRelay is designed for engineering teams managing complex, long-running pro
 | Multi-agent collaboration | Yes (agent scoping, subagent tracking) | Limited | No |
 | Auto-capture with privacy tiers | Yes (off/conservative/smart/aggressive) | Basic | No |
 | V2 Async Storage | Yes | No | No |
-| Direct commands | 16 | ~5 | 0 |
+| Direct commands | 17 | ~5 | 0 |
 | Lifecycle hooks | 13 | 0 | 0 |
 | Tools | 42 | ~10 | 0 |
 
@@ -318,6 +318,24 @@ The plugin ships with 9 skills providing guided workflows on top of the raw tool
 
 - **Agent-facing**: `memory-workflow`, `decision-tracking`, `pattern-management`, `project-orchestration`, `entity-and-context`
 - **Developer-facing**: `codebase-navigation`, `testing-memoryrelay`, `release-process`
+
+## Updating
+
+To update to the latest version:
+
+```bash
+openclaw plugins update plugin-memoryrelay-ai
+```
+
+Or from within a conversation, run `/memory-update` to see the exact command.
+
+**Important:** The plugin ID is `plugin-memoryrelay-ai` (not `memory-memoryrelay`). Using the wrong ID will fail with "No install record."
+
+After updating, restart the gateway:
+
+```bash
+openclaw restart
+```
 
 ## Troubleshooting
 
