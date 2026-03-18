@@ -1,10 +1,11 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.13.0 (SDK Enhancements)
+ * Version: 0.15.2
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
+ * New in v0.15.0: V2 async API, context_build with AI-enhanced search modes
  * New in v0.13.0: External session IDs, get-or-create sessions, multi-agent collaboration
  * New in v0.12.7: OpenClaw session context integration for session tracking
  * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
@@ -67,6 +68,7 @@ interface DebugLoggerConfig {
   enabled: boolean;
   verbose: boolean;
   maxEntries: number;
+  logFile?: string; // Deprecated: File logging removed for security compliance
 }
 
 class DebugLogger {
@@ -709,7 +711,7 @@ class MemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.15.1",
+            "User-Agent": "openclaw-memory-memoryrelay/0.15.2",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -1666,7 +1668,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // ========================================================================
-  // Tools (39 total)
+  // Tools (42 total)
   // ========================================================================
 
   // --------------------------------------------------------------------------
@@ -4490,7 +4492,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.15.1 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.15.2 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -4551,7 +4553,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         }
 
         const formatted = logs.map((l) =>
-          `[${new Date(l.timestamp).toISOString()}] ${l.level.toUpperCase()} ${l.tool ?? "-"}: ${l.message}`
+          `[${new Date(l.timestamp).toISOString()}] ${l.status.toUpperCase()} ${l.tool ?? "-"}: ${l.method} ${l.path} (${l.duration}ms)${l.error ? ` - ${l.error}` : ""}`
         ).join("\n");
         respond(true, {
           logs,
@@ -5586,7 +5588,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     description: "Show how to update the MemoryRelay plugin to the latest version",
     requireAuth: true,
     handler: async (_ctx) => {
-      const currentVersion = "0.15.1";
+      const currentVersion = "0.15.2";
       const lines: string[] = [
         "MemoryRelay Plugin Update",
         "━".repeat(50),

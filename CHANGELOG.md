@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-03-18
+
+### Fixed
+- Stale version header in index.ts (was 0.13.0, now 0.15.2) (#38)
+- Runtime TypeError in `memoryrelay.logs` gateway: `l.level`/`l.message` replaced with actual `LogEntry` fields (#39)
+- Type mismatch in `src/status-reporter.ts`: `PluginConfig.autoCapture` synced from `boolean` to `AutoCaptureConfig` (#41)
+- Missing `logFile?` field in inlined `DebugLoggerConfig` interface (#41)
+- Stale tool count comment (39 → 42) (#41)
+
 ## [0.15.1] - 2026-03-17
 
 ### Added
@@ -180,7 +189,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.13.0...v0.14.0
