@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-03-17
+
+### Added
+- 3 V2 async tools: `memory_store_async`, `memory_status`, `context_build`
+- Total tools: 42 (was 39), 9 groups (was 8)
+- New direct command: `/memory-context` — build ranked context bundles
+- Total direct commands: 16 (was 15)
+
+### Fixed
+- Startup log now shows dynamic tool count (was hardcoded "39 tools")
+- Startup log version updated (was stuck at v0.13.0)
+- User-Agent header updated to v0.15.0 (was v0.13.0)
+
+### Changed
+- README updated with V2 tools, comparison table, correct counts
+- MCP server README aligned with competitive positioning
+
 ## [0.14.0] - 2026-03-17
 
 ### Added
@@ -153,7 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.11...v0.13.0
 [0.12.11]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.10...v0.12.11
