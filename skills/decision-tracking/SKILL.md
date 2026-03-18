@@ -5,27 +5,27 @@ description: "Use when making architectural choices, evaluating alternatives, re
 
 # Decision Tracking
 
-Decisions are **choices with rationale and alternatives considered**. Plain facts, findings, or information are memories — use `memory_store` for those.
+Decisions are **choices with rationale and alternatives considered**. Plain facts, findings, or information are memories — use `memory_store` for those (see `memory-workflow` skill).
 
 ## Decision Tools
 
 | Tool | Signature | Purpose |
 |------|-----------|---------|
-| `decision_record` | `decision_record(title, rationale, project)` | Record a new decision with reasoning |
-| `decision_list` | `decision_list(project)` | List all decisions for a project |
-| `decision_supersede` | `decision_supersede(old_id, new_title, new_rationale)` | Replace an outdated decision |
-| `decision_check` | `decision_check(query, project)` | Check for conflicting decisions before choosing |
+| `decision_record` | `decision_record(title, rationale, alternatives?, project?, tags?, status?)` | Record a new decision with reasoning |
+| `decision_list` | `decision_list(project?, status?, tags?, limit?)` | List decisions, optionally filtered |
+| `decision_supersede` | `decision_supersede(old_id, new_title, new_rationale, tags?)` | Replace an outdated decision |
+| `decision_check` | `decision_check(query, project?, limit?, threshold?)` | Semantic search for conflicting decisions |
 
 ## Workflow
 
 1. **Check first** — Always call `decision_check(query, project)` before making an architectural choice. This surfaces existing decisions that may conflict or already cover the topic.
-2. **Record with rationale** — Use `decision_record(title, rationale, project)`. The rationale should include why this option was chosen and what alternatives were rejected.
+2. **Record with rationale** — Use `decision_record(title, rationale, alternatives, project, tags)`. Include why this option was chosen, what alternatives were rejected, and tags for categorization.
 3. **Supersede, don't duplicate** — When a decision changes, call `decision_supersede(old_id, new_title, new_rationale)`. This preserves history while marking the old decision as replaced.
-4. **Review periodically** — Use `decision_list(project)` to audit active decisions during planning or refactoring.
+4. **Review periodically** — Use `decision_list(project, status)` to audit active decisions during planning or refactoring. Filter by `status: "active"` to see current decisions only.
 
 ## Project Scoping
 
-Decisions must be scoped to the relevant project:
+Decisions must be scoped to the relevant project (see `project-orchestration` skill for project setup):
 
 - Set `defaultProject` in plugin config to avoid passing `project` on every call.
 - Pass `project` explicitly when working across multiple projects.
@@ -48,3 +48,4 @@ Decisions must be scoped to the relevant project:
 | Adding a new decision when one already exists | Use `decision_supersede` to replace the old decision, preserving history |
 | Omitting the `project` parameter | Scope every decision to a project via parameter or `defaultProject` config |
 | Storing facts as decisions | Only choices with rationale belong in decisions; use `memory_store` for information |
+| Not using `tags` | Tags enable filtering with `decision_list(project, tags: "api,auth")` |

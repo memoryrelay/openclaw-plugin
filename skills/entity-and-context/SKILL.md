@@ -1,6 +1,6 @@
 ---
 name: entity-and-context
-description: "Use when building relationship maps between people, systems, services, or concepts that appear across multiple memories, or when recalling information that benefits from entity connections rather than flat search."
+description: "Use when building relationship maps between people, organizations, projects, or concepts that appear across multiple memories, or when recalling information that benefits from entity connections rather than flat search."
 ---
 
 # Entity and Context
@@ -11,22 +11,22 @@ Entities turn flat memory storage into a connected knowledge graph. Create entit
 
 | Tool | Signature | Purpose |
 |------|-----------|---------|
-| `entity_create` | `entity_create(name, type, description)` | Create a new entity node |
-| `entity_link` | `entity_link(entity_id, memory_id)` | Connect an entity to a memory |
-| `entity_list` | `entity_list(type?)` | List entities, optionally filtered by type |
-| `entity_graph` | `entity_graph(entity_id)` | Visualize an entity's relationships |
-| `memory_context` | `memory_context(query)` | Enriched recall with entity connections (memory group tool) |
+| `entity_create` | `entity_create(name, type, metadata?)` | Create a new entity node |
+| `entity_link` | `entity_link(entity_id, memory_id, relationship?)` | Connect an entity to a memory |
+| `entity_list` | `entity_list(limit?, offset?)` | List entities with pagination |
+| `entity_graph` | `entity_graph(entity_id, depth?, max_neighbors?)` | Explore an entity's neighborhood |
+| `memory_context` | `memory_context(query, token_budget?)` | Enriched recall with entity connections (see `memory-workflow` skill) |
 
 ## Entity Types
 
 | Type | Examples |
 |------|----------|
-| `people` | Team members, stakeholders, external contacts |
-| `systems` | Databases, cloud platforms, internal tools |
-| `services` | APIs, microservices, third-party integrations |
-| `concepts` | Architecture patterns, business domains, protocols |
-| `teams` | Engineering squads, departments, working groups |
-| `repositories` | Codebases, monorepos, package libraries |
+| `person` | Team members, stakeholders, external contacts |
+| `place` | Data centers, offices, deployment regions |
+| `organization` | Companies, departments, vendors |
+| `project` | Codebases, initiatives, products |
+| `concept` | Architecture patterns, business domains, protocols |
+| `other` | Anything that doesn't fit the above |
 
 ## When to Create Entities
 
@@ -37,11 +37,11 @@ Create an entity when a named thing:
 
 ## Linking Workflow
 
-1. **Create the entity** — `entity_create("AuthService", "services", "Handles OAuth2 and JWT token management")`
-2. **Store related memories** — `memory_store(content, metadata)` as usual
-3. **Link them** — `entity_link(entity_id, memory_id)` to connect entity to each relevant memory
+1. **Create the entity** — `entity_create("AuthService", "concept", { "domain": "security" })`
+2. **Store related memories** — `memory_store(content, metadata)` as usual (see `memory-workflow` skill)
+3. **Link them** — `entity_link(entity_id, memory_id, "mentioned_in")` to connect entity to each relevant memory
 4. **Query with context** — `memory_context("authentication flow")` returns memories enriched with linked entity data
-5. **Explore connections** — `entity_graph(entity_id)` to see all related memories and co-linked entities
+5. **Explore connections** — `entity_graph(entity_id, 2, 10)` to see related memories and co-linked entities up to 2 hops away
 
 ## memory_context vs memory_recall
 
@@ -58,5 +58,5 @@ Create an entity when a named thing:
 | Creating entities for one-off mentions | Only create entities for things referenced across multiple memories |
 | Not linking entities to memories | An unlinked entity is invisible to `memory_context`; always link after creating |
 | Using `memory_recall` when entities exist | Switch to `memory_context` for richer results that include entity connections |
-| Creating duplicate entities | Call `entity_list(type)` first to check if the entity already exists |
+| Creating duplicate entities | Call `entity_list()` first to check if the entity already exists |
 | Linking everything to one entity | Keep links specific; an entity should connect only to directly relevant memories |
