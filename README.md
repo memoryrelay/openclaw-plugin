@@ -314,10 +314,13 @@ The plugin registers 14 lifecycle hooks:
 
 ### Skills
 
-The plugin ships with 9 skills providing guided workflows on top of the raw tools:
+The plugin ships with 5 skills providing guided workflows on top of the raw tools:
 
-- **Agent-facing**: `memory-workflow`, `decision-tracking`, `pattern-management`, `project-orchestration`, `entity-and-context`
-- **Developer-facing**: `codebase-navigation`, `testing-memoryrelay`, `release-process`
+- `memory-workflow` — Session lifecycle, storing/retrieving memories
+- `decision-tracking` — ADR management, checking before deciding
+- `pattern-management` — Reusable conventions, search before create
+- `project-orchestration` — Multi-project context loading and impact analysis
+- `entity-and-context` — Knowledge graph, linking entities to memories
 
 ## Updating
 
