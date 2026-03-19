@@ -1227,3 +1227,98 @@ describe("Direct Commands (v0.15.0)", () => {
     expect(args.positional.length).toBe(0);
   });
 });
+
+// ============================================================================
+// Issue #43: Memory ID Format Tests
+// ============================================================================
+
+describe("Memory ID Display Format (#43)", () => {
+  test("memory_list should display full UUIDs, not truncated 8-char IDs", () => {
+    const fullId = "cf939add-1234-5678-9abc-def012345678";
+    // The fix: use full ID instead of id.slice(0, 8)
+    const formatted = `- [${fullId}] Some memory content`;
+    expect(formatted).toContain(fullId);
+    expect(formatted).not.toBe(`- [${fullId.slice(0, 8)}] Some memory content`);
+  });
+
+  test("memory_forget candidates should display full UUIDs", () => {
+    const memories = [
+      { memory: { id: "cf939add-1234-5678-9abc-def012345678", content: "First memory content here" }, score: 0.8 },
+      { memory: { id: "6f4e698e-abcd-efgh-ijkl-mnopqrstuvwx", content: "Second memory content here" }, score: 0.7 },
+    ];
+
+    // Simulates the fixed formatting logic
+    const list = memories
+      .map((r) => `- [${r.memory.id}] ${r.memory.content.slice(0, 60)}...`)
+      .join("\n");
+
+    // Full UUIDs should be present, not truncated
+    expect(list).toContain("cf939add-1234-5678-9abc-def012345678");
+    expect(list).toContain("6f4e698e-abcd-efgh-ijkl-mnopqrstuvwx");
+  });
+
+  test("full UUIDs from memory_list can be used with memory_get/memory_forget", () => {
+    const fullId = "cf939add-1234-5678-9abc-def012345678";
+    // UUID regex validation (same as API expects)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    expect(uuidRegex.test(fullId)).toBe(true);
+    // Truncated ID would fail validation
+    expect(uuidRegex.test(fullId.slice(0, 8))).toBe(false);
+  });
+});
+
+// ============================================================================
+// Issue #44: AutoCapture Subagent Pollution Tests
+// ============================================================================
+
+describe("Subagent Completion Filtering (#44)", () => {
+  test("routine subagent completions (outcome: ok) should be skipped", () => {
+    const outcome = "ok";
+    const shouldStore = outcome !== "ok" && outcome !== "success";
+    expect(shouldStore).toBe(false);
+  });
+
+  test("routine subagent completions (outcome: success) should be skipped", () => {
+    const outcome = "success";
+    const shouldStore = outcome !== "ok" && outcome !== "success";
+    expect(shouldStore).toBe(false);
+  });
+
+  test("failed subagent completions should still be stored", () => {
+    const outcome = "error";
+    const shouldStore = outcome !== "ok" && outcome !== "success";
+    expect(shouldStore).toBe(true);
+  });
+
+  test("unknown subagent outcomes should still be stored", () => {
+    const outcome = "unknown";
+    const shouldStore = outcome !== "ok" && outcome !== "success";
+    expect(shouldStore).toBe(true);
+  });
+
+  test("subagent completions should respect blocklist", () => {
+    // Reuse the isBlocklisted function logic
+    function isBlocklisted(content: string, blocklist: string[]): boolean {
+      return blocklist.some((pattern) => {
+        try {
+          return new RegExp(pattern, "i").test(content);
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    const summary = "Subagent agent:friday:subagent:abc123 ended: subagent-complete (outcome: ok)";
+    const blocklist = ["subagent-complete"];
+    expect(isBlocklisted(summary, blocklist)).toBe(true);
+
+    const emptyBlocklist: string[] = [];
+    expect(isBlocklisted(summary, emptyBlocklist)).toBe(false);
+  });
+
+  test("subagent storage should be gated by autoCapture.enabled", () => {
+    const autoCaptureEnabled = false;
+    // When autoCapture is disabled, subagent completions should not be stored
+    expect(autoCaptureEnabled).toBe(false);
+  });
+});

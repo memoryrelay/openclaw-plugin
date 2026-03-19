@@ -1967,7 +1967,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             }
 
             const list = results
-              .map((r) => `- [${r.memory.id.slice(0, 8)}] ${r.memory.content.slice(0, 60)}...`)
+              .map((r) => `- [${r.memory.id}] ${r.memory.content.slice(0, 60)}...`)
               .join("\n");
 
             return {
@@ -2025,7 +2025,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               };
             }
             const formatted = memories
-              .map((m) => `- [${m.id.slice(0, 8)}] ${m.content.slice(0, 120)}`)
+              .map((m) => `- [${m.id}] ${m.content.slice(0, 120)}`)
               .join("\n");
             return {
               content: [{ type: "text", text: `${memories.length} memories:\n${formatted}` }],
@@ -4459,14 +4459,30 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       const outcome = event.outcome || "unknown";
       const summary = `Subagent ${event.targetSessionKey} ended: ${event.reason} (outcome: ${outcome})`;
 
-      await client.store(summary, {
-        category: "subagent-activity",
-        source: "subagent_ended_hook",
-        agent: agentId,
-        outcome,
-      });
+      // Only store subagent completions if autoCapture is enabled and content passes filters (#44)
+      if (autoCaptureConfig.enabled) {
+        if (isBlocklisted(summary, autoCaptureConfig.blocklist || [])) {
+          api.logger.debug?.(`memory-memoryrelay: subagent completion blocklisted, skipping storage`);
+          return;
+        }
 
-      api.logger.debug?.(`memory-memoryrelay: stored subagent completion: ${summary}`);
+        // Skip routine completion events — only store failures or unusual outcomes
+        if (outcome === "ok" || outcome === "success") {
+          api.logger.debug?.(`memory-memoryrelay: skipping routine subagent completion: ${summary}`);
+          return;
+        }
+
+        await client.store(summary, {
+          category: "subagent-activity",
+          source: "subagent_ended_hook",
+          agent: agentId,
+          outcome,
+        });
+
+        api.logger.debug?.(`memory-memoryrelay: stored subagent completion: ${summary}`);
+      } else {
+        api.logger.debug?.(`memory-memoryrelay: autoCapture disabled, skipping subagent completion storage`);
+      }
     } catch (err) {
       api.logger.warn?.(`memory-memoryrelay: subagent_ended hook failed: ${String(err)}`);
     }
