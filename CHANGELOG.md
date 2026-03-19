@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.3] - 2026-03-19
+
+### Fixed
+- **CRITICAL:** `memory_list` and `memory_forget` now display full UUIDs instead of truncated 8-char hex IDs, fixing 422 validation errors when using listed IDs with `memory_get`/`memory_forget` (#43)
+- **HIGH:** `subagent_ended` hook no longer unconditionally stores every completion event as a memory. Storage is now gated behind `autoCapture` config, respects the blocklist, and skips routine `ok`/`success` outcomes — only failures and unusual outcomes are persisted (#44)
+
 ## [0.15.2] - 2026-03-18
 
 ### Fixed
