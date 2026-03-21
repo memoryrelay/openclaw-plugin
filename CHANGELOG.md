@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.6] - 2026-03-21
+
+### Fixed
+- `client.list()` now caps limit to 100 to avoid 422 validation errors from the API when `/memory-stats` and other commands requested limit=1000 (#49)
+
 ## [0.15.5] - 2026-03-21
 
 ### Fixed
@@ -202,7 +207,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.5...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.6...HEAD
+[0.15.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.3...v0.15.5
 [0.15.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.0...v0.15.1
