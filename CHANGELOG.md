@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.4] - 2026-03-21
+
+### Fixed
+- `stats()` method now calls correct API endpoint `/v1/agents/{agent_id}/stats` instead of non-existent `/v1/stats?agent_id=...` which returned 404 (#47)
+
 ## [0.15.3] - 2026-03-19
 
 ### Fixed

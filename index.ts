@@ -1324,7 +1324,7 @@ class MemoryRelayClient {
   async stats(): Promise<Stats> {
     const response = await this.request<{ data: Stats }>(
       "GET",
-      `/v1/stats?agent_id=${encodeURIComponent(this.agentId)}`,
+      `/v1/agents/${encodeURIComponent(this.agentId)}/stats`,
     );
     return {
       total_memories: response.data?.total_memories ?? 0,
