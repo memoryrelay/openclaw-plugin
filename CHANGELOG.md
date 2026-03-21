@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.15.4] - 2026-03-21
+## [0.15.5] - 2026-03-21
 
 ### Fixed
-- `stats()` method now calls correct API endpoint `/v1/agents/{agent_id}/stats` instead of non-existent `/v1/stats?agent_id=...` which returned 404 (#47)
+- `stats()` method now calls correct API endpoint `/v1/agents/{agent_id}/stats` instead of non-existent `/v1/stats?agent_id=...` which returned 404 (#47, #49)
+- All hardcoded version strings updated to 0.15.5 (header, User-Agent, startup log, currentVersion, plugin manifest)
+- Merged stats endpoint fix to main branch (was only on feature branch in v0.15.4 release)
 
 ## [0.15.3] - 2026-03-19
 
@@ -200,7 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.5...HEAD
+[0.15.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.3...v0.15.5
 [0.15.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.14.0...v0.15.0
