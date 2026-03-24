@@ -13,7 +13,7 @@ Decisions are **choices with rationale and alternatives considered**. Plain fact
 |------|-----------|---------|
 | `decision_record` | `decision_record(title, rationale, alternatives?, project?, tags?, status?)` | Record a new decision with reasoning |
 | `decision_list` | `decision_list(project?, status?, tags?, limit?)` | List decisions, optionally filtered |
-| `decision_supersede` | `decision_supersede(old_id, new_title, new_rationale, tags?)` | Replace an outdated decision |
+| `decision_supersede` | `decision_supersede(id, new_title, new_rationale, tags?)` | Replace an outdated decision |
 | `decision_check` | `decision_check(query, project?, limit?, threshold?)` | Semantic search for conflicting decisions |
 
 ## Workflow

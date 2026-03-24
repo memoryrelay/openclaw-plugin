@@ -5,7 +5,7 @@
 Persistent memory, architectural decisions, reusable patterns, and project orchestration for AI agents.
 
 [![npm version](https://img.shields.io/npm/v/@memoryrelay/plugin-memoryrelay-ai.svg)](https://www.npmjs.com/package/@memoryrelay/plugin-memoryrelay-ai)
-[![OpenClaw Compatible](https://img.shields.io/badge/OpenClaw-2026.2.26+-blue.svg)](https://openclaw.ai)
+[![OpenClaw Compatible](https://img.shields.io/badge/OpenClaw-2026.2.0+-blue.svg)](https://openclaw.ai)
 
 ## Why MemoryRelay?
 
@@ -23,7 +23,7 @@ MemoryRelay is designed for engineering teams managing complex, long-running pro
 | Auto-capture with privacy tiers | Yes (off/conservative/smart/aggressive) | Basic | No |
 | V2 Async Storage | Yes | No | No |
 | Direct commands | 17 | ~5 | 0 |
-| Lifecycle hooks | 13 | 0 | 0 |
+| Lifecycle hooks | 14 | 0 | 0 |
 | Tools | 42 | ~10 | 0 |
 
 ## Quick Start
@@ -382,7 +382,6 @@ Then inspect with `/memory-logs` or `/memory-metrics` to identify slow or failin
 ### Known Limitations
 
 - `memory_batch_store`: May return 500 errors on large batches (use individual `memory_store` as workaround)
-- `memory_context`: Returns 405 Method Not Allowed on some API versions (use `memory_recall` instead)
 
 ## Development
 
