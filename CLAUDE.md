@@ -42,7 +42,6 @@ memory (9), entity (4), agent (3), session (4), decision (4), pattern (4), proje
 
 - Plugin ID is `plugin-memoryrelay-ai` (not `memory-memoryrelay`) — wrong ID causes "No install record" errors
 - `memory_batch_store` may return 500 on large batches — use individual `memory_store` as workaround
-- `memory_context` returns 405 on some API versions — use `memory_recall` instead
 - `memory_list` limit is capped at 100 to prevent 422 errors (v0.15.6 fix)
 - DebugLogger is duplicated: inlined in `index.ts` AND in `src/debug-logger.ts` — keep both in sync
 - `logFile` config option is deprecated and ignored since v0.8.4 (security compliance)

@@ -15,7 +15,7 @@ Entities turn flat memory storage into a connected knowledge graph. Create entit
 | `entity_link` | `entity_link(entity_id, memory_id, relationship?)` | Connect an entity to a memory |
 | `entity_list` | `entity_list(limit?, offset?)` | List entities with pagination |
 | `entity_graph` | `entity_graph(entity_id, depth?, max_neighbors?)` | Explore an entity's neighborhood |
-| `memory_context` | `memory_context(query, token_budget?)` | Enriched recall with entity connections (see `memory-workflow` skill) |
+| `memory_context` | `memory_context(query, max_tokens?)` | Enriched recall with entity connections (see `memory-workflow` skill) |
 
 ## Entity Types
 

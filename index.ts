@@ -1625,7 +1625,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // Helper to check if a tool is enabled (by group)
   // ========================================================================
 
-  // Tool group mapping — matches MCP server's TOOL_GROUPS
+  // Plugin tool group mapping
   const TOOL_GROUPS: Record<string, string[]> = {
     memory: [
       "memory_store", "memory_recall", "memory_forget", "memory_list",
@@ -1701,7 +1701,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             },
             dedup_threshold: {
               type: "number",
-              description: "Similarity threshold for deduplication (0-1). Default 0.9.",
+              description: "Similarity threshold for deduplication (0-1). Default 0.95.",
             },
             project: {
               type: "string",
@@ -2997,6 +2997,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               description: "Tags for the new decision.",
               items: { type: "string" },
             },
+            metadata: {
+              type: "object",
+              description: "Optional key-value metadata to attach to the new decision.",
+              additionalProperties: { type: "string" },
+            },
           },
           required: ["id", "title", "rationale"],
         },
@@ -3008,6 +3013,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             rationale: string;
             alternatives?: string;
             tags?: string[];
+            metadata?: Record<string, string>;
           },
         ) => {
           try {
@@ -3017,6 +3023,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
               args.rationale,
               args.alternatives,
               args.tags,
+              args.metadata,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -3843,6 +3850,10 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             description: "Memory tier: hot, warm, or cold.",
             enum: ["hot", "warm", "cold"],
           },
+          webhook_url: {
+            type: "string",
+            description: "Optional webhook URL to notify when async storage completes.",
+          },
         },
         required: ["content"],
       },
@@ -3854,13 +3865,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           project?: string;
           importance?: number;
           tier?: string;
+          webhook_url?: string;
         },
       ) => {
         try {
-          const { content, metadata, importance, tier } = args;
+          const { content, metadata, importance, tier, webhook_url } = args;
           let project = args.project;
           if (!project && defaultProject) project = defaultProject;
-          const result = await client.storeAsync(content, metadata, project, importance, tier);
+          const result = await client.storeAsync(content, metadata, project, importance, tier, webhook_url);
           return {
             content: [
               {
@@ -3962,6 +3974,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             description: "Memory IDs to exclude from results.",
             items: { type: "string" },
           },
+          llm_api_url: {
+            type: "string",
+            description: "Optional custom LLM API URL for AI summarization.",
+          },
+          llm_model: {
+            type: "string",
+            description: "Optional LLM model name for AI summarization.",
+          },
         },
         required: ["query"],
       },
@@ -3974,6 +3994,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           ai_enhanced?: boolean;
           search_mode?: "semantic" | "hybrid" | "keyword";
           exclude_memory_ids?: string[];
+          llm_api_url?: string;
+          llm_model?: string;
         },
       ) => {
         try {
@@ -3983,6 +4005,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             aiEnhanced: args.ai_enhanced,
             searchMode: args.search_mode,
             excludeMemoryIds: args.exclude_memory_ids,
+            llmApiUrl: args.llm_api_url,
+            llmModel: args.llm_model,
           });
           return {
             content: [

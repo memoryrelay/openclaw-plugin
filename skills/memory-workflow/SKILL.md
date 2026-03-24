@@ -40,7 +40,7 @@ Call `session_end(session_id, summary)` with a meaningful summary. This becomes 
 
 ## Deduplication
 
-Always pass `deduplicate=true` on `memory_store` and `memory_batch_store`. The default threshold is 0.9 similarity. Skipping this clutters search results with near-duplicates.
+Always pass `deduplicate=true` on `memory_store` and `memory_batch_store`. The default threshold is 0.95 similarity. Skipping this clutters search results with near-duplicates.
 
 ## Metadata Best Practices
 
