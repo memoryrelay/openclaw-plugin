@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.8] - 2026-03-27
+
+### Added
+- **`before_prompt_build` hook**: Auto-recall memories before every LLM turn via new `before_prompt_build` hook, not just at session start (#51)
+
+### Changed
+- `before_agent_start` hook now only injects workflow instructions; auto-recall logic moved to `before_prompt_build`
+- Version log updated from v0.15.6 to v0.15.8
+
 ## [0.15.6] - 2026-03-21
 
 ### Fixed
@@ -207,7 +216,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.6...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.8...HEAD
+[0.15.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.6...v0.15.8
 [0.15.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.3...v0.15.5
 [0.15.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.1...v0.15.2

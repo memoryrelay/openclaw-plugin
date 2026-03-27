@@ -4233,33 +4233,49 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
     const workflowInstructions = lines.join("\n");
 
-    let prependContext = `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`;
+    const prependContext = `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`;
 
-    // Auto-recall: search and inject relevant memories
-    if (cfg?.autoRecall) {
-      try {
-        const results = await client.search(
-          event.prompt,
-          cfg.recallLimit || 5,
-          cfg.recallThreshold || 0.3,
+    return { prependContext };
+  });
+
+  // Auto-recall: search and inject relevant memories before every LLM turn
+  api.on("before_prompt_build", async (event) => {
+    if (!cfg?.autoRecall) return;
+
+    if (!event.prompt || event.prompt.length < 10) return;
+
+    // Check if current channel is excluded
+    if (cfg?.excludeChannels && event.channel) {
+      const channelId = String(event.channel);
+      if (cfg.excludeChannels.some((excluded: string) => channelId.includes(excluded))) {
+        api.logger.debug?.(
+          `memory-memoryrelay: skipping recall for excluded channel: ${channelId}`,
         );
-
-        if (results.length > 0) {
-          const memoryContext = results.map((r) => `- ${r.memory.content}`).join("\n");
-
-          api.logger.info?.(
-            `memory-memoryrelay: injecting ${results.length} memories into context`,
-          );
-
-          prependContext +=
-            `\n\n<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`;
-        }
-      } catch (err) {
-        api.logger.warn?.(`memory-memoryrelay: recall failed: ${String(err)}`);
+        return;
       }
     }
 
-    return { prependContext };
+    try {
+      const results = await client.search(
+        event.prompt,
+        cfg.recallLimit || 5,
+        cfg.recallThreshold || 0.3,
+      );
+
+      if (results.length > 0) {
+        const memoryContext = results.map((r: any) => `- ${r.memory.content}`).join("\n");
+
+        api.logger.info?.(
+          `memory-memoryrelay: injecting ${results.length} memories into context`,
+        );
+
+        return {
+          prependContext: `<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`,
+        };
+      }
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: recall failed: ${String(err)}`);
+    }
   });
 
   // Auto-capture: analyze and store important information after agent ends
@@ -4533,7 +4549,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.15.6 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.15.8 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
