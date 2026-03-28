@@ -1,6 +1,8 @@
 // src/context/session-resolver.ts
 import type { MemoryRelayClient, PluginConfig, RequestContext } from "../pipelines/types.js";
 
+const MAX_CACHE_SIZE = 1000;
+
 export interface SessionEntry {
   readonly sessionId: string;
   readonly externalId: string;
@@ -33,6 +35,20 @@ export class SessionResolver {
     try {
       const entry = await promise;
       this.cache.set(key, entry);
+      if (this.cache.size > MAX_CACHE_SIZE) {
+        // Evict the entry with the oldest lastActivityAt
+        let oldestKey: string | undefined;
+        let oldestTime = Infinity;
+        for (const [k, e] of this.cache) {
+          if (e.lastActivityAt < oldestTime) {
+            oldestTime = e.lastActivityAt;
+            oldestKey = k;
+          }
+        }
+        if (oldestKey !== undefined) {
+          this.cache.delete(oldestKey);
+        }
+      }
       return entry;
     } finally {
       this.pending.delete(key);

@@ -19,6 +19,8 @@ export function buildRequestContext(event: HookEvent, config: PluginConfig): Req
 
   const isSubagent = !!subagentMatch;
   const agentId = subagentMatch?.[1] ?? agentMatch?.[1] ?? config.agentId ?? null;
+  // Convention: subagent key format is agent:<agentId>:subagent:<parentSessionSuffix>
+  // The parent key is reconstructed by removing the :subagent: segment
   const parentSessionKey = isSubagent
     ? sessionKey.replace(/:subagent:[^:]+$/, `:${subagentMatch![2]}`)
     : null;

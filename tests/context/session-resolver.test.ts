@@ -89,4 +89,22 @@ describe("SessionResolver", () => {
     await resolver.cleanupStale();
     expect(client.endSession).toHaveBeenCalledWith("session-1", undefined);
   });
+  test("evicts oldest entry when cache exceeds MAX_CACHE_SIZE", async () => {
+    const client = mockClient();
+    const resolver = new SessionResolver(client, config);
+    // Fill cache to MAX_CACHE_SIZE (1000) with staggered lastActivityAt values
+    // by resolving sessions sequentially so timestamps differ
+    const MAX = 1000;
+    for (let i = 0; i < MAX; i++) {
+      await resolver.resolve(requestCtx(`key-${i}`));
+    }
+    // Capture the first resolved entry's sessionId before eviction
+    const firstKey = "key-0";
+    // Resolve one more entry to trigger eviction of the oldest (key-0 was first)
+    await resolver.resolve(requestCtx("key-overflow"));
+    // Resolving key-0 again should create a new session (it was evicted)
+    const reResolved = await resolver.resolve(requestCtx(firstKey));
+    // A new session was created (id > 1001 since we created 1001 sessions before)
+    expect(reResolved.sessionId).not.toBe("session-1");
+  });
 });
