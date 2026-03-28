@@ -81,7 +81,7 @@ export interface MemoryRelayClient {
     namespace?: string;
   }): Promise<Array<{ memory: Memory; score: number }>>;
   store(content: string, metadata?: Record<string, string>, opts?: Record<string, unknown>): Promise<Memory>;
-  list(limit?: number, offset?: number): Promise<Memory[]>;
+  list(limit?: number, offset?: number, opts?: { scope?: string }): Promise<Memory[]>;
   getOrCreateSession(
     externalId: string,
     agentId?: string,

@@ -390,7 +390,9 @@ export function registerMemoryTools(
         },
         execute: async (_id, args: { limit?: number; offset?: number; scope?: string }) => {
           try {
-            const memories = await client.list(args.limit ?? 20, args.offset ?? 0);
+            const memories = await client.list(args.limit ?? 20, args.offset ?? 0, {
+              ...(args.scope && { scope: args.scope }),
+            });
             if (memories.length === 0) {
               return {
                 content: [{ type: "text", text: "No memories found." }],

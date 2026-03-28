@@ -7,6 +7,7 @@
 
 import type { DebugLogger } from "../debug-logger.js";
 import type { StatusReporter } from "../status-reporter.js";
+import type { Memory } from "../pipelines/types.js";
 
 // ============================================================================
 // Constants
@@ -22,16 +23,8 @@ export const VALID_HEALTH_STATUSES = ["ok", "healthy", "up"];
 // Types
 // ============================================================================
 
-export interface Memory {
-  id: string;
-  content: string;
-  agent_id: string;
-  user_id: string;
-  metadata: Record<string, string>;
-  entities: string[];
-  created_at: number;
-  updated_at: number;
-}
+// Re-export Memory from canonical source
+export type { Memory } from "../pipelines/types.js";
 
 export interface SearchResult {
   memory: Memory;
@@ -347,11 +340,13 @@ export class MemoryRelayClient {
     return response.data || [];
   }
 
-  async list(limit: number = 20, offset: number = 0): Promise<Memory[]> {
+  async list(limit: number = 20, offset: number = 0, opts?: { scope?: string }): Promise<Memory[]> {
     const cappedLimit = Math.min(limit, 100);
+    let path = `/v1/memories?limit=${cappedLimit}&offset=${offset}&agent_id=${encodeURIComponent(this.agentId)}`;
+    if (opts?.scope) path += `&scope=${encodeURIComponent(opts.scope)}`;
     const response = await this.request<{ data: Memory[] }>(
       "GET",
-      `/v1/memories?limit=${cappedLimit}&offset=${offset}&agent_id=${encodeURIComponent(this.agentId)}`,
+      path,
     );
     return response.data || [];
   }
@@ -414,6 +409,7 @@ export class MemoryRelayClient {
     project?: string,
     importance?: number,
     tier?: string,
+    webhook_url?: string,
   ): Promise<{ id: string; status: string; job_id: string; estimated_completion_seconds: number }> {
     if (!content || content.length === 0 || content.length > 50000) {
       throw new Error("Content must be between 1 and 50,000 characters");
@@ -426,6 +422,7 @@ export class MemoryRelayClient {
     if (project) body.project = project;
     if (importance != null) body.importance = importance;
     if (tier) body.tier = tier;
+    if (webhook_url) body.webhook_url = webhook_url;
     return this.request("POST", "/v2/memories", body);
   }
 
