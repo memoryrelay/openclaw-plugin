@@ -21,8 +21,8 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
-    
+        node-version: '22.x'
+
     - name: Validate plugin manifest
       run: |
         if [ ! -f "openclaw.plugin.json" ]; then
@@ -59,7 +59,7 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: '22.x'
         registry-url: 'https://registry.npmjs.org'
     
     - name: Extract version from tag
