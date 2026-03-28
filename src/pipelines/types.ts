@@ -74,13 +74,31 @@ export interface PluginConfig {
   logFile?: string;
 }
 
+export interface StoreOptions {
+  deduplicate?: boolean;
+  dedup_threshold?: number;
+  project?: string;
+  importance?: number;
+  tier?: string;
+  scope?: string;
+}
+
+export interface SearchOptions {
+  include_confidential?: boolean;
+  include_archived?: boolean;
+  compress?: boolean;
+  max_context_tokens?: number;
+  project?: string;
+  tier?: string;
+  min_importance?: number;
+  scope?: string;
+  session_id?: string;
+  namespace?: string;
+}
+
 export interface MemoryRelayClient {
-  search(query: string, limit: number, threshold: number, opts?: {
-    scope?: "session" | "long-term";
-    session_id?: string;
-    namespace?: string;
-  }): Promise<Array<{ memory: Memory; score: number }>>;
-  store(content: string, metadata?: Record<string, string>, opts?: Record<string, unknown>): Promise<Memory>;
+  search(query: string, limit?: number, threshold?: number, opts?: SearchOptions): Promise<Array<{ memory: Memory; score: number }>>;
+  store(content: string, metadata?: Record<string, string>, options?: StoreOptions): Promise<Memory>;
   list(limit?: number, offset?: number, opts?: { scope?: string }): Promise<Memory[]>;
   getOrCreateSession(
     externalId: string,

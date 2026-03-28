@@ -1,13 +1,13 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.15.6
+ * Version: 0.16.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
  * Includes: memories, entities, agents, sessions, decisions, patterns, projects.
+ * New in v0.16.0: Modular architecture — hooks, tools, and client extracted to src/
  * New in v0.15.0: V2 async API, context_build with AI-enhanced search modes
  * New in v0.13.0: External session IDs, get-or-create sessions, multi-agent collaboration
- * New in v0.12.7: OpenClaw session context integration for session tracking
  * New in v0.12.0: Smart auto-capture, daily stats, CLI commands, onboarding
  *
  * API: https://api.memoryrelay.net
@@ -15,6 +15,43 @@
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+
+// --- Core services ---
+import { DebugLogger } from "./src/debug-logger.js";
+import {
+  StatusReporter,
+  type AutoCaptureConfig,
+  type AutoCaptureTier,
+} from "./src/status-reporter.js";
+import {
+  MemoryRelayClient,
+  DEFAULT_API_URL,
+  VALID_HEALTH_STATUSES,
+} from "./src/client/memoryrelay-client.js";
+import { SessionResolver } from "./src/context/session-resolver.js";
+
+// --- Hooks ---
+import { registerBeforeAgentStart } from "./src/hooks/before-agent-start.js";
+import { registerBeforePromptBuild } from "./src/hooks/before-prompt-build.js";
+import { registerAgentEnd } from "./src/hooks/agent-end.js";
+import { registerSessionLifecycle } from "./src/hooks/session-lifecycle.js";
+import { registerSubagentHooks } from "./src/hooks/subagent.js";
+import { registerCompactionHooks } from "./src/hooks/compaction.js";
+import { registerActivityHooks } from "./src/hooks/activity.js";
+import { registerPrivacyHooks } from "./src/hooks/privacy.js";
+
+// --- Tools ---
+import { registerMemoryTools } from "./src/tools/memory-tools.js";
+import { registerSessionTools } from "./src/tools/session-tools.js";
+import { registerEntityTools } from "./src/tools/entity-tools.js";
+import { registerDecisionTools } from "./src/tools/decision-tools.js";
+import { registerPatternTools } from "./src/tools/pattern-tools.js";
+import { registerProjectTools } from "./src/tools/project-tools.js";
+import { registerAgentTools } from "./src/tools/agent-tools.js";
+import { registerV2Tools } from "./src/tools/v2-tools.js";
+import { registerHealthTools } from "./src/tools/health-tools.js";
+
+// --- Heartbeat / Onboarding / CLI ---
 import {
   calculateStats,
   morningCheck,
@@ -22,7 +59,6 @@ import {
   shouldRunHeartbeat,
   formatStatsForDisplay,
   type DailyStatsConfig,
-  type MemoryStats,
 } from "./src/heartbeat/daily-stats.js";
 import {
   statsCommand,
@@ -33,513 +69,53 @@ import {
   generateOnboardingPrompt,
   generateSuccessMessage,
   runSimpleOnboarding,
-  type OnboardingResult,
 } from "./src/onboarding/first-run.js";
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-const DEFAULT_API_URL = "https://api.memoryrelay.net";
-const VALID_HEALTH_STATUSES = ["ok", "healthy", "up"];
-const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY_MS = 1000; // 1 second
+// --- Pipeline types (used for PluginConfig interface) ---
+import type { PluginConfig } from "./src/pipelines/types.js";
 
 // ============================================================================
-// DebugLogger (Inlined from src/debug-logger.ts)
+// Config type for raw plugin JSON (superset of PluginConfig)
 // ============================================================================
-
-interface LogEntry {
-  timestamp: string;
-  tool: string;
-  method: string;
-  path: string;
-  duration: number;
-  status: "success" | "error";
-  requestBody?: unknown;
-  responseBody?: unknown;
-  responseStatus?: number;
-  error?: string;
-  retries?: number;
-}
-
-interface DebugLoggerConfig {
-  enabled: boolean;
-  verbose: boolean;
-  maxEntries: number;
-  logFile?: string; // Deprecated: File logging removed for security compliance
-}
-
-class DebugLogger {
-  private logs: LogEntry[] = [];
-  private config: DebugLoggerConfig;
-
-  constructor(config: DebugLoggerConfig) {
-    this.config = config;
-  }
-
-  log(entry: LogEntry): void {
-    if (!this.config.enabled) return;
-    this.logs.push(entry);
-    if (this.logs.length > this.config.maxEntries) {
-      this.logs.shift();
-    }
-  }
-
-  getRecentLogs(limit: number = 10): LogEntry[] {
-    return this.logs.slice(-limit);
-  }
-
-  getToolLogs(toolName: string, limit: number = 10): LogEntry[] {
-    return this.logs.filter(log => log.tool === toolName).slice(-limit);
-  }
-
-  getErrorLogs(limit: number = 10): LogEntry[] {
-    return this.logs.filter(log => log.status === "error").slice(-limit);
-  }
-
-  getAllLogs(): LogEntry[] {
-    return [...this.logs];
-  }
-
-  clear(): void {
-    this.logs = [];
-  }
-
-  getStats() {
-    const total = this.logs.length;
-    const successful = this.logs.filter(l => l.status === "success").length;
-    const failed = total - successful;
-    const avgDuration = total > 0 ? this.logs.reduce((sum, l) => sum + l.duration, 0) / total : 0;
-    return {
-      total,
-      successful,
-      failed,
-      successRate: total > 0 ? (successful / total) * 100 : 0,
-      avgDuration: Math.round(avgDuration),
-    };
-  }
-}
-
-// ============================================================================
-// StatusReporter (Inlined from src/status-reporter.ts)
-// ============================================================================
-
-interface ToolStatus {
-  enabled: number;
-  available: number;
-  failed: number;
-  tools: {
-    name: string;
-    status: "working" | "error" | "unknown";
-    error?: string;
-    lastSuccess?: string;
-    lastError?: string;
-  }[];
-}
-
-interface ConnectionStatus {
-  status: "connected" | "disconnected" | "degraded";
-  endpoint: string;
-  lastCheck: string;
-  responseTime: number;
-}
-
-interface MemoryStats {
-  total_memories: number;
-  memories_today?: number;
-  last_stored?: string;
-  search_count_24h?: number;
-}
-
-interface PluginConfig {
-  agentId: string;
-  autoRecall: boolean;
-  autoCapture: AutoCaptureConfig; // Updated in v0.12.0
-  recallLimit: number;
-  recallThreshold: number;
-  excludeChannels: string[];
-  defaultProject?: string;
-}
-
-interface StatusReport {
-  connection: ConnectionStatus;
-  config: PluginConfig;
-  stats: MemoryStats;
-  tools: Record<string, ToolStatus>;
-  recentCalls: LogEntry[];
-  issues: { tool: string; error: string; since: string }[];
-}
-
-class StatusReporter {
-  private debugLogger?: DebugLogger;
-  private toolFailures: Map<string, { error: string; since: string }> = new Map();
-
-  constructor(debugLogger?: DebugLogger) {
-    this.debugLogger = debugLogger;
-  }
-
-  /**
-   * Record tool failure
-   */
-  recordFailure(toolName: string, error: string): void {
-    if (!this.toolFailures.has(toolName)) {
-      this.toolFailures.set(toolName, {
-        error,
-        since: new Date().toISOString(),
-      });
-    }
-  }
-
-  /**
-   * Record tool success (clears failure)
-   */
-  recordSuccess(toolName: string): void {
-    this.toolFailures.delete(toolName);
-  }
-
-  /**
-   * Get known issues
-   */
-  getIssues(): { tool: string; error: string; since: string }[] {
-    return Array.from(this.toolFailures.entries()).map(([tool, data]) => ({
-      tool,
-      error: data.error,
-      since: data.since,
-    }));
-  }
-
-  /**
-   * Build status report
-   */
-  buildReport(
-    connection: ConnectionStatus,
-    config: PluginConfig,
-    stats: MemoryStats,
-    toolGroups: Record<string, string[]>
-  ): StatusReport {
-    const recentCalls = this.debugLogger
-      ? this.debugLogger.getRecentLogs(10)
-      : [];
-
-    const tools: Record<string, ToolStatus> = {};
-
-    for (const [group, toolNames] of Object.entries(toolGroups)) {
-      const toolStatuses = toolNames.map(name => {
-        const logs = this.debugLogger?.getToolLogs(name, 1) || [];
-        const lastLog = logs[0];
-        const failure = this.toolFailures.get(name);
-
-        let status: "working" | "error" | "unknown" = "unknown";
-        let error: string | undefined;
-        let lastSuccess: string | undefined;
-        let lastError: string | undefined;
-
-        if (lastLog) {
-          status = lastLog.status === "success" ? "working" : "error";
-          if (lastLog.status === "success") {
-            lastSuccess = lastLog.timestamp;
-          } else {
-            lastError = lastLog.timestamp;
-            error = lastLog.error;
-          }
-        } else if (failure) {
-          status = "error";
-          error = failure.error;
-          lastError = failure.since;
-        }
-
-        return {
-          name,
-          status,
-          error,
-          lastSuccess,
-          lastError,
-        };
-      });
-
-      const available = toolStatuses.filter(t => t.status === "working").length;
-      const failed = toolStatuses.filter(t => t.status === "error").length;
-
-      tools[group] = {
-        enabled: toolNames.length,
-        available,
-        failed,
-        tools: toolStatuses,
-      };
-    }
-
-    return {
-      connection,
-      config,
-      stats,
-      tools,
-      recentCalls,
-      issues: this.getIssues(),
-    };
-  }
-
-  /**
-   * Format status report for CLI display
-   */
-  static formatReport(report: StatusReport): string {
-    const lines: string[] = [];
-
-    // Header
-    lines.push("");
-    lines.push("MemoryRelay Plugin Status");
-    lines.push("━".repeat(50));
-    lines.push("");
-
-    // Connection
-    lines.push("CONNECTION");
-    const connSymbol = report.connection.status === "connected" ? "✓" : "✗";
-    lines.push(`  Status:        ${connSymbol} ${report.connection.status}`);
-    lines.push(`  Endpoint:      ${report.connection.endpoint}`);
-    lines.push(`  Response Time: ${report.connection.responseTime}ms`);
-    lines.push(`  Last Check:    ${new Date(report.connection.lastCheck).toLocaleString()}`);
-    lines.push("");
-
-    // Configuration
-    lines.push("CONFIGURATION");
-    lines.push(`  Agent ID:      ${report.config.agentId}`);
-    const recallStatus = report.config.autoRecall
-      ? `✓ Enabled (limit: ${report.config.recallLimit}, threshold: ${report.config.recallThreshold})`
-      : "✗ Disabled";
-    lines.push(`  Auto-Recall:   ${recallStatus}`);
-    const captureStatus = report.config.autoCapture.enabled
-      ? `✓ Enabled (tier: ${report.config.autoCapture.tier})`
-      : "✗ Disabled";
-    lines.push(`  Auto-Capture:  ${captureStatus}`);
-    if (report.config.defaultProject) {
-      lines.push(`  Default Project: ${report.config.defaultProject}`);
-    }
-    lines.push("");
-
-    // Memory Statistics
-    lines.push("MEMORY STATISTICS");
-    lines.push(`  Total Memories: ${report.stats.total_memories}`);
-    if (report.stats.memories_today !== undefined) {
-      lines.push(`  Today:          ${report.stats.memories_today}`);
-    }
-    if (report.stats.last_stored) {
-      const lastStored = new Date(report.stats.last_stored);
-      const ago = this.formatTimeAgo(lastStored);
-      lines.push(`  Last Stored:    ${ago}`);
-    }
-    if (report.stats.search_count_24h !== undefined) {
-      lines.push(`  Searches (24h): ${report.stats.search_count_24h}`);
-    }
-    lines.push("");
-
-    // Tools Status
-    const totalEnabled = Object.values(report.tools).reduce((sum, g) => sum + g.enabled, 0);
-    const totalAvailable = Object.values(report.tools).reduce((sum, g) => sum + g.available, 0);
-    lines.push(`TOOLS STATUS (${totalAvailable}/${totalEnabled} working)`);
-
-    for (const [groupName, group] of Object.entries(report.tools)) {
-      const symbol = group.failed === 0 ? "✓" : group.failed === group.enabled ? "✗" : "⚠";
-      const label = groupName.charAt(0).toUpperCase() + groupName.slice(1);
-      lines.push(`  ${symbol} ${label}: ${group.available}/${group.enabled} working`);
-
-      // Show failed tools
-      const failedTools = group.tools.filter(t => t.status === "error");
-      for (const tool of failedTools) {
-        lines.push(`    ✗ ${tool.name} (${tool.error})`);
-      }
-    }
-    lines.push("");
-
-    // Recent Activity
-    if (report.recentCalls.length > 0) {
-      lines.push(`RECENT ACTIVITY (last ${report.recentCalls.length} calls)`);
-      for (const call of report.recentCalls.reverse()) {
-        const time = new Date(call.timestamp).toLocaleTimeString();
-        const status = call.status === "success" ? "✓" : "✗";
-        const duration = `${call.duration}ms`;
-        lines.push(`  ${time}  ${call.tool.padEnd(18)} ${duration.padStart(6)}  ${status}`);
-      }
-      lines.push("");
-    }
-
-    // Known Issues
-    if (report.issues.length > 0) {
-      lines.push(`KNOWN ISSUES (${report.issues.length})`);
-      for (const issue of report.issues) {
-        const since = this.formatTimeAgo(new Date(issue.since));
-        lines.push(`  ⚠ ${issue.tool} - ${issue.error} (since ${since})`);
-      }
-      lines.push("");
-    }
-
-    // Footer
-    lines.push("For detailed logs, run: openclaw memoryrelay logs");
-    lines.push("For troubleshooting: https://github.com/MemoryRelay/api/issues/213");
-    lines.push("");
-
-    return lines.join("\n");
-  }
-
-  /**
-   * Format time ago string
-   */
-  private static formatTimeAgo(date: Date): string {
-    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-
-    if (seconds < 60) return `${seconds} seconds ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
-    return `${Math.floor(seconds / 86400)} days ago`;
-  }
-
-  /**
-   * Format compact status (for inline display)
-   */
-  static formatCompact(report: StatusReport): string {
-    const totalEnabled = Object.values(report.tools).reduce((sum, g) => sum + g.enabled, 0);
-    const totalAvailable = Object.values(report.tools).reduce((sum, g) => sum + g.available, 0);
-    const symbol = report.connection.status === "connected" ? "✓" : "✗";
-    
-    return `MemoryRelay: ${symbol} ${report.connection.status}, ${totalAvailable}/${totalEnabled} tools working`;
-  }
-}
-
-// Auto-capture configuration types (Phase 1 - Issue #12)
-type AutoCaptureTier = "off" | "conservative" | "smart" | "aggressive";
-
-interface AutoCaptureConfig {
-  enabled: boolean;
-  tier: AutoCaptureTier;
-  confirmFirst?: number; // Number of captures to confirm (default: 5)
-  categories?: {
-    credentials?: boolean;
-    preferences?: boolean;
-    technical?: boolean;
-    personal?: boolean;
-  };
-  blocklist?: string[]; // Regex patterns to never capture
-}
 
 interface MemoryRelayConfig {
   apiKey?: string;
   agentId?: string;
   apiUrl?: string;
-  autoCapture?: boolean | AutoCaptureConfig; // Enhanced in v0.12.0
+  autoCapture?: boolean | AutoCaptureConfig;
   autoRecall?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
   excludeChannels?: string[];
   defaultProject?: string;
   enabledTools?: string;
-  // Daily stats configuration (v0.12.0)
   dailyStats?: DailyStatsConfig;
-  // Debug and logging options (v0.8.0)
   debug?: boolean;
   verbose?: boolean;
   logFile?: string;
   maxLogEntries?: number;
-}
-
-interface Memory {
-  id: string;
-  content: string;
-  agent_id: string;
-  user_id: string;
-  metadata: Record<string, string>;
-  entities: string[];
-  created_at: number;
-  updated_at: number;
-}
-
-interface SearchResult {
-  memory: Memory;
-  score: number;
-}
-
-interface Stats {
-  total_memories: number;
-  last_updated?: string;
+  sessionTimeoutMinutes?: number;
+  sessionCleanupIntervalMinutes?: number;
 }
 
 // ============================================================================
-// Utility Functions
+// Auto-Capture Configuration Helpers
 // ============================================================================
 
-/**
- * Sleep for specified milliseconds
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Check if error is retryable (network/timeout errors)
- */
-function isRetryableError(error: unknown): boolean {
-  const errStr = String(error).toLowerCase();
-  return (
-    errStr.includes("timeout") ||
-    errStr.includes("econnrefused") ||
-    errStr.includes("enotfound") ||
-    errStr.includes("network") ||
-    errStr.includes("fetch failed") ||
-    errStr.includes("502") ||
-    errStr.includes("503") ||
-    errStr.includes("504")
-  );
-}
-
-/**
- * Fetch with timeout
- */
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    return response;
-  } catch (err) {
-    clearTimeout(timeout);
-    if ((err as Error).name === "AbortError") {
-      throw new Error("Request timeout");
-    }
-    throw err;
-  }
-}
-
-// ============================================================================
-// Auto-Capture Configuration Helpers (Phase 1 - Issue #12)
-// ============================================================================
-
-/**
- * Normalize auto-capture config from boolean or object format
- */
 function normalizeAutoCaptureConfig(
-  config: boolean | AutoCaptureConfig | undefined
+  config: boolean | AutoCaptureConfig | undefined,
 ): AutoCaptureConfig {
-  // Default configuration (smart auto-capture enabled by default in v0.12.0)
   const defaultConfig: AutoCaptureConfig = {
     enabled: true,
-    tier: "smart",
+    tier: "smart" as AutoCaptureTier,
     confirmFirst: 5,
     categories: {
       credentials: true,
       preferences: true,
       technical: true,
-      personal: false, // Privacy: personal info requires confirmation
+      personal: false,
     },
     blocklist: [
-      // Privacy patterns - never auto-capture
       /password\s*[:=]\s*[^\s]+/i,
       /credit\s*card/i,
       /ssn\s*[:=]/i,
@@ -547,49 +123,35 @@ function normalizeAutoCaptureConfig(
     ].map((r) => r.source),
   };
 
-  // Handle legacy boolean config
   if (typeof config === "boolean") {
-    return {
-      ...defaultConfig,
-      enabled: config,
-    };
+    return { ...defaultConfig, enabled: config };
   }
-
-  // Handle undefined (use smart default in v0.12.0+)
   if (config === undefined) {
     return defaultConfig;
   }
-
-  // Merge provided config with defaults
   return {
     enabled: config.enabled ?? defaultConfig.enabled,
     tier: config.tier ?? defaultConfig.tier,
     confirmFirst: config.confirmFirst ?? defaultConfig.confirmFirst,
-    categories: {
-      ...defaultConfig.categories,
-      ...config.categories,
-    },
+    categories: { ...defaultConfig.categories, ...config.categories },
     blocklist: config.blocklist ?? defaultConfig.blocklist,
   };
 }
 
-/**
- * Check if content matches any blocklist patterns
- */
+// ============================================================================
+// Privacy / Content helpers (used by hooks that take function refs)
+// ============================================================================
+
 function isBlocklisted(content: string, blocklist: string[]): boolean {
   return blocklist.some((pattern) => {
     try {
       return new RegExp(pattern, "i").test(content);
     } catch {
-      return false; // Invalid regex, skip
+      return false;
     }
   });
 }
 
-/**
- * Redact sensitive patterns from content using the blocklist.
- * Returns the content with matches replaced by [REDACTED].
- */
 function redactSensitive(content: string, blocklist: string[]): string {
   let redacted = content;
   for (const pattern of blocklist) {
@@ -602,15 +164,7 @@ function redactSensitive(content: string, blocklist: string[]): string {
   return redacted;
 }
 
-/**
- * Extract storable content from messages about to be lost (compaction/reset).
- * Only keeps assistant messages longer than 200 chars.
- * Respects the privacy blocklist.
- */
-function extractRescueContent(
-  messages: unknown[],
-  blocklist: string[]
-): string[] {
+function extractRescueContent(messages: unknown[], blocklist: string[]): string[] {
   const rescued: string[] = [];
   for (const msg of messages) {
     if (!msg || typeof msg !== "object") continue;
@@ -624,762 +178,96 @@ function extractRescueContent(
   return rescued.slice(0, 3);
 }
 
-/**
- * Mask sensitive data in content (API keys, tokens, etc.)
- */
-function maskSensitiveData(content: string): string {
-  // Mask API keys (show only last 4 chars)
-  content = content.replace(
-    /\b([a-z]{2,}_)?([a-z]{4,}_)?[a-f0-9]{32,}\b/gi,
-    (match) => {
-      if (match.length <= 8) return match;
-      return `${match.slice(0, 4)}...${match.slice(-4)}`;
-    }
-  );
-
-  // Mask email addresses (show only domain)
-  content = content.replace(
-    /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi,
-    (match) => {
-      const domain = match.split("@")[1];
-      return `***@${domain}`;
-    }
-  );
-
-  return content;
-}
-
 // ============================================================================
-// MemoryRelay API Client (Full Suite)
+// Tool Groups (used by status reporting and enabledTools filter)
 // ============================================================================
 
-class MemoryRelayClient {
-  private debugLogger?: DebugLogger;
-  private statusReporter?: StatusReporter;
-
-  constructor(
-    private readonly apiKey: string,
-    private readonly agentId: string,
-    private readonly apiUrl: string = DEFAULT_API_URL,
-    debugLogger?: DebugLogger,
-    statusReporter?: StatusReporter,
-  ) {
-    this.debugLogger = debugLogger;
-    this.statusReporter = statusReporter;
-  }
-
-  /**
-   * Extract tool name from API path
-   */
-  private extractToolName(path: string): string {
-    // /v1/memories -> memory
-    // /v1/memories/batch -> memory_batch
-    // /v1/sessions/123/end -> session_end
-    const parts = path.split("/").filter(Boolean);
-    if (parts.length < 2) return "unknown";
-    
-    let toolName = parts[1].replace(/s$/, ""); // Remove trailing 's'
-    
-    // Check for specific endpoints
-    if (path.includes("/batch")) toolName += "_batch";
-    if (path.includes("/recall")) toolName += "_recall";
-    if (path.includes("/context")) toolName += "_context";
-    if (path.includes("/end")) toolName += "_end";
-    if (path.includes("/health")) return "memory_health";
-    
-    return toolName;
-  }
-
-  /**
-   * Make HTTP request with retry logic and timeout
-   */
-  private async request<T>(
-    method: string,
-    path: string,
-    body?: unknown,
-    retryCount = 0,
-  ): Promise<T> {
-    const url = `${this.apiUrl}${path}`;
-    const startTime = Date.now();
-    const toolName = this.extractToolName(path);
-
-    try {
-      const response = await fetchWithTimeout(
-        url,
-        {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.15.6",
-          },
-          body: body ? JSON.stringify(body) : undefined,
-        },
-        REQUEST_TIMEOUT_MS,
-      );
-
-      const duration = Date.now() - startTime;
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.detail || errorData.message || "";
-        const error = new Error(
-          `MemoryRelay API error: ${response.status} ${response.statusText}` +
-            (errorMsg ? ` - ${errorMsg}` : ""),
-        );
-
-        // Log error
-        if (this.debugLogger) {
-          this.debugLogger.log({
-            timestamp: new Date().toISOString(),
-            tool: toolName,
-            method,
-            path,
-            duration,
-            status: "error",
-            responseStatus: response.status,
-            error: error.message,
-            retries: retryCount,
-            requestBody: this.debugLogger && body ? body : undefined,
-          });
-        }
-
-        // Track failure
-        if (this.statusReporter) {
-          this.statusReporter.recordFailure(toolName, `${response.status} ${errorMsg || response.statusText}`);
-        }
-
-        // Retry on 5xx errors
-        if (response.status >= 500 && retryCount < MAX_RETRIES) {
-          const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount);
-          await sleep(delay);
-          return this.request<T>(method, path, body, retryCount + 1);
-        }
-
-        throw error;
-      }
-
-      const result = await response.json();
-
-      // Log success
-      if (this.debugLogger) {
-        this.debugLogger.log({
-          timestamp: new Date().toISOString(),
-          tool: toolName,
-          method,
-          path,
-          duration,
-          status: "success",
-          responseStatus: response.status,
-          retries: retryCount,
-          requestBody: this.debugLogger && body ? body : undefined,
-          responseBody: this.debugLogger && result ? result : undefined,
-        });
-      }
-
-      // Track success
-      if (this.statusReporter) {
-        this.statusReporter.recordSuccess(toolName);
-      }
-
-      return result;
-    } catch (err) {
-      const duration = Date.now() - startTime;
-
-      // Log error
-      if (this.debugLogger) {
-        this.debugLogger.log({
-          timestamp: new Date().toISOString(),
-          tool: toolName,
-          method,
-          path,
-          duration,
-          status: "error",
-          error: String(err),
-          retries: retryCount,
-          requestBody: this.debugLogger && body ? body : undefined,
-        });
-      }
-
-      // Track failure
-      if (this.statusReporter) {
-        this.statusReporter.recordFailure(toolName, String(err));
-      }
-
-      // Retry on network errors
-      if (isRetryableError(err) && retryCount < MAX_RETRIES) {
-        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount);
-        await sleep(delay);
-        return this.request<T>(method, path, body, retryCount + 1);
-      }
-
-      throw err;
-    }
-  }
-
-  // --------------------------------------------------------------------------
-  // Memory operations
-  // --------------------------------------------------------------------------
-
-  async store(
-    content: string,
-    metadata?: Record<string, string>,
-    options?: {
-      deduplicate?: boolean;
-      dedup_threshold?: number;
-      project?: string;
-      importance?: number;
-      tier?: string;
-    },
-  ): Promise<Memory> {
-    // Extract session_id from metadata if present and move to top-level
-    const { session_id, ...cleanMetadata } = metadata || {};
-    
-    const payload: any = {
-      content,
-      agent_id: this.agentId,
-      ...options,
-    };
-    
-    // Only include metadata if there's something left after extracting session_id
-    if (Object.keys(cleanMetadata).length > 0) {
-      payload.metadata = cleanMetadata;
-    }
-    
-    // Add session_id as top-level parameter if provided
-    if (session_id) {
-      payload.session_id = session_id;
-    }
-    
-    return this.request<Memory>("POST", "/v1/memories", payload);
-  }
-
-  async search(
-    query: string,
-    limit: number = 5,
-    threshold: number = 0.3,
-    options?: {
-      include_confidential?: boolean;
-      include_archived?: boolean;
-      compress?: boolean;
-      max_context_tokens?: number;
-      project?: string;
-      tier?: string;
-      min_importance?: number;
-    },
-  ): Promise<SearchResult[]> {
-    const response = await this.request<{ data: SearchResult[] }>(
-      "POST",
-      "/v1/memories/search",
-      {
-        query,
-        limit,
-        threshold,
-        agent_id: this.agentId,
-        ...options,
-      },
-    );
-    return response.data || [];
-  }
-
-  async list(limit: number = 20, offset: number = 0): Promise<Memory[]> {
-    const cappedLimit = Math.min(limit, 100);
-    const response = await this.request<{ data: Memory[] }>(
-      "GET",
-      `/v1/memories?limit=${cappedLimit}&offset=${offset}&agent_id=${encodeURIComponent(this.agentId)}`,
-    );
-    return response.data || [];
-  }
-
-  async get(id: string): Promise<Memory> {
-    return this.request<Memory>("GET", `/v1/memories/${id}`);
-  }
-
-  async update(id: string, content: string, metadata?: Record<string, string>): Promise<Memory> {
-    return this.request<Memory>("PUT", `/v1/memories/${id}`, {
-      content,
-      metadata,
-    });
-  }
-
-  async delete(id: string): Promise<void> {
-    await this.request<void>("DELETE", `/v1/memories/${id}`);
-  }
-
-  async batchStore(
-    memories: Array<{ content: string; metadata?: Record<string, string> }>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/memories/batch", {
-      memories,
-      agent_id: this.agentId,
-    });
-  }
-
-  async buildContext(
-    query: string,
-    limit?: number,
-    threshold?: number,
-    maxTokens?: number,
-    project?: string,
-  ): Promise<any> {
-    return this.request("POST", "/v1/memories/context", {
-      query,
-      limit,
-      threshold,
-      max_tokens: maxTokens,
-      agent_id: this.agentId,
-      project,
-    });
-  }
-
-  async promote(memoryId: string, importance: number, tier?: string): Promise<any> {
-    return this.request("PUT", `/v1/memories/${memoryId}/importance`, {
-      importance,
-      tier,
-    });
-  }
-
-  // --------------------------------------------------------------------------
-  // V2 Async API Methods (v0.15.0)
-  // --------------------------------------------------------------------------
-
-  async storeAsync(
-    content: string,
-    metadata?: Record<string, string>,
-    project?: string,
-    importance?: number,
-    tier?: string,
-  ): Promise<{ id: string; status: string; job_id: string; estimated_completion_seconds: number }> {
-    if (!content || content.length === 0 || content.length > 50000) {
-      throw new Error("Content must be between 1 and 50,000 characters");
-    }
-    const body: Record<string, unknown> = {
-      content,
-      agent_id: this.agentId,
-    };
-    if (metadata) body.metadata = metadata;
-    if (project) body.project = project;
-    if (importance != null) body.importance = importance;
-    if (tier) body.tier = tier;
-    return this.request("POST", "/v2/memories", body);
-  }
-
-  async getMemoryStatus(memoryId: string): Promise<{
-    id: string;
-    status: "pending" | "processing" | "ready" | "failed";
-    created_at: string;
-    updated_at: string;
-    error?: string;
-  }> {
-    return this.request("GET", `/v2/memories/${memoryId}/status`);
-  }
-
-  async buildContextV2(
-    query: string,
-    options?: {
-      maxMemories?: number;
-      maxTokens?: number;
-      aiEnhanced?: boolean;
-      searchMode?: "semantic" | "hybrid" | "keyword";
-      excludeMemoryIds?: string[];
-    },
-  ): Promise<any> {
-    const body: Record<string, unknown> = {
-      query,
-      agent_id: this.agentId,
-    };
-    if (options?.maxMemories != null) body.max_memories = options.maxMemories;
-    if (options?.maxTokens != null) body.max_tokens = options.maxTokens;
-    if (options?.aiEnhanced != null) body.ai_enhanced = options.aiEnhanced;
-    if (options?.searchMode) body.search_mode = options.searchMode;
-    if (options?.excludeMemoryIds) body.exclude_memory_ids = options.excludeMemoryIds;
-    return this.request("POST", "/v2/context", body);
-  }
-
-  // --------------------------------------------------------------------------
-  // Entity operations
-  // --------------------------------------------------------------------------
-
-  async createEntity(
-    name: string,
-    type: string,
-    metadata?: Record<string, string>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/entities", {
-      name,
-      type,
-      metadata,
-      agent_id: this.agentId,
-    });
-  }
-
-  async linkEntity(
-    entityId: string,
-    memoryId: string,
-    relationship?: string,
-  ): Promise<any> {
-    return this.request("POST", `/v1/entities/links`, {
-      entity_id: entityId,
-      memory_id: memoryId,
-      relationship,
-    });
-  }
-
-  async listEntities(limit: number = 20, offset: number = 0): Promise<any> {
-    return this.request("GET", `/v1/entities?limit=${limit}&offset=${offset}`);
-  }
-
-  async entityGraph(
-    entityId: string,
-    depth: number = 2,
-    maxNeighbors: number = 10,
-  ): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/entities/${entityId}/neighborhood?depth=${depth}&max_neighbors=${maxNeighbors}`,
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // Agent operations
-  // --------------------------------------------------------------------------
-
-  async listAgents(limit: number = 20): Promise<any> {
-    return this.request("GET", `/v1/agents?limit=${limit}`);
-  }
-
-  async createAgent(name: string, description?: string): Promise<any> {
-    return this.request("POST", "/v1/agents", { name, description });
-  }
-
-  async getAgent(id: string): Promise<any> {
-    return this.request("GET", `/v1/agents/${id}`);
-  }
-
-  // --------------------------------------------------------------------------
-  // Session operations
-  // --------------------------------------------------------------------------
-
-  async startSession(
-    title?: string,
-    project?: string,
-    metadata?: Record<string, string>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/sessions", {
-      title,
-      project,
-      metadata,
-      agent_id: this.agentId,
-    });
-  }
-
-  async getOrCreateSession(
-    external_id: string,
-    agent_id?: string,
-    title?: string,
-    project?: string,
-    metadata?: Record<string, string>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/sessions/get-or-create", {
-      external_id,
-      agent_id: agent_id || this.agentId,
-      title,
-      project,
-      metadata,
-    });
-  }
-
-  async endSession(id: string, summary?: string): Promise<any> {
-    return this.request("PUT", `/v1/sessions/${id}/end`, { summary });
-  }
-
-  async getSession(id: string): Promise<any> {
-    return this.request("GET", `/v1/sessions/${id}`);
-  }
-
-  async listSessions(
-    limit: number = 20,
-    project?: string,
-    status?: string,
-  ): Promise<any> {
-    let path = `/v1/sessions?limit=${limit}`;
-    if (project) path += `&project=${encodeURIComponent(project)}`;
-    if (status) path += `&status=${encodeURIComponent(status)}`;
-    return this.request("GET", path);
-  }
-
-  // --------------------------------------------------------------------------
-  // Decision operations
-  // --------------------------------------------------------------------------
-
-  async recordDecision(
-    title: string,
-    rationale: string,
-    alternatives?: string,
-    project?: string,
-    tags?: string[],
-    status?: string,
-    metadata?: Record<string, string>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/decisions", {
-      title,
-      rationale,
-      alternatives,
-      project_slug: project,
-      tags,
-      status,
-      metadata,
-      agent_id: this.agentId,
-    });
-  }
-
-  async listDecisions(
-    limit: number = 20,
-    project?: string,
-    status?: string,
-    tags?: string,
-  ): Promise<any> {
-    let path = `/v1/decisions?limit=${limit}`;
-    if (project) path += `&project=${encodeURIComponent(project)}`;
-    if (status) path += `&status=${encodeURIComponent(status)}`;
-    if (tags) path += `&tags=${encodeURIComponent(tags)}`;
-    return this.request("GET", path);
-  }
-
-  async supersedeDecision(
-    id: string,
-    title: string,
-    rationale: string,
-    alternatives?: string,
-    tags?: string[],
-  ): Promise<any> {
-    return this.request("POST", `/v1/decisions/${id}/supersede`, {
-      title,
-      rationale,
-      alternatives,
-      tags,
-    });
-  }
-
-  async checkDecisions(
-    query: string,
-    project?: string,
-    limit?: number,
-    threshold?: number,
-    includeSuperseded?: boolean,
-  ): Promise<any> {
-    const params = new URLSearchParams();
-    params.set("query", query);
-    if (project) params.set("project", project);
-    if (limit !== undefined) params.set("limit", String(limit));
-    if (threshold !== undefined) params.set("threshold", String(threshold));
-    if (includeSuperseded) params.set("include_superseded", "true");
-    return this.request("GET", `/v1/decisions/check?${params.toString()}`);
-  }
-
-  // --------------------------------------------------------------------------
-  // Pattern operations
-  // --------------------------------------------------------------------------
-
-  async createPattern(
-    title: string,
-    description: string,
-    category?: string,
-    exampleCode?: string,
-    scope?: string,
-    tags?: string[],
-    sourceProject?: string,
-  ): Promise<any> {
-    return this.request("POST", "/v1/patterns", {
-      title,
-      description,
-      category,
-      example_code: exampleCode,
-      scope,
-      tags,
-      source_project: sourceProject,
-    });
-  }
-
-  async searchPatterns(
-    query: string,
-    category?: string,
-    project?: string,
-    limit?: number,
-    threshold?: number,
-  ): Promise<any> {
-    const params = new URLSearchParams();
-    params.set("query", query);
-    if (category) params.set("category", category);
-    if (project) params.set("project", project);
-    if (limit !== undefined) params.set("limit", String(limit));
-    if (threshold !== undefined) params.set("threshold", String(threshold));
-    return this.request("GET", `/v1/patterns/search?${params.toString()}`);
-  }
-
-  async adoptPattern(id: string, project: string): Promise<any> {
-    return this.request("POST", `/v1/patterns/${id}/adopt`, { project });
-  }
-
-  async suggestPatterns(project: string, limit?: number): Promise<any> {
-    let path = `/v1/patterns/suggest?project=${encodeURIComponent(project)}`;
-    if (limit) path += `&limit=${limit}`;
-    return this.request("GET", path);
-  }
-
-  // --------------------------------------------------------------------------
-  // Project operations
-  // --------------------------------------------------------------------------
-
-  async registerProject(
-    slug: string,
-    name: string,
-    description?: string,
-    stack?: Record<string, unknown>,
-    repoUrl?: string,
-  ): Promise<any> {
-    return this.request("POST", "/v1/projects", {
-      slug,
-      name,
-      description,
-      stack,
-      repo_url: repoUrl,
-    });
-  }
-
-  async listProjects(limit: number = 20): Promise<any> {
-    return this.request("GET", `/v1/projects?limit=${limit}`);
-  }
-
-  async getProject(slug: string): Promise<any> {
-    return this.request("GET", `/v1/projects/${encodeURIComponent(slug)}`);
-  }
-
-  async addProjectRelationship(
-    from: string,
-    to: string,
-    type: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<any> {
-    return this.request("POST", `/v1/projects/${encodeURIComponent(from)}/relationships`, {
-      target_project: to,
-      relationship_type: type,
-      metadata,
-    });
-  }
-
-  async getProjectDependencies(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/dependencies`,
-    );
-  }
-
-  async getProjectDependents(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/dependents`,
-    );
-  }
-
-  async getProjectRelated(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/related`,
-    );
-  }
-
-  async projectImpact(project: string, changeDescription: string): Promise<any> {
-    return this.request(
-      "POST",
-      `/v1/projects/impact-analysis`,
-      { project, change_description: changeDescription },
-    );
-  }
-
-  async getSharedPatterns(projectA: string, projectB: string): Promise<any> {
-    const params = new URLSearchParams();
-    params.set("a", projectA);
-    params.set("b", projectB);
-    return this.request(
-      "GET",
-      `/v1/projects/shared-patterns?${params.toString()}`,
-    );
-  }
-
-  async getProjectContext(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/context`,
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // Health & stats
-  // --------------------------------------------------------------------------
-
-  async health(): Promise<{ status: string }> {
-    return this.request<{ status: string }>("GET", "/v1/health");
-  }
-
-  async stats(): Promise<Stats> {
-    const response = await this.request<{ data: Stats }>(
-      "GET",
-      `/v1/agents/${encodeURIComponent(this.agentId)}/stats`,
-    );
-    return {
-      total_memories: response.data?.total_memories ?? 0,
-      last_updated: response.data?.last_updated,
-    };
-  }
-
-  /**
-   * Export all memories as JSON
-   */
-  async export(): Promise<Memory[]> {
-    const allMemories: Memory[] = [];
-    let offset = 0;
-    const limit = 100;
-
-    while (true) {
-      const batch = await this.list(limit, offset);
-      if (batch.length === 0) break;
-      allMemories.push(...batch);
-      offset += limit;
-      if (batch.length < limit) break;
-    }
-
-    return allMemories;
-  }
-}
+const TOOL_GROUPS: Record<string, string[]> = {
+  memory: [
+    "memory_store", "memory_recall", "memory_forget", "memory_list",
+    "memory_get", "memory_update", "memory_batch_store", "memory_context",
+    "memory_promote",
+  ],
+  entity: ["entity_create", "entity_link", "entity_list", "entity_graph"],
+  agent: ["agent_list", "agent_create", "agent_get"],
+  session: ["session_start", "session_end", "session_recall", "session_list"],
+  decision: ["decision_record", "decision_list", "decision_supersede", "decision_check"],
+  pattern: ["pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest"],
+  project: [
+    "project_register", "project_list", "project_info",
+    "project_add_relationship", "project_dependencies", "project_dependents",
+    "project_related", "project_impact", "project_shared_patterns", "project_context",
+  ],
+  health: ["memory_health"],
+  v2: ["memory_store_async", "memory_status", "context_build"],
+};
 
 // ============================================================================
-// Pattern Detection (for auto-capture)
+// Command Argument Parser
 // ============================================================================
 
-const CAPTURE_PATTERNS = [
-  /remember\s+(?:that\s+)?/i,
-  /(?:my|the)\s+(?:name|email|phone|address|preference)/i,
-  /important(?:ly)?[:\s]/i,
-  /always\s+(?:use|prefer|want)/i,
-  /(?:do|don't)\s+(?:like|want|prefer)/i,
-  /(?:api|key|token|password|secret)(?:\s+is)?[:\s]/i,
-  /(?:ssh|server|host|ip|port)(?:\s+is)?[:\s]/i,
-];
+function parseCommandArgs(input: string | undefined): { positional: string[]; flags: Record<string, string | boolean> } {
+  const positional: string[] = [];
+  const flags: Record<string, string | boolean> = {};
 
-function shouldCapture(text: string): boolean {
-  if (text.length < 20 || text.length > 2000) {
-    return false;
+  if (!input || input.trim() === "") {
+    return { positional, flags };
   }
-  return CAPTURE_PATTERNS.some((pattern) => pattern.test(text));
+
+  const tokens: string[] = [];
+  let current = "";
+  let inQuote: string | null = null;
+
+  for (const ch of input) {
+    if (inQuote) {
+      if (ch === inQuote) {
+        inQuote = null;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = ch;
+    } else if (ch === " " || ch === "\t") {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token.startsWith("--")) {
+      const key = token.slice(2);
+      const next = tokens[i + 1];
+      if (next && !next.startsWith("--")) {
+        flags[key] = next;
+        i += 2;
+      } else {
+        flags[key] = true;
+        i += 1;
+      }
+    } else {
+      positional.push(token);
+      i += 1;
+    }
+  }
+
+  return { positional, flags };
 }
 
 // ============================================================================
 // Plugin Export
+// ============================================================================
+
 export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
 
-  // Fall back to environment variables
+  // --- Resolve config from plugin JSON + env vars ---
   const apiKey = cfg?.apiKey || process.env.MEMORYRELAY_API_KEY;
   const agentId = cfg?.agentId || process.env.MEMORYRELAY_AGENT_ID || api.agentName;
 
@@ -1406,249 +294,65 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
   const apiUrl = cfg?.apiUrl || process.env.MEMORYRELAY_API_URL || DEFAULT_API_URL;
   const defaultProject = cfg?.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
-  
-  // ========================================================================
-  // Debug Logger and Status Reporter (v0.8.0)
-  // ========================================================================
-  
+
+  // --- Debug Logger & Status Reporter ---
   const debugEnabled = cfg?.debug || false;
   const verboseEnabled = cfg?.verbose || false;
-  const logFile = cfg?.logFile;
   const maxLogEntries = cfg?.maxLogEntries || 100;
-  const sessionTimeoutMs = ((cfg?.sessionTimeoutMinutes as number) || 120) * 60 * 1000;
-  const sessionCleanupIntervalMs = ((cfg?.sessionCleanupIntervalMinutes as number) || 30) * 60 * 1000;
 
   let debugLogger: DebugLogger | undefined;
-  let statusReporter: StatusReporter | undefined;
-  
   if (debugEnabled) {
     debugLogger = new DebugLogger({
       enabled: true,
       verbose: verboseEnabled,
       maxEntries: maxLogEntries,
-      logFile: logFile,
+      logFile: cfg?.logFile,
     });
     api.logger.info(`memory-memoryrelay: debug mode enabled (verbose: ${verboseEnabled}, maxEntries: ${maxLogEntries})`);
   }
-  
-  statusReporter = new StatusReporter(debugLogger);
-  
+
+  const statusReporter = new StatusReporter(debugLogger);
+
+  // --- API Client ---
   const client = new MemoryRelayClient(apiKey, agentId, apiUrl, debugLogger, statusReporter);
 
-  // ========================================================================
-  // Session Cache for External Session IDs (v0.13.0)
-  // ========================================================================
-  
-  /**
-   * Cache mapping: external_id → MemoryRelay session_id
-   * Enables multi-agent collaboration and conversation-spanning sessions
-   */
-  const sessionCache = new Map<string, { sessionId: string; lastActivityAt: number }>();
-  
-  /**
-   * Get or create MemoryRelay session for current workspace/project context.
-   * Uses external_id as semantic key for multi-agent collaboration.
-   * 
-   * @param project - Project slug (from context or user args)
-   * @param workspaceDir - Workspace directory path
-   * @returns MemoryRelay session UUID, or null if session creation disabled
-   */
-  async function getContextSession(
-    project?: string,
-    workspaceDir?: string
-  ): Promise<string | null> {
-    // If no project context, don't auto-create session
-    if (!project && !workspaceDir) {
-      return null;
-    }
-    
-    // Generate external_id from project or workspace
-    const externalId = project ||
-      (workspaceDir ? `workspace-${workspaceDir.split(/[/\\]/).pop()}` : null);
-    
-    if (!externalId) {
-      return null;
-    }
-    
-    // Check cache first
-    if (sessionCache.has(externalId)) {
-      api.logger.debug?.(`Session: Cache hit for external_id="${externalId}"`);
-      touchSession(externalId);
-      return sessionCache.get(externalId)!.sessionId;
-    }
-    
-    try {
-      // Get or create session via new API endpoint
-      const response = await client.getOrCreateSession(
-        externalId,
-        agentId,
-        project ? `${project} work session` : `Workspace ${externalId}`,
-        project,
-        { source: "openclaw-plugin", agent: agentId }
-      );
-      
-      // Cache the mapping
-      sessionCache.set(externalId, { sessionId: response.id, lastActivityAt: Date.now() });
-      
-      api.logger.debug?.(
-        `Session: ${response.created ? 'Created' : 'Retrieved'} session ${response.id} for external_id="${externalId}"`
-      );
-      
-      return response.id;
-    } catch (err) {
-      api.logger.debug?.(`Session: Failed to get-or-create session for ${externalId}: ${String(err)}`);
-      return null;
-    }
-  }
+  // --- Auto-capture config ---
+  const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
+  const blocklist = autoCaptureConfig.blocklist || [];
 
-  function touchSession(externalId: string): void {
-    const entry = sessionCache.get(externalId);
-    if (entry) {
-      entry.lastActivityAt = Date.now();
-    }
-  }
+  // --- Build PluginConfig for extracted modules ---
+  const pluginConfig: PluginConfig = {
+    apiKey,
+    agentId,
+    apiUrl,
+    defaultProject,
+    autoRecall: cfg?.autoRecall ?? true,
+    recallLimit: cfg?.recallLimit ?? 5,
+    recallThreshold: cfg?.recallThreshold ?? 0.3,
+    excludeChannels: cfg?.excludeChannels ?? [],
+    autoCapture: autoCaptureConfig,
+    sessionTimeoutMinutes: cfg?.sessionTimeoutMinutes,
+    sessionCleanupIntervalMinutes: cfg?.sessionCleanupIntervalMinutes,
+    debug: cfg?.debug,
+    verbose: cfg?.verbose,
+    maxLogEntries: cfg?.maxLogEntries,
+    logFile: cfg?.logFile,
+  };
 
-  // Verify connection on startup (with timeout)
+  // --- Session Resolver ---
+  const sessionResolver = new SessionResolver(client, pluginConfig);
+
+  // --- Verify connection on startup ---
   try {
     await client.health();
     api.logger.info(`memory-memoryrelay: connected to ${apiUrl}`);
   } catch (err) {
     api.logger.error(`memory-memoryrelay: health check failed: ${String(err)}`);
-    // Continue loading plugin even if health check fails (will retry on first use)
   }
 
-  // ========================================================================
-  // Status Reporting (for openclaw status command)
-  // ========================================================================
-
-  api.registerGatewayMethod?.("memory.status", async ({ respond }) => {
-    try {
-      // Get connection status
-      const startTime = Date.now();
-      const health = await client.health();
-      const responseTime = Date.now() - startTime;
-      
-      const healthStatus = String(health.status).toLowerCase();
-      const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
-      
-      const connectionStatus = {
-        status: isConnected ? "connected" as const : "disconnected" as const,
-        endpoint: apiUrl,
-        lastCheck: new Date().toISOString(),
-        responseTime,
-      };
-      
-      // Get memory stats
-      let memoryCount = 0;
-      try {
-        const stats = await client.stats();
-        memoryCount = stats.total_memories;
-      } catch (statsErr) {
-        api.logger.debug?.(`memory-memoryrelay: stats endpoint unavailable: ${String(statsErr)}`);
-      }
-      
-      const memoryStats = {
-        total_memories: memoryCount,
-      };
-      
-      // Get config - normalize autoCapture to new format
-      const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
-      
-      const pluginConfig = {
-        agentId: agentId,
-        autoRecall: cfg?.autoRecall ?? true,
-        autoCapture: autoCaptureConfig,
-        recallLimit: cfg?.recallLimit ?? 5,
-        recallThreshold: cfg?.recallThreshold ?? 0.3,
-        excludeChannels: cfg?.excludeChannels ?? [],
-        defaultProject: defaultProject,
-      };
-      
-      // Build comprehensive status report
-      if (statusReporter) {
-        const report = statusReporter.buildReport(
-          connectionStatus,
-          pluginConfig,
-          memoryStats,
-          TOOL_GROUPS,
-        );
-        
-        // Format and output
-        const formatted = StatusReporter.formatReport(report);
-        api.logger.info(formatted);
-        
-        // Also return structured data for programmatic access
-        respond(true, {
-          available: true,
-          connected: isConnected,
-          endpoint: apiUrl,
-          memoryCount: memoryCount,
-          agentId: agentId,
-          debug: debugEnabled,
-          verbose: verboseEnabled,
-          report: report,
-          vector: {
-            available: true,
-            enabled: true,
-          },
-        });
-      } else {
-        // Fallback to simple status (shouldn't happen)
-        respond(true, {
-          available: true,
-          connected: isConnected,
-          endpoint: apiUrl,
-          memoryCount: memoryCount,
-          agentId: agentId,
-          vector: {
-            available: true,
-            enabled: true,
-          },
-        });
-      }
-    } catch (err) {
-      respond(true, {
-        available: false,
-        connected: false,
-        error: String(err),
-        endpoint: apiUrl,
-        agentId: agentId,
-        vector: {
-          available: false,
-          enabled: true,
-        },
-      });
-    }
-  });
-
-  // ========================================================================
-  // Helper to check if a tool is enabled (by group)
-  // ========================================================================
-
-  // Plugin tool group mapping
-  const TOOL_GROUPS: Record<string, string[]> = {
-    memory: [
-      "memory_store", "memory_recall", "memory_forget", "memory_list",
-      "memory_get", "memory_update", "memory_batch_store", "memory_context",
-      "memory_promote",
-    ],
-    entity: ["entity_create", "entity_link", "entity_list", "entity_graph"],
-    agent: ["agent_list", "agent_create", "agent_get"],
-    session: ["session_start", "session_end", "session_recall", "session_list"],
-    decision: ["decision_record", "decision_list", "decision_supersede", "decision_check"],
-    pattern: ["pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest"],
-    project: [
-      "project_register", "project_list", "project_info",
-      "project_add_relationship", "project_dependencies", "project_dependents",
-      "project_related", "project_impact", "project_shared_patterns", "project_context",
-    ],
-    health: ["memory_health"],
-    v2: ["memory_store_async", "memory_status", "context_build"],
-  };
-
-  // Build a set of enabled tool names from group names
+  // --- Tool enablement filter ---
   const enabledToolNames: Set<string> | null = (() => {
-    if (!cfg?.enabledTools) return null; // all enabled
+    if (!cfg?.enabledTools) return null;
     const groups = cfg.enabledTools.split(",").map((s) => s.trim().toLowerCase());
     if (groups.includes("all")) return null;
     const enabled = new Set<string>();
@@ -1669,2894 +373,44 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // ========================================================================
-  // Tools (42 total)
+  // Register Hooks (8 modules)
   // ========================================================================
 
-  // --------------------------------------------------------------------------
-  // 1. memory_store
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_store")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_store",
-        description:
-          "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations." +
-          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : "") +
-          " Set deduplicate=true to avoid storing near-duplicate memories.",
-        parameters: {
-          type: "object",
-          properties: {
-            content: {
-              type: "string",
-              description: "The memory content to store. Be specific and include relevant context.",
-            },
-            metadata: {
-              type: "object",
-              description: "Optional key-value metadata to attach to the memory",
-              additionalProperties: { type: "string" },
-            },
-            deduplicate: {
-              type: "boolean",
-              description: "If true, check for duplicate memories before storing. Default false.",
-            },
-            dedup_threshold: {
-              type: "number",
-              description: "Similarity threshold for deduplication (0-1). Default 0.95.",
-            },
-            project: {
-              type: "string",
-              description: "Project slug to associate with this memory.",
-            },
-            importance: {
-              type: "number",
-              description: "Importance score (0-1). Higher values are retained longer.",
-            },
-            tier: {
-              type: "string",
-              description: "Memory tier: hot, warm, or cold.",
-              enum: ["hot", "warm", "cold"],
-            },
-            session_id: {
-              type: "string",
-              description: "Optional MemoryRelay session UUID to associate this memory with. If omitted and project is set, plugin auto-creates session via external_id.",
-            },
-          },
-          required: ["content"],
-        },
-        execute: async (
-          _id,
-          args: {
-            content: string;
-            metadata?: Record<string, string>;
-            deduplicate?: boolean;
-            dedup_threshold?: number;
-            project?: string;
-            importance?: number;
-            tier?: string;
-            session_id?: string;  // Allow explicit session_id
-          },
-        ) => {
-          try {
-            const { content, metadata: rawMetadata, session_id: explicitSessionId, ...opts } = args;
-
-            // Auto-tag with sender identity from tool context
-            const metadata = rawMetadata || {};
-            if (ctx.requesterSenderId && !metadata.sender_id) {
-              metadata.sender_id = ctx.requesterSenderId;
-            }
-
-            // Apply defaultProject fallback before session resolution
-            if (!opts.project && defaultProject) opts.project = defaultProject;
-
-            // Get session_id from cache if project context available
-            // Priority: explicit session_id > context session > no session
-            let sessionId: string | undefined = explicitSessionId;
-
-            if (!sessionId && (opts.project || ctx.workspaceDir)) {
-              const contextSessionId = await getContextSession(opts.project, ctx.workspaceDir);
-              if (contextSessionId) {
-                sessionId = contextSessionId;
-              }
-            }
-            
-            // Build request options with session_id as top-level parameter
-            const storeOpts = {
-              ...opts,
-              ...(sessionId && { session_id: sessionId }),
-            };
-            
-            const memory = await client.store(content, metadata, storeOpts);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Memory stored successfully (id: ${memory.id.slice(0, 8)}...)${sessionId ? ` in session ${sessionId.slice(0, 8)}...` : ''}`,
-                },
-              ],
-              details: { id: memory.id, stored: true, session_id: sessionId },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to store memory: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_store" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 2. memory_recall
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_recall")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_recall",
-        description:
-          "Search memories using natural language. Returns the most relevant memories based on semantic similarity to the query." +
-          (defaultProject ? ` Results scoped to project '${defaultProject}' by default; pass project explicitly to override or omit to search all.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "Natural language search query",
-            },
-            limit: {
-              type: "number",
-              description: "Maximum results (1-50). Default 5.",
-              minimum: 1,
-              maximum: 50,
-            },
-            threshold: {
-              type: "number",
-              description: "Minimum similarity threshold (0-1). Default 0.3.",
-            },
-            project: {
-              type: "string",
-              description: "Filter by project slug.",
-            },
-            tier: {
-              type: "string",
-              description: "Filter by memory tier: hot, warm, or cold.",
-              enum: ["hot", "warm", "cold"],
-            },
-            min_importance: {
-              type: "number",
-              description: "Minimum importance score filter (0-1).",
-            },
-            compress: {
-              type: "boolean",
-              description: "If true, compress results for token efficiency.",
-            },
-          },
-          required: ["query"],
-        },
-        execute: async (
-          _id,
-          args: {
-            query: string;
-            limit?: number;
-            threshold?: number;
-            project?: string;
-            tier?: string;
-            min_importance?: number;
-            compress?: boolean;
-          },
-        ) => {
-          try {
-            const {
-              query,
-              limit = 5,
-              threshold,
-              project,
-              tier,
-              min_importance,
-              compress,
-            } = args;
-            const searchThreshold = threshold ?? cfg?.recallThreshold ?? 0.3;
-            const searchProject = project ?? defaultProject;
-            const results = await client.search(query, limit, searchThreshold, {
-              project: searchProject,
-              tier,
-              min_importance,
-              compress,
-            });
-
-            if (results.length === 0) {
-              return {
-                content: [{ type: "text", text: "No relevant memories found." }],
-                details: { count: 0 },
-              };
-            }
-
-            const formatted = results
-              .map(
-                (r) =>
-                  `- [${r.score.toFixed(2)}] ${r.memory.content.slice(0, 200)}${
-                    r.memory.content.length > 200 ? "..." : ""
-                  }`,
-              )
-              .join("\n");
-
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Found ${results.length} relevant memories:\n${formatted}`,
-                },
-              ],
-              details: {
-                count: results.length,
-                memories: results.map((r) => ({
-                  id: r.memory.id,
-                  content: r.memory.content,
-                  score: r.score,
-                })),
-              },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Search failed: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_recall" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 3. memory_forget
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_forget")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_forget",
-        description: "Delete a memory by ID, or search by query to find candidates. Provide memoryId for direct deletion, or query to search first. A single high-confidence match (>0.9) is auto-deleted; otherwise candidates are listed for you to choose.",
-        parameters: {
-          type: "object",
-          properties: {
-            memoryId: {
-              type: "string",
-              description: "Memory ID to delete",
-            },
-            query: {
-              type: "string",
-              description: "Search query to find memory",
-            },
-          },
-        },
-        execute: async (_id, { memoryId, query }: { memoryId?: string; query?: string }) => {
-          if (memoryId) {
-            try {
-              await client.delete(memoryId);
-              return {
-                content: [{ type: "text", text: `Memory ${memoryId.slice(0, 8)}... deleted.` }],
-                details: { action: "deleted", id: memoryId },
-              };
-            } catch (err) {
-              return {
-                content: [{ type: "text", text: `Delete failed: ${String(err)}` }],
-                details: { error: String(err) },
-              };
-            }
-          }
-
-          if (query) {
-            const results = await client.search(query, 5, 0.5, { project: defaultProject });
-
-            if (results.length === 0) {
-              return {
-                content: [{ type: "text", text: "No matching memories found." }],
-                details: { count: 0 },
-              };
-            }
-
-            // If single high-confidence match, delete it
-            if (results.length === 1 && results[0].score > 0.9) {
-              await client.delete(results[0].memory.id);
-              return {
-                content: [
-                  { type: "text", text: `Forgotten: "${results[0].memory.content.slice(0, 60)}..."` },
-                ],
-                details: { action: "deleted", id: results[0].memory.id },
-              };
-            }
-
-            const list = results
-              .map((r) => `- [${r.memory.id}] ${r.memory.content.slice(0, 60)}...`)
-              .join("\n");
-
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Found ${results.length} candidates. Specify memoryId:\n${list}`,
-                },
-              ],
-              details: { action: "candidates", count: results.length },
-            };
-          }
-
-          return {
-            content: [{ type: "text", text: "Provide query or memoryId." }],
-            details: { error: "missing_param" },
-          };
-        },
-      }),
-      { name: "memory_forget" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 4. memory_list
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_list")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_list",
-        description: "List recent memories chronologically for this agent. Use to review what has been stored or to find memory IDs for update/delete operations.",
-        parameters: {
-          type: "object",
-          properties: {
-            limit: {
-              type: "number",
-              description: "Number of memories to return (1-100). Default 20.",
-              minimum: 1,
-              maximum: 100,
-            },
-            offset: {
-              type: "number",
-              description: "Offset for pagination. Default 0.",
-              minimum: 0,
-            },
-          },
-        },
-        execute: async (_id, args: { limit?: number; offset?: number }) => {
-          try {
-            const memories = await client.list(args.limit ?? 20, args.offset ?? 0);
-            if (memories.length === 0) {
-              return {
-                content: [{ type: "text", text: "No memories found." }],
-                details: { count: 0 },
-              };
-            }
-            const formatted = memories
-              .map((m) => `- [${m.id}] ${m.content.slice(0, 120)}`)
-              .join("\n");
-            return {
-              content: [{ type: "text", text: `${memories.length} memories:\n${formatted}` }],
-              details: { count: memories.length, memories },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to list memories: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_list" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 5. memory_get
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_get")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_get",
-        description: "Retrieve a specific memory by its ID.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "The memory ID (UUID) to retrieve.",
-            },
-          },
-          required: ["id"],
-        },
-        execute: async (_id, args: { id: string }) => {
-          try {
-            const memory = await client.get(args.id);
-            return {
-              content: [{ type: "text", text: JSON.stringify(memory, null, 2) }],
-              details: { memory },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get memory: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_get" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 6. memory_update
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_update")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_update",
-        description: "Update the content of an existing memory. Use to correct or expand stored information.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "The memory ID (UUID) to update.",
-            },
-            content: {
-              type: "string",
-              description: "The new content to replace the existing memory.",
-            },
-            metadata: {
-              type: "object",
-              description: "Updated metadata (replaces existing).",
-              additionalProperties: { type: "string" },
-            },
-          },
-          required: ["id", "content"],
-        },
-        execute: async (_id, args: { id: string; content: string; metadata?: Record<string, string> }) => {
-          try {
-            const memory = await client.update(args.id, args.content, args.metadata);
-            return {
-              content: [{ type: "text", text: `Memory ${args.id.slice(0, 8)}... updated.` }],
-              details: { id: memory.id, updated: true },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to update memory: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_update" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 7. memory_batch_store
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_batch_store")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_batch_store",
-        description: "Store multiple memories at once. More efficient than individual calls for bulk storage.",
-        parameters: {
-          type: "object",
-          properties: {
-            memories: {
-              type: "array",
-              description: "Array of memories to store.",
-              items: {
-                type: "object",
-                properties: {
-                  content: { type: "string", description: "Memory content." },
-                  metadata: {
-                    type: "object",
-                    description: "Optional metadata.",
-                    additionalProperties: { type: "string" },
-                  },
-                },
-                required: ["content"],
-              },
-            },
-          },
-          required: ["memories"],
-        },
-        execute: async (
-          _id,
-          args: { memories: Array<{ content: string; metadata?: Record<string, string> }> },
-        ) => {
-          try {
-            // Auto-tag each memory with sender identity from tool context
-            if (ctx.requesterSenderId) {
-              for (const mem of args.memories) {
-                const metadata = mem.metadata || {};
-                if (!metadata.sender_id) {
-                  metadata.sender_id = ctx.requesterSenderId;
-                }
-                mem.metadata = metadata;
-              }
-            }
-
-            const result = await client.batchStore(args.memories);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Batch stored ${args.memories.length} memories successfully.`,
-                },
-              ],
-              details: { count: args.memories.length, result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Batch store failed: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_batch_store" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 8. memory_context
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_context")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_context",
-        description:
-          "Build a context window from relevant memories, optimized for injecting into agent prompts with token budget awareness." +
-          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "The query to build context around.",
-            },
-            limit: {
-              type: "number",
-              description: "Maximum number of memories to include.",
-            },
-            threshold: {
-              type: "number",
-              description: "Minimum similarity threshold (0-1).",
-            },
-            max_tokens: {
-              type: "number",
-              description: "Maximum token budget for the context.",
-            },
-            project: {
-              type: "string",
-              description: "Project slug to scope the context.",
-            },
-          },
-          required: ["query"],
-        },
-        execute: async (
-          _id,
-          args: { query: string; limit?: number; threshold?: number; max_tokens?: number; project?: string },
-        ) => {
-          try {
-            const project = args.project ?? defaultProject;
-            const result = await client.buildContext(
-              args.query,
-              args.limit,
-              args.threshold,
-              args.max_tokens,
-              project,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Context build failed: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_context" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 9. memory_promote
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_promote")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_promote",
-        description:
-          "Promote a memory by updating its importance score and/or tier. Use to ensure critical memories are retained longer.",
-        parameters: {
-          type: "object",
-          properties: {
-            memory_id: {
-              type: "string",
-              description: "The memory ID to promote.",
-            },
-            importance: {
-              type: "number",
-              description: "New importance score (0-1).",
-              minimum: 0,
-              maximum: 1,
-            },
-            tier: {
-              type: "string",
-              description: "Target tier: hot, warm, or cold.",
-              enum: ["hot", "warm", "cold"],
-            },
-          },
-          required: ["memory_id", "importance"],
-        },
-        execute: async (_id, args: { memory_id: string; importance: number; tier?: string }) => {
-          try {
-            const result = await client.promote(args.memory_id, args.importance, args.tier);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Memory ${args.memory_id.slice(0, 8)}... promoted (importance: ${args.importance}${args.tier ? `, tier: ${args.tier}` : ""}).`,
-                },
-              ],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Promote failed: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_promote" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 10. entity_create
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("entity_create")) {
-    api.registerTool((ctx) => ({
-      
-        name: "entity_create",
-        description:
-          "Create a named entity (person, place, organization, project, concept) for the knowledge graph. Entities help organize and connect memories.",
-        parameters: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "Entity name (1-200 characters).",
-            },
-            type: {
-              type: "string",
-              description: "Entity type classification.",
-              enum: ["person", "place", "organization", "project", "concept", "other"],
-            },
-            metadata: {
-              type: "object",
-              description: "Optional key-value metadata.",
-              additionalProperties: { type: "string" },
-            },
-          },
-          required: ["name", "type"],
-        },
-        execute: async (
-          _id,
-          args: { name: string; type: string; metadata?: Record<string, string> },
-        ) => {
-          try {
-            const result = await client.createEntity(args.name, args.type, args.metadata);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to create entity: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "entity_create" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 11. entity_link
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("entity_link")) {
-    api.registerTool((ctx) => ({
-      
-        name: "entity_link",
-        description: "Link an entity to a memory to establish relationships in the knowledge graph.",
-        parameters: {
-          type: "object",
-          properties: {
-            entity_id: {
-              type: "string",
-              description: "Entity UUID.",
-            },
-            memory_id: {
-              type: "string",
-              description: "Memory UUID.",
-            },
-            relationship: {
-              type: "string",
-              description:
-                'Relationship type (e.g., "mentioned_in", "created_by", "relates_to"). Default "mentioned_in".',
-            },
-          },
-          required: ["entity_id", "memory_id"],
-        },
-        execute: async (
-          _id,
-          args: { entity_id: string; memory_id: string; relationship?: string },
-        ) => {
-          try {
-            const result = await client.linkEntity(
-              args.entity_id,
-              args.memory_id,
-              args.relationship,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to link entity: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "entity_link" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 12. entity_list
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("entity_list")) {
-    api.registerTool((ctx) => ({
-      
-        name: "entity_list",
-        description: "List entities in the knowledge graph.",
-        parameters: {
-          type: "object",
-          properties: {
-            limit: {
-              type: "number",
-              description: "Maximum entities to return. Default 20.",
-              minimum: 1,
-              maximum: 100,
-            },
-            offset: {
-              type: "number",
-              description: "Offset for pagination. Default 0.",
-              minimum: 0,
-            },
-          },
-        },
-        execute: async (_id, args: { limit?: number; offset?: number }) => {
-          try {
-            const result = await client.listEntities(args.limit, args.offset);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to list entities: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "entity_list" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 13. entity_graph
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("entity_graph")) {
-    api.registerTool((ctx) => ({
-      
-        name: "entity_graph",
-        description:
-          "Explore the knowledge graph around an entity. Returns the entity and its neighborhood of connected entities and memories.",
-        parameters: {
-          type: "object",
-          properties: {
-            entity_id: {
-              type: "string",
-              description: "Entity UUID to explore from.",
-            },
-            depth: {
-              type: "number",
-              description: "How many hops to traverse. Default 2.",
-              minimum: 1,
-              maximum: 5,
-            },
-            max_neighbors: {
-              type: "number",
-              description: "Maximum neighbors per node. Default 10.",
-              minimum: 1,
-              maximum: 50,
-            },
-          },
-          required: ["entity_id"],
-        },
-        execute: async (
-          _id,
-          args: { entity_id: string; depth?: number; max_neighbors?: number },
-        ) => {
-          try {
-            const result = await client.entityGraph(
-              args.entity_id,
-              args.depth,
-              args.max_neighbors,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get entity graph: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "entity_graph" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 14. agent_list
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("agent_list")) {
-    api.registerTool((ctx) => ({
-      
-        name: "agent_list",
-        description: "List available agents.",
-        parameters: {
-          type: "object",
-          properties: {
-            limit: {
-              type: "number",
-              description: "Maximum agents to return. Default 20.",
-              minimum: 1,
-              maximum: 100,
-            },
-          },
-        },
-        execute: async (_id, args: { limit?: number }) => {
-          try {
-            const result = await client.listAgents(args.limit);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to list agents: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "agent_list" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 15. agent_create
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("agent_create")) {
-    api.registerTool((ctx) => ({
-      
-        name: "agent_create",
-        description: "Create a new agent. Agents serve as memory namespaces and isolation boundaries.",
-        parameters: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description: "Agent name.",
-            },
-            description: {
-              type: "string",
-              description: "Optional agent description.",
-            },
-          },
-          required: ["name"],
-        },
-        execute: async (_id, args: { name: string; description?: string }) => {
-          try {
-            const result = await client.createAgent(args.name, args.description);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to create agent: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "agent_create" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 16. agent_get
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("agent_get")) {
-    api.registerTool((ctx) => ({
-      
-        name: "agent_get",
-        description: "Get details about a specific agent by ID.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "Agent UUID.",
-            },
-          },
-          required: ["id"],
-        },
-        execute: async (_id, args: { id: string }) => {
-          try {
-            const result = await client.getAgent(args.id);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get agent: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "agent_get" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 17. session_start
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("session_start")) {
-    api.registerTool((ctx) => ({
-      
-        name: "session_start",
-        description:
-          "Start a new work session. Sessions track the lifecycle of a task or conversation for later review. Call this early in your workflow and save the returned session ID for session_end later." +
-          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            title: {
-              type: "string",
-              description: "Session title describing the goal or task.",
-            },
-            project: {
-              type: "string",
-              description: "Project slug to associate this session with.",
-            },
-            metadata: {
-              type: "object",
-              description: "Optional key-value metadata.",
-              additionalProperties: { type: "string" },
-            },
-          },
-        },
-        execute: async (
-          _id,
-          args: { title?: string; project?: string; metadata?: Record<string, string> },
-        ) => {
-          try {
-            const project = args.project ?? defaultProject;
-            const result = await client.startSession(args.title, project, args.metadata);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to start session: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "session_start" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 18. session_end
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("session_end")) {
-    api.registerTool((ctx) => ({
-      
-        name: "session_end",
-        description: "End an active session with a summary of what was accomplished. Always include a meaningful summary — it serves as the historical record of the session.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "Session ID to end.",
-            },
-            summary: {
-              type: "string",
-              description: "Summary of what was accomplished during this session.",
-            },
-          },
-          required: ["id"],
-        },
-        execute: async (_id, args: { id: string; summary?: string }) => {
-          try {
-            const result = await client.endSession(args.id, args.summary);
-            return {
-              content: [{ type: "text", text: `Session ${args.id.slice(0, 8)}... ended.` }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to end session: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "session_end" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 19. session_recall
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("session_recall")) {
-    api.registerTool((ctx) => ({
-      
-        name: "session_recall",
-        description: "Retrieve details of a specific session including its timeline and associated memories.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "Session ID to retrieve.",
-            },
-          },
-          required: ["id"],
-        },
-        execute: async (_id, args: { id: string }) => {
-          try {
-            const result = await client.getSession(args.id);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to recall session: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "session_recall" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 20. session_list
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("session_list")) {
-    api.registerTool((ctx) => ({
-      
-        name: "session_list",
-        description: "List sessions, optionally filtered by project or status." +
-          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            limit: {
-              type: "number",
-              description: "Maximum sessions to return. Default 20.",
-              minimum: 1,
-              maximum: 100,
-            },
-            project: {
-              type: "string",
-              description: "Filter by project slug.",
-            },
-            status: {
-              type: "string",
-              description: "Filter by status (active, ended).",
-              enum: ["active", "ended"],
-            },
-          },
-        },
-        execute: async (
-          _id,
-          args: { limit?: number; project?: string; status?: string },
-        ) => {
-          try {
-            const project = args.project ?? defaultProject;
-            const result = await client.listSessions(args.limit, project, args.status);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to list sessions: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "session_list" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 21. decision_record
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("decision_record")) {
-    api.registerTool((ctx) => ({
-      
-        name: "decision_record",
-        description:
-          "Record an architectural or design decision. Captures the rationale and alternatives considered for future reference. Always check existing decisions with decision_check first to avoid contradictions." +
-          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            title: {
-              type: "string",
-              description: "Short title summarizing the decision.",
-            },
-            rationale: {
-              type: "string",
-              description: "Why this decision was made. Include context and reasoning.",
-            },
-            alternatives: {
-              type: "string",
-              description: "What alternatives were considered and why they were rejected.",
-            },
-            project: {
-              type: "string",
-              description: "Project slug this decision applies to.",
-            },
-            tags: {
-              type: "array",
-              description: "Tags for categorizing the decision.",
-              items: { type: "string" },
-            },
-            status: {
-              type: "string",
-              description: "Decision status.",
-              enum: ["active", "experimental"],
-            },
-            metadata: {
-              type: "object",
-              description: "Optional key-value metadata to attach to the decision.",
-              additionalProperties: { type: "string" },
-            },
-          },
-          required: ["title", "rationale"],
-        },
-        execute: async (
-          _id,
-          args: {
-            title: string;
-            rationale: string;
-            alternatives?: string;
-            project?: string;
-            tags?: string[];
-            status?: string;
-            metadata?: Record<string, string>;
-          },
-        ) => {
-          try {
-            const project = args.project ?? defaultProject;
-
-            // Merge user-provided metadata with sender identity from tool context
-            const metadata: Record<string, string> = { ...(args.metadata ?? {}) };
-            if (ctx.requesterSenderId) {
-              metadata.sender_id = ctx.requesterSenderId;
-            }
-
-            const result = await client.recordDecision(
-              args.title,
-              args.rationale,
-              args.alternatives,
-              project,
-              args.tags,
-              args.status,
-              Object.keys(metadata).length > 0 ? metadata : undefined,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to record decision: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "decision_record" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 22. decision_list
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("decision_list")) {
-    api.registerTool((ctx) => ({
-      
-        name: "decision_list",
-        description: "List recorded decisions, optionally filtered by project, status, or tags." +
-          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            limit: {
-              type: "number",
-              description: "Maximum decisions to return. Default 20.",
-              minimum: 1,
-              maximum: 100,
-            },
-            project: {
-              type: "string",
-              description: "Filter by project slug.",
-            },
-            status: {
-              type: "string",
-              description: "Filter by status.",
-              enum: ["active", "superseded", "reverted", "experimental"],
-            },
-            tags: {
-              type: "string",
-              description: "Comma-separated tags to filter by.",
-            },
-          },
-        },
-        execute: async (
-          _id,
-          args: { limit?: number; project?: string; status?: string; tags?: string },
-        ) => {
-          try {
-            const project = args.project ?? defaultProject;
-            const result = await client.listDecisions(args.limit, project, args.status, args.tags);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to list decisions: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "decision_list" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 23. decision_supersede
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("decision_supersede")) {
-    api.registerTool((ctx) => ({
-      
-        name: "decision_supersede",
-        description:
-          "Supersede an existing decision with a new one. The old decision is marked as superseded and linked to the replacement.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "ID of the decision to supersede.",
-            },
-            title: {
-              type: "string",
-              description: "Title of the new replacement decision.",
-            },
-            rationale: {
-              type: "string",
-              description: "Why the previous decision is being replaced.",
-            },
-            alternatives: {
-              type: "string",
-              description: "Alternatives considered for the new decision.",
-            },
-            tags: {
-              type: "array",
-              description: "Tags for the new decision.",
-              items: { type: "string" },
-            },
-            metadata: {
-              type: "object",
-              description: "Optional key-value metadata to attach to the new decision.",
-              additionalProperties: { type: "string" },
-            },
-          },
-          required: ["id", "title", "rationale"],
-        },
-        execute: async (
-          _id,
-          args: {
-            id: string;
-            title: string;
-            rationale: string;
-            alternatives?: string;
-            tags?: string[];
-            metadata?: Record<string, string>;
-          },
-        ) => {
-          try {
-            const result = await client.supersedeDecision(
-              args.id,
-              args.title,
-              args.rationale,
-              args.alternatives,
-              args.tags,
-              args.metadata,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to supersede decision: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "decision_supersede" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 24. decision_check
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("decision_check")) {
-    api.registerTool((ctx) => ({
-      
-        name: "decision_check",
-        description:
-          "Check if there are existing decisions relevant to a topic. ALWAYS call this before making architectural choices to avoid contradicting past decisions." +
-          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "Natural language description of the topic or decision area.",
-            },
-            project: {
-              type: "string",
-              description: "Project slug to scope the search.",
-            },
-            limit: {
-              type: "number",
-              description: "Maximum results. Default 5.",
-            },
-            threshold: {
-              type: "number",
-              description: "Minimum similarity threshold (0-1). Default 0.3.",
-            },
-            include_superseded: {
-              type: "boolean",
-              description: "Include superseded decisions in results. Default false.",
-            },
-          },
-          required: ["query"],
-        },
-        execute: async (
-          _id,
-          args: {
-            query: string;
-            project?: string;
-            limit?: number;
-            threshold?: number;
-            include_superseded?: boolean;
-          },
-        ) => {
-          try {
-            const project = args.project ?? defaultProject;
-            const result = await client.checkDecisions(
-              args.query,
-              project,
-              args.limit,
-              args.threshold,
-              args.include_superseded,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to check decisions: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "decision_check" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 25. pattern_create
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("pattern_create")) {
-    api.registerTool((ctx) => ({
-      
-        name: "pattern_create",
-        description:
-          "Create a reusable pattern (coding convention, architecture pattern, or best practice) that can be shared across projects. Include example_code for maximum usefulness." +
-          (defaultProject ? ` Source project defaults to '${defaultProject}' if not specified.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            title: {
-              type: "string",
-              description: "Pattern title.",
-            },
-            description: {
-              type: "string",
-              description: "Detailed description of the pattern, when to use it, and why.",
-            },
-            category: {
-              type: "string",
-              description: "Category (e.g., architecture, testing, error-handling, naming).",
-            },
-            example_code: {
-              type: "string",
-              description: "Example code demonstrating the pattern.",
-            },
-            scope: {
-              type: "string",
-              description: "Scope: global (visible to all projects) or project (visible to source project only).",
-              enum: ["global", "project"],
-            },
-            tags: {
-              type: "array",
-              description: "Tags for categorization.",
-              items: { type: "string" },
-            },
-            source_project: {
-              type: "string",
-              description: "Project slug where this pattern originated.",
-            },
-          },
-          required: ["title", "description"],
-        },
-        execute: async (
-          _id,
-          args: {
-            title: string;
-            description: string;
-            category?: string;
-            example_code?: string;
-            scope?: string;
-            tags?: string[];
-            source_project?: string;
-          },
-        ) => {
-          try {
-            const sourceProject = args.source_project ?? defaultProject;
-            const result = await client.createPattern(
-              args.title,
-              args.description,
-              args.category,
-              args.example_code,
-              args.scope,
-              args.tags,
-              sourceProject,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to create pattern: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "pattern_create" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 26. pattern_search
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("pattern_search")) {
-    api.registerTool((ctx) => ({
-      
-        name: "pattern_search",
-        description: "Search for established patterns by natural language query. Call this before writing code to find and follow existing conventions." +
-          (defaultProject ? ` Scoped to project '${defaultProject}' by default.` : ""),
-        parameters: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "Natural language search query.",
-            },
-            category: {
-              type: "string",
-              description: "Filter by category.",
-            },
-            project: {
-              type: "string",
-              description: "Filter by project slug.",
-            },
-            limit: {
-              type: "number",
-              description: "Maximum results. Default 10.",
-            },
-            threshold: {
-              type: "number",
-              description: "Minimum similarity threshold (0-1). Default 0.3.",
-            },
-          },
-          required: ["query"],
-        },
-        execute: async (
-          _id,
-          args: {
-            query: string;
-            category?: string;
-            project?: string;
-            limit?: number;
-            threshold?: number;
-          },
-        ) => {
-          try {
-            const project = args.project ?? defaultProject;
-            const result = await client.searchPatterns(
-              args.query,
-              args.category,
-              project,
-              args.limit,
-              args.threshold,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to search patterns: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "pattern_search" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 27. pattern_adopt
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("pattern_adopt")) {
-    api.registerTool((ctx) => ({
-      
-        name: "pattern_adopt",
-        description: "Adopt an existing pattern for use in a project. Creates a link between the pattern and the project.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "Pattern ID to adopt.",
-            },
-            project: {
-              type: "string",
-              description: "Project slug adopting the pattern.",
-            },
-          },
-          required: ["id", "project"],
-        },
-        execute: async (_id, args: { id: string; project: string }) => {
-          try {
-            const result = await client.adoptPattern(args.id, args.project);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to adopt pattern: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "pattern_adopt" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 28. pattern_suggest
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("pattern_suggest")) {
-    api.registerTool((ctx) => ({
-      
-        name: "pattern_suggest",
-        description:
-          "Get pattern suggestions for a project based on its stack and existing patterns from related projects.",
-        parameters: {
-          type: "object",
-          properties: {
-            project: {
-              type: "string",
-              description: "Project slug to get suggestions for.",
-            },
-            limit: {
-              type: "number",
-              description: "Maximum suggestions. Default 10.",
-            },
-          },
-          required: ["project"],
-        },
-        execute: async (_id, args: { project: string; limit?: number }) => {
-          try {
-            const result = await client.suggestPatterns(args.project, args.limit);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to suggest patterns: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "pattern_suggest" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 29. project_register
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_register")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_register",
-        description: "Register a new project in MemoryRelay. Projects organize memories, decisions, patterns, and sessions.",
-        parameters: {
-          type: "object",
-          properties: {
-            slug: {
-              type: "string",
-              description: "URL-friendly project identifier (e.g., 'my-api', 'frontend-app').",
-            },
-            name: {
-              type: "string",
-              description: "Human-readable project name.",
-            },
-            description: {
-              type: "string",
-              description: "Project description.",
-            },
-            stack: {
-              type: "object",
-              description: "Technology stack details (e.g., {language: 'python', framework: 'fastapi'}).",
-            },
-            repo_url: {
-              type: "string",
-              description: "Repository URL.",
-            },
-          },
-          required: ["slug", "name"],
-        },
-        execute: async (
-          _id,
-          args: {
-            slug: string;
-            name: string;
-            description?: string;
-            stack?: Record<string, unknown>;
-            repo_url?: string;
-          },
-        ) => {
-          try {
-            const result = await client.registerProject(
-              args.slug,
-              args.name,
-              args.description,
-              args.stack,
-              args.repo_url,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to register project: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_register" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 30. project_list
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_list")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_list",
-        description: "List all registered projects.",
-        parameters: {
-          type: "object",
-          properties: {
-            limit: {
-              type: "number",
-              description: "Maximum projects to return. Default 20.",
-              minimum: 1,
-              maximum: 100,
-            },
-          },
-        },
-        execute: async (_id, args: { limit?: number }) => {
-          try {
-            const result = await client.listProjects(args.limit);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to list projects: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_list" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 31. project_info
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_info")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_info",
-        description: "Get detailed information about a specific project.",
-        parameters: {
-          type: "object",
-          properties: {
-            slug: {
-              type: "string",
-              description: "Project slug.",
-            },
-          },
-          required: ["slug"],
-        },
-        execute: async (_id, args: { slug: string }) => {
-          try {
-            const result = await client.getProject(args.slug);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get project: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_info" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 32. project_add_relationship
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_add_relationship")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_add_relationship",
-        description:
-          "Add a relationship between two projects (e.g., depends_on, api_consumer, shares_schema, shares_infra, pattern_source, forked_from).",
-        parameters: {
-          type: "object",
-          properties: {
-            from: {
-              type: "string",
-              description: "Source project slug.",
-            },
-            to: {
-              type: "string",
-              description: "Target project slug.",
-            },
-            type: {
-              type: "string",
-              description: "Relationship type (e.g., depends_on, api_consumer, shares_schema, shares_infra, pattern_source, forked_from).",
-            },
-            metadata: {
-              type: "object",
-              description: "Optional metadata about the relationship.",
-            },
-          },
-          required: ["from", "to", "type"],
-        },
-        execute: async (
-          _id,
-          args: { from: string; to: string; type: string; metadata?: Record<string, unknown> },
-        ) => {
-          try {
-            const result = await client.addProjectRelationship(
-              args.from,
-              args.to,
-              args.type,
-              args.metadata,
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to add relationship: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_add_relationship" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 33. project_dependencies
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_dependencies")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_dependencies",
-        description: "List projects that a given project depends on.",
-        parameters: {
-          type: "object",
-          properties: {
-            project: {
-              type: "string",
-              description: "Project slug.",
-            },
-          },
-          required: ["project"],
-        },
-        execute: async (_id, args: { project: string }) => {
-          try {
-            const result = await client.getProjectDependencies(args.project);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get dependencies: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_dependencies" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 34. project_dependents
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_dependents")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_dependents",
-        description: "List projects that depend on a given project.",
-        parameters: {
-          type: "object",
-          properties: {
-            project: {
-              type: "string",
-              description: "Project slug.",
-            },
-          },
-          required: ["project"],
-        },
-        execute: async (_id, args: { project: string }) => {
-          try {
-            const result = await client.getProjectDependents(args.project);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get dependents: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_dependents" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 35. project_related
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_related")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_related",
-        description: "List all projects related to a given project (any relationship direction).",
-        parameters: {
-          type: "object",
-          properties: {
-            project: {
-              type: "string",
-              description: "Project slug.",
-            },
-          },
-          required: ["project"],
-        },
-        execute: async (_id, args: { project: string }) => {
-          try {
-            const result = await client.getProjectRelated(args.project);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get related projects: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_related" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 36. project_impact
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_impact")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_impact",
-        description:
-          "Analyze the impact of a proposed change on a project and its dependents. Helps understand blast radius before making changes.",
-        parameters: {
-          type: "object",
-          properties: {
-            project: {
-              type: "string",
-              description: "Project slug to analyze.",
-            },
-            change_description: {
-              type: "string",
-              description: "Description of the proposed change.",
-            },
-          },
-          required: ["project", "change_description"],
-        },
-        execute: async (_id, args: { project: string; change_description: string }) => {
-          try {
-            const result = await client.projectImpact(args.project, args.change_description);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to analyze impact: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_impact" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 37. project_shared_patterns
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_shared_patterns")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_shared_patterns",
-        description: "Find patterns shared between two projects. Useful for maintaining consistency across related projects.",
-        parameters: {
-          type: "object",
-          properties: {
-            project_a: {
-              type: "string",
-              description: "First project slug.",
-            },
-            project_b: {
-              type: "string",
-              description: "Second project slug.",
-            },
-          },
-          required: ["project_a", "project_b"],
-        },
-        execute: async (_id, args: { project_a: string; project_b: string }) => {
-          try {
-            const result = await client.getSharedPatterns(args.project_a, args.project_b);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get shared patterns: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_shared_patterns" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 38. project_context
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("project_context")) {
-    api.registerTool((ctx) => ({
-      
-        name: "project_context",
-        description:
-          "Load full project context including hot-tier memories, active decisions, adopted patterns, and recent sessions. Call this FIRST when starting work on a project to understand existing context before making changes.",
-        parameters: {
-          type: "object",
-          properties: {
-            project: {
-              type: "string",
-              description: "Project slug.",
-            },
-          },
-          required: ["project"],
-        },
-        execute: async (_id, args: { project: string }) => {
-          try {
-            const result = await client.getProjectContext(args.project);
-            return {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              details: { result },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to load project context: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "project_context" },
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // 39. memory_health
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_health")) {
-    api.registerTool((ctx) => ({
-      
-        name: "memory_health",
-        description: "Check the MemoryRelay API connectivity and health status.",
-        parameters: {
-          type: "object",
-          properties: {},
-        },
-        execute: async () => {
-          try {
-            const health = await client.health();
-            return {
-              content: [{ type: "text", text: JSON.stringify(health, null, 2) }],
-              details: { health },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Health check failed: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_health" },
-    );
-  }
-
-  // 40. memory_store_async
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_store_async")) {
-    api.registerTool((_ctx) => ({
-      name: "memory_store_async",
-      description:
-        "Store a memory asynchronously using V2 API. Returns immediately (<50ms) with a job ID. Background workers generate the embedding. Use memory_status to poll for completion. Prefer this over memory_store for high-throughput or latency-sensitive applications." +
-        (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
-      parameters: {
-        type: "object",
-        properties: {
-          content: {
-            type: "string",
-            description: "The memory content to store (1–50,000 characters).",
-          },
-          metadata: {
-            type: "object",
-            description: "Optional key-value metadata to attach to the memory.",
-            additionalProperties: { type: "string" },
-          },
-          project: {
-            type: "string",
-            description: "Project slug to associate with this memory (max 100 characters).",
-            maxLength: 100,
-          },
-          importance: {
-            type: "number",
-            description: "Importance score (0-1). Higher values are retained longer.",
-            minimum: 0,
-            maximum: 1,
-          },
-          tier: {
-            type: "string",
-            description: "Memory tier: hot, warm, or cold.",
-            enum: ["hot", "warm", "cold"],
-          },
-          webhook_url: {
-            type: "string",
-            description: "Optional webhook URL to notify when async storage completes.",
-          },
-        },
-        required: ["content"],
-      },
-      execute: async (
-        _id,
-        args: {
-          content: string;
-          metadata?: Record<string, string>;
-          project?: string;
-          importance?: number;
-          tier?: string;
-          webhook_url?: string;
-        },
-      ) => {
-        try {
-          const { content, metadata, importance, tier, webhook_url } = args;
-          let project = args.project;
-          if (!project && defaultProject) project = defaultProject;
-          const result = await client.storeAsync(content, metadata, project, importance, tier, webhook_url);
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Memory queued for async storage (id: ${result.id}, job_id: ${result.job_id}). Use memory_status to check completion.`,
-              },
-            ],
-            details: result,
-          };
-        } catch (err) {
-          return {
-            content: [{ type: "text", text: `Failed to queue memory: ${String(err)}` }],
-            details: { error: String(err) },
-          };
-        }
-      },
-    }), { name: "memory_store_async" });
-  }
-
-  // 41. memory_status
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_status")) {
-    api.registerTool((_ctx) => ({
-      name: "memory_status",
-      description:
-        "Check the processing status of a memory created via memory_store_async. Status values: pending (waiting for worker), processing (generating embedding), ready (searchable), failed (error occurred).",
-      parameters: {
-        type: "object",
-        properties: {
-          memory_id: {
-            type: "string",
-            description: "The memory ID returned by memory_store_async.",
-          },
-        },
-        required: ["memory_id"],
-      },
-      execute: async (
-        _id,
-        args: { memory_id: string },
-      ) => {
-        try {
-          const status = await client.getMemoryStatus(args.memory_id);
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(status, null, 2),
-              },
-            ],
-            details: status,
-          };
-        } catch (err) {
-          return {
-            content: [{ type: "text", text: `Failed to get memory status: ${String(err)}` }],
-            details: { error: String(err) },
-          };
-        }
-      },
-    }), { name: "memory_status" });
-  }
-
-  // 42. context_build
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("context_build")) {
-    api.registerTool((_ctx) => ({
-      name: "context_build",
-      description:
-        "Build a ranked context bundle from memories with optional AI summarization. Searches for relevant memories, ranks them by composite score, and optionally generates an AI summary. Useful for building token-efficient context windows.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "The query to build context for.",
-          },
-          max_memories: {
-            type: "number",
-            description: "Maximum number of memories to include (1-100).",
-            minimum: 1,
-            maximum: 100,
-          },
-          max_tokens: {
-            type: "number",
-            description: "Maximum tokens for the context bundle (100-128000).",
-            minimum: 100,
-            maximum: 128000,
-          },
-          ai_enhanced: {
-            type: "boolean",
-            description: "If true, generate an AI summary of the retrieved memories.",
-          },
-          search_mode: {
-            type: "string",
-            description: "Search strategy: semantic, hybrid, or keyword.",
-            enum: ["semantic", "hybrid", "keyword"],
-          },
-          exclude_memory_ids: {
-            type: "array",
-            description: "Memory IDs to exclude from results.",
-            items: { type: "string" },
-          },
-          llm_api_url: {
-            type: "string",
-            description: "Optional custom LLM API URL for AI summarization.",
-          },
-          llm_model: {
-            type: "string",
-            description: "Optional LLM model name for AI summarization.",
-          },
-        },
-        required: ["query"],
-      },
-      execute: async (
-        _id,
-        args: {
-          query: string;
-          max_memories?: number;
-          max_tokens?: number;
-          ai_enhanced?: boolean;
-          search_mode?: "semantic" | "hybrid" | "keyword";
-          exclude_memory_ids?: string[];
-          llm_api_url?: string;
-          llm_model?: string;
-        },
-      ) => {
-        try {
-          const context = await client.buildContextV2(args.query, {
-            maxMemories: args.max_memories,
-            maxTokens: args.max_tokens,
-            aiEnhanced: args.ai_enhanced,
-            searchMode: args.search_mode,
-            excludeMemoryIds: args.exclude_memory_ids,
-            llmApiUrl: args.llm_api_url,
-            llmModel: args.llm_model,
-          });
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(context, null, 2),
-              },
-            ],
-            details: context,
-          };
-        } catch (err) {
-          return {
-            content: [{ type: "text", text: `Failed to build context: ${String(err)}` }],
-            details: { error: String(err) },
-          };
-        }
-      },
-    }), { name: "context_build" });
-  }
+  registerBeforeAgentStart(api, pluginConfig, isToolEnabled, defaultProject);
+  registerBeforePromptBuild(api, pluginConfig, client);
+  registerAgentEnd(api, pluginConfig, client);
+  registerSessionLifecycle(api, pluginConfig, client, agentId, defaultProject, sessionResolver);
+  registerSubagentHooks(api, pluginConfig, client, agentId, autoCaptureConfig, isBlocklisted);
+  registerCompactionHooks(api, client, agentId, blocklist, extractRescueContent);
+  registerActivityHooks(api, sessionResolver, debugLogger);
+  registerPrivacyHooks(api, blocklist, isBlocklisted, redactSensitive);
 
   // ========================================================================
-  // CLI Commands
+  // Register Tools (9 modules, 42 tools total)
   // ========================================================================
 
-  api.registerCli(
-    ({ program }) => {
-      const mem = program.command("memoryrelay").description("MemoryRelay memory plugin commands");
-
-      mem
-        .command("status")
-        .description("Check MemoryRelay connection status")
-        .action(async () => {
-          try {
-            const health = await client.health();
-            const stats = await client.stats();
-            console.log(`Status: ${health.status}`);
-            console.log(`Agent ID: ${agentId}`);
-            console.log(`API: ${apiUrl}`);
-            console.log(`Total Memories: ${stats.total_memories}`);
-            if (stats.last_updated) {
-              console.log(`Last Updated: ${new Date(stats.last_updated).toLocaleString()}`);
-            }
-          } catch (err) {
-            console.error(`Connection failed: ${String(err)}`);
-          }
-        });
-
-      mem
-        .command("stats")
-        .description("Show agent statistics")
-        .action(async () => {
-          try {
-            const stats = await client.stats();
-            console.log(`Total Memories: ${stats.total_memories}`);
-            if (stats.last_updated) {
-              console.log(`Last Updated: ${new Date(stats.last_updated).toLocaleString()}`);
-            }
-          } catch (err) {
-            console.error(`Failed to fetch stats: ${String(err)}`);
-          }
-        });
-
-      mem
-        .command("list")
-        .description("List recent memories")
-        .option("--limit <n>", "Max results", "10")
-        .action(async (opts) => {
-          try {
-            const memories = await client.list(parseInt(opts.limit));
-            for (const m of memories) {
-              console.log(`[${m.id.slice(0, 8)}] ${m.content.slice(0, 80)}...`);
-            }
-            console.log(`\nTotal: ${memories.length} memories`);
-          } catch (err) {
-            console.error(`Failed to list memories: ${String(err)}`);
-          }
-        });
-
-      mem
-        .command("search")
-        .description("Search memories")
-        .argument("<query>", "Search query")
-        .option("--limit <n>", "Max results", "5")
-        .action(async (query, opts) => {
-          try {
-            const results = await client.search(query, parseInt(opts.limit));
-            for (const r of results) {
-              console.log(`[${r.score.toFixed(2)}] ${r.memory.content.slice(0, 80)}...`);
-            }
-          } catch (err) {
-            console.error(`Search failed: ${String(err)}`);
-          }
-        });
-
-      mem
-        .command("delete")
-        .description("Delete a memory by ID")
-        .argument("<id>", "Memory ID")
-        .action(async (id) => {
-          try {
-            await client.delete(id);
-            console.log(`Memory ${id.slice(0, 8)}... deleted.`);
-          } catch (err) {
-            console.error(`Delete failed: ${String(err)}`);
-          }
-        });
-
-      mem
-        .command("export")
-        .description("Export all memories to JSON file")
-        .option("--output <path>", "Output file path", "memories-export.json")
-        .action(async (opts) => {
-          try {
-            console.log("Exporting memories...");
-            const memories = await client.export();
-            const fs = await import("fs/promises");
-            await fs.writeFile(opts.output, JSON.stringify(memories, null, 2));
-            console.log(`Exported ${memories.length} memories to ${opts.output}`);
-          } catch (err) {
-            console.error(`Export failed: ${String(err)}`);
-          }
-        });
-    },
-    { commands: ["memoryrelay"] },
-  );
+  registerMemoryTools(api, pluginConfig, client, sessionResolver, isToolEnabled);
+  registerSessionTools(api, pluginConfig, client, sessionResolver, isToolEnabled);
+  registerEntityTools(api, pluginConfig, client, isToolEnabled);
+  registerDecisionTools(api, pluginConfig, client, isToolEnabled);
+  registerPatternTools(api, pluginConfig, client, isToolEnabled);
+  registerProjectTools(api, pluginConfig, client, isToolEnabled);
+  registerAgentTools(api, pluginConfig, client, isToolEnabled);
+  registerV2Tools(api, pluginConfig, client, isToolEnabled);
+  registerHealthTools(api, pluginConfig, client, isToolEnabled);
 
   // ========================================================================
-  // Lifecycle Hooks
+  // Startup log
   // ========================================================================
-
-  // Workflow instructions + auto-recall: always inject workflow guidance,
-  // optionally recall relevant memories if autoRecall is enabled
-  api.on("before_agent_start", async (event) => {
-    if (!event.prompt || event.prompt.length < 10) {
-      return;
-    }
-
-    // Check if current channel is excluded
-    if (cfg?.excludeChannels && event.channel) {
-      const channelId = String(event.channel);
-      if (cfg.excludeChannels.some((excluded) => channelId.includes(excluded))) {
-        api.logger.debug?.(
-          `memory-memoryrelay: skipping for excluded channel: ${channelId}`,
-        );
-        return;
-      }
-    }
-
-    // Build workflow instructions dynamically based on enabled tools
-    const lines: string[] = [
-      "You have MemoryRelay tools available for persistent memory across sessions.",
-    ];
-
-    if (defaultProject) {
-      lines.push(`Default project: \`${defaultProject}\` (auto-applied when you omit the project parameter).`);
-    }
-
-    lines.push("", "## Recommended Workflow", "");
-
-    // Starting work section — only include steps for enabled tools
-    const startSteps: string[] = [];
-    if (isToolEnabled("project_context")) {
-      startSteps.push(`**Load context**: Call \`project_context(${defaultProject ? `"${defaultProject}"` : "project"})\` to load hot-tier memories, active decisions, and adopted patterns`);
-    }
-    if (isToolEnabled("session_start")) {
-      startSteps.push(`**Start session**: Call \`session_start(title${defaultProject ? "" : ", project"})\` to begin tracking your work`);
-    }
-    if (isToolEnabled("decision_check")) {
-      startSteps.push(`**Check decisions**: Call \`decision_check(query${defaultProject ? "" : ", project"})\` before making architectural choices`);
-    }
-    if (isToolEnabled("pattern_search")) {
-      startSteps.push("**Find patterns**: Call `pattern_search(query)` to find established conventions before writing code");
-    }
-
-    if (startSteps.length > 0) {
-      lines.push("When starting work on a project:");
-      startSteps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
-      lines.push("");
-    }
-
-    // While working section
-    const workSteps: string[] = [];
-    if (isToolEnabled("memory_store")) {
-      workSteps.push("**Store findings**: Call `memory_store(content, metadata)` for important information worth remembering");
-    }
-    if (isToolEnabled("decision_record")) {
-      workSteps.push(`**Record decisions**: Call \`decision_record(title, rationale${defaultProject ? "" : ", project"})\` when making significant architectural choices`);
-    }
-    if (isToolEnabled("pattern_create")) {
-      workSteps.push("**Create patterns**: Call `pattern_create(title, description)` when establishing reusable conventions");
-    }
-
-    if (workSteps.length > 0) {
-      lines.push("While working:");
-      const offset = startSteps.length;
-      workSteps.forEach((step, i) => lines.push(`${offset + i + 1}. ${step}`));
-      lines.push("");
-    }
-
-    // When done section
-    if (isToolEnabled("session_end")) {
-      const offset = startSteps.length + workSteps.length;
-      lines.push("When done:");
-      lines.push(`${offset + 1}. **End session**: Call \`session_end(session_id, summary)\` with a summary of what was accomplished`);
-      lines.push("");
-    }
-
-    // First-time setup — only if project tools are enabled
-    if (isToolEnabled("project_register")) {
-      lines.push("## First-Time Setup", "");
-      lines.push("If the project is not yet registered, start with:");
-      lines.push("1. `project_register(slug, name, description, stack)` to register the project");
-      lines.push("2. Then follow the workflow above");
-      lines.push("");
-      if (isToolEnabled("project_list")) {
-        lines.push("Use `project_list()` to see existing projects before registering a new one.");
-      }
-    }
-
-    // Memory-only fallback — if no session/decision/project tools are enabled
-    if (startSteps.length === 0 && workSteps.length === 0) {
-      lines.push("Use `memory_store(content)` to save important information and `memory_recall(query)` to find relevant memories.");
-    }
-
-    const workflowInstructions = lines.join("\n");
-
-    const prependContext = `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`;
-
-    return { prependContext };
-  });
-
-  // Auto-recall: search and inject relevant memories before every LLM turn
-  api.on("before_prompt_build", async (event) => {
-    if (!cfg?.autoRecall) return;
-
-    if (!event.prompt || event.prompt.length < 10) return;
-
-    // Check if current channel is excluded
-    if (cfg?.excludeChannels && event.channel) {
-      const channelId = String(event.channel);
-      if (cfg.excludeChannels.some((excluded: string) => channelId.includes(excluded))) {
-        api.logger.debug?.(
-          `memory-memoryrelay: skipping recall for excluded channel: ${channelId}`,
-        );
-        return;
-      }
-    }
-
-    try {
-      const results = await client.search(
-        event.prompt,
-        cfg.recallLimit || 5,
-        cfg.recallThreshold || 0.3,
-      );
-
-      if (results.length > 0) {
-        const memoryContext = results.map((r: any) => `- ${r.memory.content}`).join("\n");
-
-        api.logger.info?.(
-          `memory-memoryrelay: injecting ${results.length} memories into context`,
-        );
-
-        return {
-          prependContext: `<relevant-memories>\nThe following memories from MemoryRelay may be relevant:\n${memoryContext}\n</relevant-memories>`,
-        };
-      }
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: recall failed: ${String(err)}`);
-    }
-  });
-
-  // Auto-capture: analyze and store important information after agent ends
-  const autoCaptureConfig = normalizeAutoCaptureConfig(cfg?.autoCapture);
-  
-  if (autoCaptureConfig.enabled) {
-    api.on("agent_end", async (event) => {
-      if (!event.success || !event.messages || event.messages.length === 0) {
-        return;
-      }
-
-      try {
-        const texts: string[] = [];
-        for (const msg of event.messages) {
-          if (!msg || typeof msg !== "object") continue;
-          const msgObj = msg as Record<string, unknown>;
-          const role = msgObj.role;
-          if (role !== "user" && role !== "assistant") continue;
-
-          const content = msgObj.content;
-          if (typeof content === "string") {
-            texts.push(content);
-          } else if (Array.isArray(content)) {
-            for (const block of content) {
-              if (
-                block &&
-                typeof block === "object" &&
-                "type" in block &&
-                (block as Record<string, unknown>).type === "text" &&
-                "text" in block
-              ) {
-                texts.push((block as Record<string, unknown>).text as string);
-              }
-            }
-          }
-        }
-
-        const toCapture = texts.filter((text) => {
-          if (!text || !shouldCapture(text)) return false;
-          // Check blocklist
-          if (isBlocklisted(text, autoCaptureConfig.blocklist || [])) return false;
-          return true;
-        });
-        
-        if (toCapture.length === 0) return;
-
-        let stored = 0;
-        for (const text of toCapture.slice(0, 3)) {
-          // Check for duplicates via search
-          const existing = await client.search(text, 1, 0.95);
-          if (existing.length > 0) continue;
-
-          await client.store(text, { source: "auto-capture" });
-          stored++;
-        }
-
-        if (stored > 0) {
-          api.logger.info?.(`memory-memoryrelay: auto-captured ${stored} memories`);
-        }
-      } catch (err) {
-        api.logger.warn?.(`memory-memoryrelay: capture failed: ${String(err)}`);
-      }
-    });
-  }
-
-  // Session sync: auto-create MemoryRelay session when OpenClaw session starts
-  api.on("session_start", async (event, _ctx) => {
-    try {
-      const externalId = event.sessionKey || event.sessionId;
-      if (!externalId) return;
-
-      const response = await client.getOrCreateSession(
-        externalId,
-        agentId,
-        `OpenClaw session ${externalId}`,
-        defaultProject || undefined,
-        { source: "openclaw-plugin", agent: agentId, trigger: "session_start_hook" },
-      );
-
-      sessionCache.set(externalId, {
-        sessionId: response.id,
-        lastActivityAt: Date.now(),
-      });
-
-      api.logger.debug?.(`memory-memoryrelay: auto-created session ${response.id} for OpenClaw session ${externalId}`);
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: session_start hook failed: ${String(err)}`);
-    }
-  });
-
-  // Session sync: auto-end MemoryRelay session when OpenClaw session ends
-  api.on("session_end", async (event, _ctx) => {
-    try {
-      const externalId = event.sessionKey || event.sessionId;
-      if (!externalId) return;
-
-      const entry = sessionCache.get(externalId);
-      if (!entry) return;
-
-      await client.endSession(entry.sessionId, `Session ended after ${event.messageCount} messages`);
-      sessionCache.delete(externalId);
-
-      api.logger.debug?.(`memory-memoryrelay: auto-ended session ${entry.sessionId}`);
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: session_end hook failed: ${String(err)}`);
-    }
-  });
-
-  // ==========================================================================
-  // Tool Observation Hooks
-  // ==========================================================================
-
-  // Tool observation: no-op, registered for future extensibility
-  api.on("before_tool_call", (_event, _ctx) => {
-    // Reserved for future: tool blocking, param injection, audit
-  });
-
-  // Tool observation: update session activity + log metrics
-  api.on("after_tool_call", (event, _ctx) => {
-    // Update activity timestamp on all active sessions
-    for (const entry of sessionCache.values()) {
-      entry.lastActivityAt = Date.now();
-    }
-
-    // Log to debug logger if enabled
-    if (debugLogger) {
-      debugLogger.log({
-        timestamp: new Date().toISOString(),
-        tool: event.toolName,
-        method: "tool_call",
-        path: "",
-        duration: event.durationMs || 0,
-        status: event.error ? "error" : "success",
-        error: event.error,
-      });
-    }
-  });
-
-  // Compaction rescue: save key context before it's lost
-  api.on("before_compaction", async (event, _ctx) => {
-    if (!event.messages || event.messages.length === 0) return;
-    try {
-      const rescued = extractRescueContent(event.messages, autoCaptureConfig.blocklist || []);
-      for (const content of rescued) {
-        await client.store(content, {
-          category: "compaction-rescue",
-          source: "auto-compaction",
-          agent: agentId,
-        });
-      }
-      if (rescued.length > 0) {
-        api.logger.info?.(`memory-memoryrelay: rescued ${rescued.length} memories before compaction`);
-      }
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: compaction rescue failed: ${String(err)}`);
-    }
-  });
-
-  // Session reset rescue: save key context before session is cleared
-  api.on("before_reset", async (event, _ctx) => {
-    if (!event.messages || event.messages.length === 0) return;
-    try {
-      const rescued = extractRescueContent(event.messages, autoCaptureConfig.blocklist || []);
-      for (const content of rescued) {
-        await client.store(content, {
-          category: "session-reset-rescue",
-          source: "auto-reset",
-          agent: agentId,
-        });
-      }
-      if (rescued.length > 0) {
-        api.logger.info?.(`memory-memoryrelay: rescued ${rescued.length} memories before reset`);
-      }
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: reset rescue failed: ${String(err)}`);
-    }
-  });
-
-  // Message processing hooks: activity tracking and privacy redaction
-  api.on("message_received", (_event, _ctx) => {
-    // Update activity timestamps on active sessions
-    for (const entry of sessionCache.values()) {
-      entry.lastActivityAt = Date.now();
-    }
-  });
-
-  api.on("message_sending", (_event, _ctx) => {
-    // No-op: registered for future extensibility
-  });
-
-  api.on("before_message_write", (event, _ctx) => {
-    const blocklist = autoCaptureConfig.blocklist || [];
-    if (blocklist.length === 0) return;
-
-    const msg = event.message;
-    if (!msg || typeof msg !== "object") return;
-
-    const m = msg as Record<string, unknown>;
-    if (typeof m.content === "string" && isBlocklisted(m.content, blocklist)) {
-      return {
-        message: {
-          ...msg,
-          content: redactSensitive(m.content as string, blocklist),
-        } as typeof msg,
-      };
-    }
-  });
-
-  // Subagent lifecycle hooks: track multi-agent collaboration
-  api.on("subagent_spawned", async (event, _ctx) => {
-    try {
-      api.logger.debug?.(
-        `memory-memoryrelay: subagent spawned: ${event.agentId} (session: ${event.childSessionKey}, label: ${event.label || "none"})`
-      );
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: subagent_spawned hook failed: ${String(err)}`);
-    }
-  });
-
-  api.on("subagent_ended", async (event, _ctx) => {
-    try {
-      const outcome = event.outcome || "unknown";
-      const summary = `Subagent ${event.targetSessionKey} ended: ${event.reason} (outcome: ${outcome})`;
-
-      // Only store subagent completions if autoCapture is enabled and content passes filters (#44)
-      if (autoCaptureConfig.enabled) {
-        if (isBlocklisted(summary, autoCaptureConfig.blocklist || [])) {
-          api.logger.debug?.(`memory-memoryrelay: subagent completion blocklisted, skipping storage`);
-          return;
-        }
-
-        // Skip routine completion events — only store failures or unusual outcomes
-        if (outcome === "ok" || outcome === "success") {
-          api.logger.debug?.(`memory-memoryrelay: skipping routine subagent completion: ${summary}`);
-          return;
-        }
-
-        await client.store(summary, {
-          category: "subagent-activity",
-          source: "subagent_ended_hook",
-          agent: agentId,
-          outcome,
-        });
-
-        api.logger.debug?.(`memory-memoryrelay: stored subagent completion: ${summary}`);
-      } else {
-        api.logger.debug?.(`memory-memoryrelay: autoCapture disabled, skipping subagent completion storage`);
-      }
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: subagent_ended hook failed: ${String(err)}`);
-    }
-  });
-
-  // Tool result redaction: apply privacy blocklist before persistence
-  api.on("tool_result_persist", (event, _ctx) => {
-    const blocklist = autoCaptureConfig.blocklist || [];
-    if (blocklist.length === 0) return;
-
-    const msg = event.message;
-    if (!msg || typeof msg !== "object") return;
-
-    const m = msg as Record<string, unknown>;
-    if (typeof m.content === "string" && isBlocklisted(m.content, blocklist)) {
-      return {
-        message: {
-          ...msg,
-          content: redactSensitive(m.content as string, blocklist),
-        } as typeof msg,
-      };
-    }
-  });
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.15.8 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${cfg?.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : 'off'}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.16.0 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
-  // First-Run Onboarding (Phase 1 - Issue #9)
+  // First-Run Onboarding
   // ========================================================================
 
-  // Check if this is the first run and auto-onboard if needed
   try {
     const onboardingCheck = await checkFirstRun(async () => {
       const memories = await client.list(1);
@@ -4564,35 +418,103 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     });
 
     if (onboardingCheck.shouldOnboard) {
-      // Auto-onboard with simple setup
       await runSimpleOnboarding(
         async (content, metadata) => {
           const memory = await client.store(content, metadata || {});
           return { id: memory.id };
         },
         "Welcome to MemoryRelay! This is your first memory. Use memory_store to add more.",
-        autoCaptureConfig.enabled
+        autoCaptureConfig.enabled,
       );
 
       const successMsg = generateSuccessMessage(
         "Welcome to MemoryRelay! This is your first memory.",
-        autoCaptureConfig.enabled
+        autoCaptureConfig.enabled,
       );
 
       api.logger.info?.(`\n${successMsg}`);
     }
   } catch (err) {
-    // Don't fail plugin load if onboarding fails
     api.logger.warn?.(`memory-memoryrelay: onboarding check failed: ${String(err)}`);
   }
 
   // ========================================================================
-  // CLI Helper Tools (v0.8.0)
+  // Gateway Methods (memory.status, memoryrelay.*)
   // ========================================================================
 
-  // Register CLI-accessible tools for debugging and diagnostics
-  
-  // memoryrelay:logs - Get debug logs
+  api.registerGatewayMethod?.("memory.status", async ({ respond }) => {
+    try {
+      const startTime = Date.now();
+      const health = await client.health();
+      const responseTime = Date.now() - startTime;
+
+      const healthStatus = String(health.status).toLowerCase();
+      const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
+
+      const connectionStatus = {
+        status: isConnected ? "connected" as const : "disconnected" as const,
+        endpoint: apiUrl,
+        lastCheck: new Date().toISOString(),
+        responseTime,
+      };
+
+      let memoryCount = 0;
+      try {
+        const stats = await client.stats();
+        memoryCount = stats.total_memories;
+      } catch (_) {
+        // stats endpoint may be unavailable
+      }
+
+      const memoryStats = { total_memories: memoryCount };
+
+      const reportConfig = {
+        agentId: agentId,
+        autoRecall: pluginConfig.autoRecall ?? true,
+        autoCapture: autoCaptureConfig,
+        recallLimit: pluginConfig.recallLimit ?? 5,
+        recallThreshold: pluginConfig.recallThreshold ?? 0.3,
+        excludeChannels: pluginConfig.excludeChannels ?? [],
+        defaultProject,
+      };
+
+      if (statusReporter) {
+        const report = statusReporter.buildReport(connectionStatus, reportConfig, memoryStats, TOOL_GROUPS);
+        const formatted = StatusReporter.formatReport(report);
+        api.logger.info(formatted);
+        respond(true, {
+          available: true,
+          connected: isConnected,
+          endpoint: apiUrl,
+          memoryCount,
+          agentId,
+          debug: debugEnabled,
+          verbose: verboseEnabled,
+          report,
+          vector: { available: true, enabled: true },
+        });
+      } else {
+        respond(true, {
+          available: true,
+          connected: isConnected,
+          endpoint: apiUrl,
+          memoryCount,
+          agentId,
+          vector: { available: true, enabled: true },
+        });
+      }
+    } catch (err) {
+      respond(true, {
+        available: false,
+        connected: false,
+        error: String(err),
+        endpoint: apiUrl,
+        agentId,
+        vector: { available: false, enabled: true },
+      });
+    }
+  });
+
   if (debugLogger) {
     api.registerGatewayMethod?.("memoryrelay.logs", async ({ respond, args }) => {
       try {
@@ -4600,7 +522,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         const toolName = args?.tool;
         const errorsOnly = args?.errorsOnly || false;
 
-        let logs: LogEntry[];
+        let logs;
         if (toolName) {
           logs = debugLogger.getToolLogs(toolName, limit);
         } else if (errorsOnly) {
@@ -4609,21 +531,19 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           logs = debugLogger.getRecentLogs(limit);
         }
 
-        const formatted = logs.map((l) =>
-          `[${new Date(l.timestamp).toISOString()}] ${l.status.toUpperCase()} ${l.tool ?? "-"}: ${l.method} ${l.path} (${l.duration}ms)${l.error ? ` - ${l.error}` : ""}`
-        ).join("\n");
-        respond(true, {
-          logs,
-          formatted,
-          count: logs.length,
-        });
+        const formatted = logs
+          .map(
+            (l) =>
+              `[${new Date(l.timestamp).toISOString()}] ${l.status.toUpperCase()} ${l.tool ?? "-"}: ${l.method} ${l.path} (${l.duration}ms)${l.error ? ` - ${l.error}` : ""}`,
+          )
+          .join("\n");
+        respond(true, { logs, formatted, count: logs.length });
       } catch (err) {
         respond(false, { error: String(err) });
       }
     });
   }
 
-  // memoryrelay:health - Comprehensive health check
   api.registerGatewayMethod?.("memoryrelay.health", async ({ respond }) => {
     try {
       const startTime = Date.now();
@@ -4631,126 +551,72 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       const healthDuration = Date.now() - startTime;
 
       const results: any = {
-        api: {
-          status: health.status,
-          endpoint: apiUrl,
-          responseTime: healthDuration,
-          reachable: true,
-        },
-        authentication: {
-          status: "valid",
-          apiKey: apiKey.substring(0, 16) + "...",
-        },
+        api: { status: health.status, endpoint: apiUrl, responseTime: healthDuration, reachable: true },
+        authentication: { status: "valid", apiKey: apiKey.substring(0, 16) + "..." },
         tools: {},
       };
 
-      // Test critical tools
       const toolTests = [
-        { name: "memory_store", test: async () => {
-          const testMem = await client.store("Plugin health check test", { test: "true" });
-          await client.delete(testMem.id);
-          return { success: true };
-        }},
-        { name: "memory_recall", test: async () => {
-          await client.search("test", 1, 0.5);
-          return { success: true };
-        }},
-        { name: "memory_list", test: async () => {
-          await client.list(1);
-          return { success: true };
-        }},
+        { name: "memory_store", test: async () => { const m = await client.store("Plugin health check test", { test: "true" }); await client.delete(m.id); return { success: true }; } },
+        { name: "memory_recall", test: async () => { await client.search("test", 1, 0.5); return { success: true }; } },
+        { name: "memory_list", test: async () => { await client.list(1); return { success: true }; } },
       ];
 
       for (const { name, test } of toolTests) {
         const testStart = Date.now();
         try {
           await test();
-          results.tools[name] = {
-            status: "working",
-            duration: Date.now() - testStart,
-          };
+          results.tools[name] = { status: "working", duration: Date.now() - testStart };
         } catch (err) {
-          results.tools[name] = {
-            status: "error",
-            error: String(err),
-            duration: Date.now() - testStart,
-          };
+          results.tools[name] = { status: "error", error: String(err), duration: Date.now() - testStart };
         }
       }
 
-      // Overall status
-      const allToolsWorking = Object.values(results.tools).every(
-        (t: any) => t.status === "working"
-      );
+      const allToolsWorking = Object.values(results.tools).every((t: any) => t.status === "working");
       results.overall = allToolsWorking ? "healthy" : "degraded";
-
       respond(true, results);
     } catch (err) {
-      respond(false, {
-        overall: "unhealthy",
-        error: String(err),
-      });
+      respond(false, { overall: "unhealthy", error: String(err) });
     }
   });
 
-  // memoryrelay:metrics - Performance metrics
   if (debugLogger) {
     api.registerGatewayMethod?.("memoryrelay.metrics", async ({ respond }) => {
       try {
         const stats = debugLogger.getStats();
         const allLogs = debugLogger.getAllLogs();
 
-        // Calculate per-tool metrics
         const toolMetrics: Record<string, any> = {};
         for (const log of allLogs) {
           if (!toolMetrics[log.tool]) {
-            toolMetrics[log.tool] = {
-              calls: 0,
-              successes: 0,
-              failures: 0,
-              totalDuration: 0,
-              durations: [],
-            };
+            toolMetrics[log.tool] = { calls: 0, successes: 0, failures: 0, totalDuration: 0, durations: [] as number[] };
           }
           const metric = toolMetrics[log.tool];
           metric.calls++;
-          if (log.status === "success") {
-            metric.successes++;
-          } else {
-            metric.failures++;
-          }
+          if (log.status === "success") metric.successes++;
+          else metric.failures++;
           metric.totalDuration += log.duration;
           metric.durations.push(log.duration);
         }
 
-        // Calculate averages and percentiles
         for (const tool in toolMetrics) {
           const metric = toolMetrics[tool];
           metric.avgDuration = Math.round(metric.totalDuration / metric.calls);
           metric.successRate = Math.round((metric.successes / metric.calls) * 100);
-          
-          // Calculate p95 and p99
           const sorted = metric.durations.sort((a: number, b: number) => a - b);
-          const p95Index = Math.floor(sorted.length * 0.95);
-          const p99Index = Math.floor(sorted.length * 0.99);
-          metric.p95Duration = sorted[p95Index] || 0;
-          metric.p99Duration = sorted[p99Index] || 0;
-          
-          delete metric.durations; // Don't include raw data in response
+          metric.p95Duration = sorted[Math.floor(sorted.length * 0.95)] || 0;
+          metric.p99Duration = sorted[Math.floor(sorted.length * 0.99)] || 0;
+          delete metric.durations;
         }
 
-        respond(true, {
-          summary: stats,
-          toolMetrics,
-        });
+        respond(true, { summary: stats, toolMetrics });
       } catch (err) {
         respond(false, { error: String(err) });
       }
     });
   }
 
-  // memoryrelay:heartbeat - Daily stats check (Phase 1 - Issue #10)
-  api.registerGatewayMethod?.("memoryrelay.heartbeat", async ({ respond, args }) => {
+  api.registerGatewayMethod?.("memoryrelay.heartbeat", async ({ respond }) => {
     try {
       const dailyStatsConfig: DailyStatsConfig = {
         enabled: cfg?.dailyStats?.enabled ?? true,
@@ -4758,25 +624,15 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         eveningTime: cfg?.dailyStats?.eveningTime || "20:00",
       };
 
-      // Check if it's time for a heartbeat
       const heartbeatType = shouldRunHeartbeat(dailyStatsConfig);
-      
       if (!heartbeatType) {
-        respond(true, {
-          type: "none",
-          message: "Not scheduled for heartbeat check right now",
-        });
+        respond(true, { type: "none", message: "Not scheduled for heartbeat check right now" });
         return;
       }
 
-      // Calculate stats
-      const memories = await client.list(1000); // Get recent memories
-      const stats = await calculateStats(
-        async () => memories,
-        () => 0 // Recall count not tracked yet (Phase 3)
-      );
+      const memories = await client.list(1000);
+      const stats = await calculateStats(async () => memories, () => 0);
 
-      // Run appropriate check
       let result;
       if (heartbeatType === "morning") {
         result = await morningCheck(stats);
@@ -4784,30 +640,22 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         result = await eveningReview(stats);
       }
 
-      respond(true, {
-        type: heartbeatType,
-        shouldNotify: result.shouldNotify,
-        message: result.message,
-        stats: result.stats,
-      });
+      respond(true, { type: heartbeatType, shouldNotify: result.shouldNotify, message: result.message, stats: result.stats });
     } catch (err) {
       respond(false, { error: String(err) });
     }
   });
 
-  // memoryrelay:onboarding - Show onboarding prompt (Phase 1 - Issue #9)
   api.registerGatewayMethod?.("memoryrelay.onboarding", async ({ respond }) => {
     try {
-      const onboardingCheck = await checkFirstRun(async () => {
+      const onboardingCheck2 = await checkFirstRun(async () => {
         const memories = await client.list(1);
         return memories.length;
       });
-
       const prompt = generateOnboardingPrompt();
-
       respond(true, {
-        isFirstRun: onboardingCheck.isFirstRun,
-        alreadyOnboarded: onboardingCheck.state?.completed || false,
+        isFirstRun: onboardingCheck2.isFirstRun,
+        alreadyOnboarded: onboardingCheck2.state?.completed || false,
         prompt,
       });
     } catch (err) {
@@ -4815,163 +663,84 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     }
   });
 
-  // memoryrelay:stats - CLI stats command (Phase 1 - Issue #11)
   api.registerGatewayMethod?.("memoryrelay.stats", async ({ respond, args }) => {
     try {
       const options: StatsCommandOptions = {
         format: (args?.format as "text" | "json") || "text",
         verbose: Boolean(args?.verbose),
       };
-
       const memories = await client.list(1000);
       const output = await statsCommand(async () => memories, options);
-
-      respond(true, {
-        output,
-        format: options.format,
-      });
+      respond(true, { output, format: options.format });
     } catch (err) {
       respond(false, { error: String(err) });
     }
   });
 
-  // memoryrelay:test - Test individual tool
   api.registerGatewayMethod?.("memoryrelay.test", async ({ respond, args }) => {
     try {
       const toolName = args?.tool;
-      if (!toolName) {
-        respond(false, { error: "Missing required argument: tool" });
-        return;
-      }
+      if (!toolName) { respond(false, { error: "Missing required argument: tool" }); return; }
 
       const startTime = Date.now();
       let result: any;
       let error: string | undefined;
 
-      // Test the specified tool
       try {
         switch (toolName) {
-          case "memory_store":
+          case "memory_store": {
             const mem = await client.store("Test memory", { test: "true" });
             await client.delete(mem.id);
             result = { success: true, message: "Memory stored and deleted successfully" };
             break;
-
-          case "memory_recall":
+          }
+          case "memory_recall": {
             const searchResults = await client.search("test", 1, 0.5);
             result = { success: true, results: searchResults.length, message: "Search completed" };
             break;
-
-          case "memory_list":
+          }
+          case "memory_list": {
             const list = await client.list(5);
             result = { success: true, count: list.length, message: "List retrieved" };
             break;
-
-          case "project_list":
+          }
+          case "project_list": {
             const projects = await client.listProjects(5);
             result = { success: true, count: projects.length, message: "Projects listed" };
             break;
-
-          case "memory_health":
-            const health = await client.health();
-            result = { success: true, status: health.status, message: "Health check passed" };
+          }
+          case "memory_health": {
+            const h = await client.health();
+            result = { success: true, status: h.status, message: "Health check passed" };
             break;
-
+          }
           default:
             result = { success: false, message: `Unknown tool: ${toolName}` };
         }
-      } catch (err) {
-        error = String(err);
+      } catch (err2) {
+        error = String(err2);
         result = { success: false, error };
       }
 
-      const duration = Date.now() - startTime;
-
-      respond(true, {
-        tool: toolName,
-        duration,
-        result,
-        error,
-      });
+      respond(true, { tool: toolName, duration: Date.now() - startTime, result, error });
     } catch (err) {
       respond(false, { error: String(err) });
     }
   });
 
   // ========================================================================
-  // Command Argument Parser (v0.14.0)
+  // CLI Commands (17 total)
   // ========================================================================
 
-  function parseCommandArgs(input: string | undefined): { positional: string[]; flags: Record<string, string | boolean> } {
-    const positional: string[] = [];
-    const flags: Record<string, string | boolean> = {};
-
-    if (!input || input.trim() === "") {
-      return { positional, flags };
-    }
-
-    const tokens: string[] = [];
-    let current = "";
-    let inQuote: string | null = null;
-
-    for (const ch of input) {
-      if (inQuote) {
-        if (ch === inQuote) {
-          inQuote = null;
-        } else {
-          current += ch;
-        }
-      } else if (ch === '"' || ch === "'") {
-        inQuote = ch;
-      } else if (ch === " " || ch === "\t") {
-        if (current) {
-          tokens.push(current);
-          current = "";
-        }
-      } else {
-        current += ch;
-      }
-    }
-    if (current) tokens.push(current);
-
-    let i = 0;
-    while (i < tokens.length) {
-      const token = tokens[i];
-      if (token.startsWith("--")) {
-        const key = token.slice(2);
-        const next = tokens[i + 1];
-        if (next && !next.startsWith("--")) {
-          flags[key] = next;
-          i += 2;
-        } else {
-          flags[key] = true;
-          i += 1;
-        }
-      } else {
-        positional.push(token);
-        i += 1;
-      }
-    }
-
-    return { positional, flags };
-  }
-
-  // ========================================================================
-  // Direct Commands (17 total) — bypass LLM, execute immediately
-  // ========================================================================
-
-  // /memory-status — Show full plugin status report
   api.registerCommand?.({
     name: "memory-status",
     description: "Show MemoryRelay connection status, tool counts, and memory stats",
     requireAuth: true,
     handler: async (_ctx) => {
       try {
-        // Get connection status via health check
         const startTime = Date.now();
         const healthResult = await client.health();
         const responseTime = Date.now() - startTime;
-
         const healthStatus = String(healthResult.status).toLowerCase();
         const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
 
@@ -4982,49 +751,30 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           responseTime,
         };
 
-        // Get memory stats
         let memoryCount = 0;
-        try {
-          const stats = await client.stats();
-          memoryCount = stats.total_memories;
-        } catch (_statsErr) {
-          // stats endpoint may be unavailable
-        }
+        try { const s = await client.stats(); memoryCount = s.total_memories; } catch (_) {}
 
-        const memoryStats = { total_memories: memoryCount };
-
-        const pluginConfig = {
+        const reportConfig = {
           agentId,
-          autoRecall: cfg?.autoRecall ?? true,
+          autoRecall: pluginConfig.autoRecall ?? true,
           autoCapture: autoCaptureConfig,
-          recallLimit: cfg?.recallLimit ?? 5,
-          recallThreshold: cfg?.recallThreshold ?? 0.3,
-          excludeChannels: cfg?.excludeChannels ?? [],
+          recallLimit: pluginConfig.recallLimit ?? 5,
+          recallThreshold: pluginConfig.recallThreshold ?? 0.3,
+          excludeChannels: pluginConfig.excludeChannels ?? [],
           defaultProject,
         };
 
         if (statusReporter) {
-          const report = statusReporter.buildReport(
-            connectionStatus,
-            pluginConfig,
-            memoryStats,
-            TOOL_GROUPS,
-          );
-          const formatted = StatusReporter.formatReport(report);
-          return { text: formatted };
+          const report = statusReporter.buildReport(connectionStatus, reportConfig, { total_memories: memoryCount }, TOOL_GROUPS);
+          return { text: StatusReporter.formatReport(report) };
         }
-
-        // Fallback: simple text status
-        return {
-          text: `MemoryRelay: ${isConnected ? "connected" : "disconnected"} | Endpoint: ${apiUrl} | Memories: ${memoryCount} | Agent: ${agentId}`,
-        };
+        return { text: `MemoryRelay: ${isConnected ? "connected" : "disconnected"} | Endpoint: ${apiUrl} | Memories: ${memoryCount} | Agent: ${agentId}` };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
       }
     },
   });
 
-  // /memory-stats — Show daily memory statistics
   api.registerCommand?.({
     name: "memory-stats",
     description: "Show daily memory statistics (total, today, weekly growth, top categories)",
@@ -5032,19 +782,14 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     handler: async (_ctx) => {
       try {
         const memories = await client.list(1000);
-        const stats = await calculateStats(
-          async () => memories,
-          () => 0,
-        );
-        const formatted = formatStatsForDisplay(stats);
-        return { text: formatted };
+        const stats = await calculateStats(async () => memories, () => 0);
+        return { text: formatStatsForDisplay(stats) };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
       }
     },
   });
 
-  // /memory-health — Quick health check with response time
   api.registerCommand?.({
     name: "memory-health",
     description: "Check MemoryRelay API health and response time",
@@ -5054,43 +799,29 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         const startTime = Date.now();
         const healthResult = await client.health();
         const responseTime = Date.now() - startTime;
-
         const healthStatus = String(healthResult.status).toLowerCase();
         const isHealthy = VALID_HEALTH_STATUSES.includes(healthStatus);
         const symbol = isHealthy ? "OK" : "DEGRADED";
-
-        return {
-          text: `MemoryRelay Health: ${symbol}\n  Status:        ${healthResult.status}\n  Response Time: ${responseTime}ms\n  Endpoint:      ${apiUrl}`,
-        };
+        return { text: `MemoryRelay Health: ${symbol}\n  Status:        ${healthResult.status}\n  Response Time: ${responseTime}ms\n  Endpoint:      ${apiUrl}` };
       } catch (err) {
         return { text: `MemoryRelay Health: UNREACHABLE\n  Error: ${String(err)}`, isError: true };
       }
     },
   });
 
-  // /memory-logs — Show recent debug log entries
   api.registerCommand?.({
     name: "memory-logs",
     description: "Show recent MemoryRelay debug log entries",
     requireAuth: true,
     handler: async (_ctx) => {
       try {
-        if (!debugLogger) {
-          return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
-        }
-
+        if (!debugLogger) return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
         const logs = debugLogger.getRecentLogs(10);
-        if (logs.length === 0) {
-          return { text: "No recent log entries." };
-        }
-
-        const lines: string[] = ["Recent MemoryRelay Logs", "━".repeat(50)];
+        if (logs.length === 0) return { text: "No recent log entries." };
+        const lines: string[] = ["Recent MemoryRelay Logs", "\u2501".repeat(50)];
         for (const entry of logs) {
           const statusSymbol = entry.status === "success" ? "OK" : "ERR";
-          lines.push(
-            `[${entry.timestamp}] ${statusSymbol} ${entry.method} ${entry.path} (${entry.duration}ms)` +
-            (entry.error ? ` - ${entry.error}` : ""),
-          );
+          lines.push(`[${entry.timestamp}] ${statusSymbol} ${entry.method} ${entry.path} (${entry.duration}ms)${entry.error ? ` - ${entry.error}` : ""}`);
         }
         return { text: lines.join("\n") };
       } catch (err) {
@@ -5099,60 +830,43 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-metrics — Show per-tool performance metrics
   api.registerCommand?.({
     name: "memory-metrics",
     description: "Show per-tool call counts, success rates, and latency metrics",
     requireAuth: true,
     handler: async (_ctx) => {
       try {
-        if (!debugLogger) {
-          return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
-        }
-
+        if (!debugLogger) return { text: "Debug logging is disabled. Enable it with debug: true in plugin config." };
         const allLogs = debugLogger.getAllLogs();
-        if (allLogs.length === 0) {
-          return { text: "No metrics data available yet." };
-        }
+        if (allLogs.length === 0) return { text: "No metrics data available yet." };
 
-        // Build per-tool metrics
         const toolMetrics = new Map<string, { calls: number; successes: number; durations: number[] }>();
         for (const entry of allLogs) {
           let metrics = toolMetrics.get(entry.tool);
-          if (!metrics) {
-            metrics = { calls: 0, successes: 0, durations: [] };
-            toolMetrics.set(entry.tool, metrics);
-          }
+          if (!metrics) { metrics = { calls: 0, successes: 0, durations: [] }; toolMetrics.set(entry.tool, metrics); }
           metrics.calls++;
           if (entry.status === "success") metrics.successes++;
           metrics.durations.push(entry.duration);
         }
 
-        // Format table
         const lines: string[] = [
           "MemoryRelay Tool Metrics",
-          "━".repeat(65),
+          "\u2501".repeat(65),
           `${"Tool".padEnd(22)} ${"Calls".padStart(6)} ${"Success%".padStart(9)} ${"Avg(ms)".padStart(8)} ${"P95(ms)".padStart(8)}`,
-          "─".repeat(65),
+          "\u2500".repeat(65),
         ];
 
         for (const [tool, m] of Array.from(toolMetrics.entries()).sort((a, b) => b[1].calls - a[1].calls)) {
           const successRate = m.calls > 0 ? ((m.successes / m.calls) * 100).toFixed(1) : "0.0";
-          const avg = m.durations.length > 0
-            ? Math.round(m.durations.reduce((s, d) => s + d, 0) / m.durations.length)
-            : 0;
+          const avg = m.durations.length > 0 ? Math.round(m.durations.reduce((s, d) => s + d, 0) / m.durations.length) : 0;
           const sorted = [...m.durations].sort((a, b) => a - b);
           const p95idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
           const p95 = sorted.length > 0 ? sorted[Math.max(0, p95idx)] : 0;
-
-          lines.push(
-            `${tool.padEnd(22)} ${String(m.calls).padStart(6)} ${(successRate + "%").padStart(9)} ${String(avg).padStart(8)} ${String(p95).padStart(8)}`,
-          );
+          lines.push(`${tool.padEnd(22)} ${String(m.calls).padStart(6)} ${(successRate + "%").padStart(9)} ${String(avg).padStart(8)} ${String(p95).padStart(8)}`);
         }
 
-        lines.push("─".repeat(65));
+        lines.push("\u2500".repeat(65));
         lines.push(`Total entries: ${allLogs.length}`);
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5160,11 +874,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // ========================================================================
-  // Direct Commands (10 new — v0.14.0)
-  // ========================================================================
-
-  // /memory-search — Semantic memory search
   api.registerCommand?.({
     name: "memory-search",
     description: "Semantic search across stored memories",
@@ -5174,21 +883,16 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       try {
         const { positional, flags } = parseCommandArgs(ctx.args);
         const query = positional[0];
-        if (!query) {
-          return { text: "Usage: /memory-search <query> [--limit 10] [--project slug] [--threshold 0.3]" };
-        }
+        if (!query) return { text: "Usage: /memory-search <query> [--limit 10] [--project slug] [--threshold 0.3]" };
         const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
         const threshold = flags["threshold"] ? parseFloat(String(flags["threshold"])) : 0.3;
         const project = flags["project"] ? String(flags["project"]) : undefined;
 
         const results = await client.search(query, limit, threshold, { project });
         const items: unknown[] = Array.isArray(results) ? results : (results as { data?: unknown[] }).data ?? [];
+        if (items.length === 0) return { text: `No memories found for: "${query}"` };
 
-        if (items.length === 0) {
-          return { text: `No memories found for: "${query}"` };
-        }
-
-        const lines: string[] = [`Memory Search: "${query}"`, "━".repeat(60)];
+        const lines: string[] = [`Memory Search: "${query}"`, "\u2501".repeat(60)];
         for (const item of items) {
           const m = item as Record<string, unknown>;
           const content = String(m["content"] ?? "").slice(0, 120);
@@ -5199,7 +903,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           lines.push(`[${score}] ${content}`);
           lines.push(`  Category: ${category} | Date: ${date} | ID: ${id}`);
         }
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5207,7 +910,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-validate — Production readiness check
   api.registerCommand?.({
     name: "memory-validate",
     description: "Run production readiness checks for the MemoryRelay plugin",
@@ -5216,84 +918,43 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       try {
         const results: Array<{ label: string; status: "PASS" | "FAIL" | "WARN"; detail: string }> = [];
 
-        // 1. API connectivity
-        try {
-          await client.health();
-          results.push({ label: "API connectivity", status: "PASS", detail: "Health endpoint reachable" });
-        } catch (err) {
-          results.push({ label: "API connectivity", status: "FAIL", detail: String(err) });
-        }
+        try { await client.health(); results.push({ label: "API connectivity", status: "PASS", detail: "Health endpoint reachable" }); }
+        catch (err) { results.push({ label: "API connectivity", status: "FAIL", detail: String(err) }); }
 
-        // 2. API health status
         try {
           const h = await client.health();
-          const statusStr = String(h.status).toLowerCase();
-          if (VALID_HEALTH_STATUSES.includes(statusStr)) {
-            results.push({ label: "API health", status: "PASS", detail: `Status: ${h.status}` });
-          } else {
-            results.push({ label: "API health", status: "WARN", detail: `Unexpected status: ${h.status}` });
-          }
-        } catch (err) {
-          results.push({ label: "API health", status: "FAIL", detail: String(err) });
-        }
+          const s = String(h.status).toLowerCase();
+          results.push(VALID_HEALTH_STATUSES.includes(s)
+            ? { label: "API health", status: "PASS", detail: `Status: ${h.status}` }
+            : { label: "API health", status: "WARN", detail: `Unexpected status: ${h.status}` });
+        } catch (err) { results.push({ label: "API health", status: "FAIL", detail: String(err) }); }
 
-        // 3. Core tools
         const allTools = Object.values(TOOL_GROUPS).flat();
         const coreTools = ["memory_store", "memory_recall", "memory_list"];
         const missing = coreTools.filter((t) => !allTools.includes(t));
-        if (missing.length === 0) {
-          results.push({ label: "Core tools", status: "PASS", detail: "memory_store, memory_recall, memory_list present" });
-        } else {
-          results.push({ label: "Core tools", status: "FAIL", detail: `Missing: ${missing.join(", ")}` });
-        }
+        results.push(missing.length === 0
+          ? { label: "Core tools", status: "PASS", detail: "memory_store, memory_recall, memory_list present" }
+          : { label: "Core tools", status: "FAIL", detail: `Missing: ${missing.join(", ")}` });
 
-        // 4. Auto-recall enabled
-        const autoRecall = cfg?.autoRecall ?? true;
-        results.push({
-          label: "Auto-recall enabled",
-          status: autoRecall ? "PASS" : "WARN",
-          detail: autoRecall ? "Enabled" : "Disabled in config",
-        });
+        const autoRecall = pluginConfig.autoRecall ?? true;
+        results.push({ label: "Auto-recall enabled", status: autoRecall ? "PASS" : "WARN", detail: autoRecall ? "Enabled" : "Disabled in config" });
+        results.push({ label: "Auto-capture enabled", status: autoCaptureConfig.enabled ? "PASS" : "WARN", detail: autoCaptureConfig.enabled ? `Enabled (tier: ${autoCaptureConfig.tier})` : "Disabled in config" });
 
-        // 5. Auto-capture enabled
-        results.push({
-          label: "Auto-capture enabled",
-          status: autoCaptureConfig.enabled ? "PASS" : "WARN",
-          detail: autoCaptureConfig.enabled ? `Enabled (tier: ${autoCaptureConfig.tier})` : "Disabled in config",
-        });
+        try { await client.list(1); results.push({ label: "Memory storage", status: "PASS", detail: "Storage accessible" }); }
+        catch (err) { results.push({ label: "Memory storage", status: "FAIL", detail: String(err) }); }
 
-        // 6. Memory storage
-        try {
-          await client.list(1);
-          results.push({ label: "Memory storage", status: "PASS", detail: "Storage accessible" });
-        } catch (err) {
-          results.push({ label: "Memory storage", status: "FAIL", detail: String(err) });
-        }
-
-        // 7. Agent ID configured
         const agentIdOk = agentId && agentId !== "" && agentId !== "default";
-        results.push({
-          label: "Agent ID configured",
-          status: agentIdOk ? "PASS" : "WARN",
-          detail: agentIdOk ? `ID: ${agentId}` : `Agent ID is "${agentId}" — consider setting a unique ID`,
-        });
+        results.push({ label: "Agent ID configured", status: agentIdOk ? "PASS" : "WARN", detail: agentIdOk ? `ID: ${agentId}` : `Agent ID is "${agentId}" -- consider setting a unique ID` });
 
         const passes = results.filter((r) => r.status === "PASS").length;
         const failures = results.filter((r) => r.status === "FAIL").length;
         let grade: string;
-        if (passes === 7) grade = "A+";
-        else if (passes === 6) grade = "A";
-        else if (passes === 5) grade = "B+";
-        else if (passes === 4) grade = "B";
-        else grade = "F";
+        if (passes === 7) grade = "A+"; else if (passes === 6) grade = "A"; else if (passes === 5) grade = "B+"; else if (passes === 4) grade = "B"; else grade = "F";
 
-        const lines: string[] = ["MemoryRelay Production Readiness", "━".repeat(50)];
-        for (const r of results) {
-          lines.push(`[${r.status.padEnd(4)}] ${r.label}: ${r.detail}`);
-        }
-        lines.push("─".repeat(50));
+        const lines: string[] = ["MemoryRelay Production Readiness", "\u2501".repeat(50)];
+        for (const r of results) lines.push(`[${r.status.padEnd(4)}] ${r.label}: ${r.detail}`);
+        lines.push("\u2500".repeat(50));
         lines.push(`Checks passed: ${passes}/7 | Grade: ${grade} | Production ready: ${failures === 0 ? "Yes" : "No"}`);
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5301,23 +962,22 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-config — Read-only config display
   api.registerCommand?.({
     name: "memory-config",
     description: "Display current MemoryRelay plugin configuration",
     requireAuth: true,
     handler: async (_ctx) => {
       try {
-        const lines: string[] = ["MemoryRelay Configuration", "━".repeat(50)];
+        const lines: string[] = ["MemoryRelay Configuration", "\u2501".repeat(50)];
         lines.push(`API URL:             ${apiUrl}`);
         lines.push(`Agent ID:            ${agentId}`);
         lines.push(`Default Project:     ${defaultProject || "(none)"}`);
         lines.push(`Enabled Tools:       ${cfg?.enabledTools ?? "all"}`);
-        lines.push(`Auto-Recall:         ${cfg?.autoRecall ?? true}`);
+        lines.push(`Auto-Recall:         ${pluginConfig.autoRecall ?? true}`);
         lines.push(`Auto-Capture:        ${autoCaptureConfig.enabled} (tier: ${autoCaptureConfig.tier})`);
-        lines.push(`Recall Limit:        ${cfg?.recallLimit ?? 5}`);
-        lines.push(`Recall Threshold:    ${cfg?.recallThreshold ?? 0.3}`);
-        lines.push(`Exclude Channels:    ${(cfg?.excludeChannels ?? []).join(", ") || "(none)"}`);
+        lines.push(`Recall Limit:        ${pluginConfig.recallLimit ?? 5}`);
+        lines.push(`Recall Threshold:    ${pluginConfig.recallThreshold ?? 0.3}`);
+        lines.push(`Exclude Channels:    ${(pluginConfig.excludeChannels ?? []).join(", ") || "(none)"}`);
         lines.push(`Session Timeout:     ${cfg?.sessionTimeoutMinutes ?? 120} min`);
         lines.push(`Cleanup Interval:    ${cfg?.sessionCleanupIntervalMinutes ?? 30} min`);
         lines.push(`Debug:               ${cfg?.debug ?? false}`);
@@ -5330,7 +990,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-sessions — List sessions
   api.registerCommand?.({
     name: "memory-sessions",
     description: "List MemoryRelay sessions",
@@ -5346,12 +1005,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
         const raw = await client.listSessions(limit, project, status);
         const sessions: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+        if (sessions.length === 0) return { text: "No sessions found." };
 
-        if (sessions.length === 0) {
-          return { text: "No sessions found." };
-        }
-
-        const lines: string[] = ["MemoryRelay Sessions", "━".repeat(60)];
+        const lines: string[] = ["MemoryRelay Sessions", "\u2501".repeat(60)];
         for (const session of sessions) {
           const s = session as Record<string, unknown>;
           const sid = String(s["id"] ?? "");
@@ -5360,15 +1016,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           let duration = "ongoing";
           if (s["started_at"] && s["ended_at"]) {
             const diffMs = new Date(String(s["ended_at"])).getTime() - new Date(String(s["started_at"])).getTime();
-            const diffMin = Math.round(diffMs / 60000);
-            duration = `${diffMin}m`;
+            duration = `${Math.round(diffMs / 60000)}m`;
           }
           const summary = String(s["summary"] ?? "").slice(0, 80);
           lines.push(`[${sessionStatus}] ${sid}`);
           lines.push(`  Started: ${startedAt} | Duration: ${duration}`);
           if (summary) lines.push(`  ${summary}`);
         }
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5376,7 +1030,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-decisions — List decisions
   api.registerCommand?.({
     name: "memory-decisions",
     description: "List architectural decisions stored in MemoryRelay",
@@ -5392,12 +1045,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
         const raw = await client.listDecisions(limit, project, status, tags);
         const decisions: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+        if (decisions.length === 0) return { text: "No decisions found." };
 
-        if (decisions.length === 0) {
-          return { text: "No decisions found." };
-        }
-
-        const lines: string[] = ["MemoryRelay Decisions", "━".repeat(60)];
+        const lines: string[] = ["MemoryRelay Decisions", "\u2501".repeat(60)];
         for (const decision of decisions) {
           const d = decision as Record<string, unknown>;
           const decisionStatus = String(d["status"] ?? "unknown").toUpperCase();
@@ -5407,7 +1057,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           lines.push(`[${decisionStatus}] ${title} (${date})`);
           if (rationale) lines.push(`  ${rationale}`);
         }
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5415,7 +1064,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-patterns — List/search patterns
   api.registerCommand?.({
     name: "memory-patterns",
     description: "List or search memory patterns",
@@ -5431,21 +1079,15 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
         const raw = await client.searchPatterns(query, category, project, limit);
         const patterns: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+        if (patterns.length === 0) return { text: query ? `No patterns found for: "${query}"` : "No patterns found." };
 
-        if (patterns.length === 0) {
-          return { text: query ? `No patterns found for: "${query}"` : "No patterns found." };
-        }
-
-        const lines: string[] = ["MemoryRelay Patterns", "━".repeat(60)];
+        const lines: string[] = ["MemoryRelay Patterns", "\u2501".repeat(60)];
         for (const pattern of patterns) {
           const p = pattern as Record<string, unknown>;
-          const name = String(p["name"] ?? "(unnamed)");
-          const cat = String(p["category"] ?? "general");
-          const description = String(p["description"] ?? "").slice(0, 100);
-          lines.push(`${name} [${cat}]`);
-          if (description) lines.push(`  ${description}`);
+          lines.push(`${String(p["name"] ?? "(unnamed)")} [${String(p["category"] ?? "general")}]`);
+          const desc = String(p["description"] ?? "").slice(0, 100);
+          if (desc) lines.push(`  ${desc}`);
         }
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5453,7 +1095,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-entities — List entities
   api.registerCommand?.({
     name: "memory-entities",
     description: "List entities stored in MemoryRelay",
@@ -5463,15 +1104,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       try {
         const { flags } = parseCommandArgs(ctx.args);
         const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 20;
-
         const raw = await client.listEntities(limit);
         const entities: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+        if (entities.length === 0) return { text: "No entities found." };
 
-        if (entities.length === 0) {
-          return { text: "No entities found." };
-        }
-
-        const lines: string[] = ["MemoryRelay Entities", "━".repeat(60)];
+        const lines: string[] = ["MemoryRelay Entities", "\u2501".repeat(60)];
         for (const entity of entities) {
           const e = entity as Record<string, unknown>;
           const name = String(e["name"] ?? "(unnamed)");
@@ -5479,7 +1116,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           const relationships = Array.isArray(e["relationships"]) ? e["relationships"].length : (typeof e["relationship_count"] === "number" ? e["relationship_count"] : 0);
           lines.push(`${name} [${type}] (${relationships} relationships)`);
         }
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5487,7 +1123,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-projects — List projects
   api.registerCommand?.({
     name: "memory-projects",
     description: "List projects in MemoryRelay",
@@ -5497,23 +1132,18 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       try {
         const { flags } = parseCommandArgs(ctx.args);
         const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 20;
-
         const raw = await client.listProjects(limit);
         const projects: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+        if (projects.length === 0) return { text: "No projects found." };
 
-        if (projects.length === 0) {
-          return { text: "No projects found." };
-        }
-
-        const lines: string[] = ["MemoryRelay Projects", "━".repeat(60)];
+        const lines: string[] = ["MemoryRelay Projects", "\u2501".repeat(60)];
         for (const project of projects) {
           const p = project as Record<string, unknown>;
           const slug = String(p["slug"] ?? "(no-slug)");
           const description = String(p["description"] ?? "").slice(0, 80);
           const memoryCount = typeof p["memory_count"] === "number" ? p["memory_count"] : 0;
-          lines.push(`${slug} — ${description || "(no description)"} (${memoryCount} memories)`);
+          lines.push(`${slug} -- ${description || "(no description)"} (${memoryCount} memories)`);
         }
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5521,7 +1151,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-agents — List agents
   api.registerCommand?.({
     name: "memory-agents",
     description: "List agents registered in MemoryRelay",
@@ -5531,15 +1160,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       try {
         const { flags } = parseCommandArgs(ctx.args);
         const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 20;
-
         const raw = await client.listAgents(limit);
         const agents: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
+        if (agents.length === 0) return { text: "No agents found." };
 
-        if (agents.length === 0) {
-          return { text: "No agents found." };
-        }
-
-        const lines: string[] = ["MemoryRelay Agents", "━".repeat(60)];
+        const lines: string[] = ["MemoryRelay Agents", "\u2501".repeat(60)];
         for (const agent of agents) {
           const a = agent as Record<string, unknown>;
           const id = String(a["id"] ?? "(no-id)");
@@ -5547,7 +1172,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           const description = String(a["description"] ?? "");
           lines.push(`${id}${name ? ` (${name})` : ""}${description ? `, ${description}` : ""}`);
         }
-
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5555,7 +1179,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-forget — Delete a memory by ID
   api.registerCommand?.({
     name: "memory-forget",
     description: "Delete a specific memory by ID",
@@ -5564,35 +1187,22 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     handler: async (ctx) => {
       const { positional } = parseCommandArgs(ctx.args);
       const memoryId = positional[0];
-      if (!memoryId) {
-        return { text: "Usage: /memory-forget <memory-id>" };
-      }
+      if (!memoryId) return { text: "Usage: /memory-forget <memory-id>" };
       try {
         let preview = "";
-        try {
-          const existing = await client.get(memoryId);
-          const m = existing as Record<string, unknown>;
-          preview = String(m["content"] ?? "").slice(0, 120);
-        } catch (_) {
-          // preview unavailable — proceed with delete
-        }
-
+        try { const existing = await client.get(memoryId); preview = String((existing as Record<string, unknown>)["content"] ?? "").slice(0, 120); } catch (_) {}
         await client.delete(memoryId);
-
         const lines = [`Memory deleted: ${memoryId}`];
         if (preview) lines.push(`Content: ${preview}`);
         return { text: lines.join("\n") };
       } catch (err) {
         const msg = String(err);
-        if (msg.toLowerCase().includes("not found") || msg.includes("404")) {
-          return { text: `Memory not found: ${memoryId}`, isError: true };
-        }
+        if (msg.toLowerCase().includes("not found") || msg.includes("404")) return { text: `Memory not found: ${memoryId}`, isError: true };
         return { text: `Error: ${msg}`, isError: true };
       }
     },
   });
 
-  // /memory-context — Build a context bundle from memories using V2 API
   api.registerCommand?.({
     name: "memory-context",
     description: "Build a ranked context bundle from memories for a given query",
@@ -5615,23 +1225,16 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         };
       }
       try {
-        const options: {
-          maxMemories?: number;
-          maxTokens?: number;
-          aiEnhanced?: boolean;
-          searchMode?: "semantic" | "hybrid" | "keyword";
-        } = {};
+        const options: { maxMemories?: number; maxTokens?: number; aiEnhanced?: boolean; searchMode?: "semantic" | "hybrid" | "keyword" } = {};
         if (flags["max-memories"]) options.maxMemories = parseInt(String(flags["max-memories"]), 10);
         if (flags["max-tokens"]) options.maxTokens = parseInt(String(flags["max-tokens"]), 10);
         if (flags["ai-enhanced"] === true) options.aiEnhanced = true;
         if (flags["search-mode"]) options.searchMode = String(flags["search-mode"]) as "semantic" | "hybrid" | "keyword";
 
         const context = await client.buildContextV2(query, options);
-
         if (!context || (Array.isArray(context.memories) && context.memories.length === 0)) {
           return { text: `No memories found for query: "${query}"` };
         }
-
         return { text: JSON.stringify(context, null, 2) };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -5639,36 +1242,39 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     },
   });
 
-  // /memory-update — Show update instructions (v0.15.0)
   api.registerCommand?.({
     name: "memory-update",
     description: "Show how to update the MemoryRelay plugin to the latest version",
     requireAuth: true,
     handler: async (_ctx) => {
-      const currentVersion = "0.15.6";
-      const lines: string[] = [
-        "MemoryRelay Plugin Update",
-        "━".repeat(50),
-        `Current version: ${currentVersion}`,
-        "",
-        "To update to the latest version, run:",
-        "",
-        "  openclaw plugins update plugin-memoryrelay-ai",
-        "",
-        "Then restart the gateway:",
-        "",
-        "  openclaw restart",
-        "",
-        "Note: The plugin ID is 'plugin-memoryrelay-ai'",
-        "(not 'memory-memoryrelay').",
-      ];
-      return { text: lines.join("\n") };
+      const currentVersion = "0.16.0";
+      return {
+        text: [
+          "MemoryRelay Plugin Update",
+          "\u2501".repeat(50),
+          `Current version: ${currentVersion}`,
+          "",
+          "To update to the latest version, run:",
+          "",
+          "  openclaw plugins update plugin-memoryrelay-ai",
+          "",
+          "Then restart the gateway:",
+          "",
+          "  openclaw restart",
+          "",
+          "Note: The plugin ID is 'plugin-memoryrelay-ai'",
+          "(not 'memory-memoryrelay').",
+        ].join("\n"),
+      };
     },
   });
 
   // ========================================================================
-  // Stale Session Cleanup Service (v0.13.0)
+  // Stale Session Cleanup Service
   // ========================================================================
+
+  const sessionCleanupIntervalMs =
+    ((cfg?.sessionCleanupIntervalMinutes as number) || 30) * 60 * 1000;
 
   let sessionCleanupInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -5676,33 +1282,10 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     id: "memoryrelay-session-cleanup",
     start: async (_ctx) => {
       sessionCleanupInterval = setInterval(async () => {
-        const now = Date.now();
-        const staleEntries: string[] = [];
-
-        for (const [externalId, entry] of sessionCache.entries()) {
-          if (now - entry.lastActivityAt > sessionTimeoutMs) {
-            staleEntries.push(externalId);
-          }
-        }
-
-        for (const externalId of staleEntries) {
-          const entry = sessionCache.get(externalId);
-          if (!entry) continue;
-
-          try {
-            await client.endSession(
-              entry.sessionId,
-              `Auto-closed: inactive for >${Math.round(sessionTimeoutMs / 60000)} minutes`
-            );
-            sessionCache.delete(externalId);
-            api.logger.info?.(
-              `memory-memoryrelay: auto-closed stale session ${entry.sessionId} (external: ${externalId})`
-            );
-          } catch (err) {
-            api.logger.warn?.(
-              `memory-memoryrelay: failed to auto-close session ${entry.sessionId}: ${String(err)}`
-            );
-          }
+        try {
+          await sessionResolver.cleanupStale();
+        } catch (err) {
+          api.logger.warn?.(`memory-memoryrelay: session cleanup failed: ${String(err)}`);
         }
       }, sessionCleanupIntervalMs);
     },

@@ -7,7 +7,7 @@
 
 import type { DebugLogger } from "../debug-logger.js";
 import type { StatusReporter } from "../status-reporter.js";
-import type { Memory } from "../pipelines/types.js";
+import type { Memory, MemoryRelayClient as IMemoryRelayClient } from "../pipelines/types.js";
 
 // ============================================================================
 // Constants
@@ -95,7 +95,7 @@ export async function fetchWithTimeout(
 // MemoryRelay API Client (Full Suite)
 // ============================================================================
 
-export class MemoryRelayClient {
+export class MemoryRelayClient implements IMemoryRelayClient {
   private debugLogger?: DebugLogger;
   private statusReporter?: StatusReporter;
 
