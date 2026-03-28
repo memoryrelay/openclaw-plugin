@@ -9,16 +9,25 @@ npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report (v8)
 ```
 
-## Architecture
+## Architecture (v0.16 Pipeline Pattern)
 
-- `index.ts` — Monolithic plugin entry point: registers 42 tools, 14 lifecycle hooks, and CLI subcommands. Contains inlined DebugLogger class (duplicated from src/debug-logger.ts) and all tool/hook handler logic
+- `index.ts` — Plugin entry point: wiring only (~1300 lines). Imports modules, registers hooks/tools, keeps gateway methods and CLI commands inline
 - `openclaw.plugin.json` — Plugin manifest with config schema and UI hints
+- `src/pipelines/types.ts` — Shared type definitions (Memory, PluginConfig, RecallStage, CaptureStage, etc.)
+- `src/pipelines/runner.ts` — Generic pipeline executor (stages run in order, short-circuit on `skip`)
+- `src/pipelines/recall/` — Recall pipeline (5 stages): trigger-gate → scope-resolver → search → rank → format
+- `src/pipelines/capture/` — Capture pipeline (6 stages): trigger-gate → message-filter → content-strip → truncate → dedup → store
+- `src/filters/` — Shared filter library: `non-interactive.ts` (trigger detection), `noise-patterns.ts` (message/boilerplate), `content-patterns.ts` (XML stripping, scope resolution)
+- `src/context/` — Context layer: `request-context.ts` (immutable per-invocation context), `namespace-router.ts` (agent isolation), `session-resolver.ts` (concurrency-safe session cache)
+- `src/client/memoryrelay-client.ts` — API client with scope/namespace support
+- `src/hooks/` — 8 hook modules (before-agent-start, before-prompt-build, agent-end, session-lifecycle, subagent, compaction, activity, privacy)
+- `src/tools/` — 9 tool modules grouped by domain (memory, session, entity, decision, pattern, project, agent, v2, health)
 - `src/status-reporter.ts` — StatusReporter class for `/memory-status` CLI output
 - `src/debug-logger.ts` — DebugLogger class (in-memory circular buffer, no file logging since v0.8.4)
-- `src/heartbeat/daily-stats.ts` — Morning/evening heartbeat stats (calculateStats, morningCheck, eveningReview)
-- `src/onboarding/first-run.ts` — First-run detection and onboarding wizard (state stored in `~/.openclaw/memoryrelay-onboarding.json`)
-- `src/cli/stats-command.ts` — `openclaw memoryrelay stats` CLI command (text/JSON output)
-- `skills/` — 5 SKILL.md files: memory-workflow, decision-tracking, pattern-management, project-orchestration, entity-and-context
+- `src/heartbeat/daily-stats.ts` — Morning/evening heartbeat stats
+- `src/onboarding/first-run.ts` — First-run detection and onboarding wizard
+- `src/cli/stats-command.ts` — `openclaw memoryrelay stats` CLI command
+- `skills/` — 5 SKILL.md files
 
 ## Tool Groups (42 total)
 
@@ -27,14 +36,21 @@ memory (9), entity (4), agent (3), session (4), decision (4), pattern (4), proje
 ## Testing
 
 - Framework: Vitest with `@vitest/coverage-v8`
-- Test files: `index.test.ts`, `src/debug-logger.test.ts`, `src/status-reporter.test.ts`
+- Test files: `index.test.ts`, `src/debug-logger.test.ts`, `src/status-reporter.test.ts`, `tests/pipelines/`, `tests/filters/`, `tests/context/`, `tests/integration/`
+- 243 tests across 22 files
 - Tests mock the OpenClaw Plugin SDK (`openclaw/plugin-sdk`) — no real API calls
+- Pipeline stages are pure functions — each has independent unit tests
+- Integration tests verify full recall and capture pipelines end-to-end
 
 ## Key Patterns
 
-- All 42 tools registered inline in `index.ts` via `api.registerTool()` with callback pattern
-- 14 hooks registered via `api.on()` (before_agent_start, agent_end, session_start/end, etc.)
-- CLI subcommands under `openclaw memoryrelay <cmd>` (status, stats, list, search)
+- Recall and capture are pipelines of discrete stages, each a pure function with `(input, ctx) → continue | skip`
+- `RequestContext` (immutable, per-invocation) replaces shared mutable `currentSessionId`
+- Session-scoped (short-term) + long-term memories with auto-scoping via `resolveScope()`
+- Namespace routing: configurable agent isolation + 3 subagent policies (inherit/isolate/skip)
+- Composite recall ranking: similarity + freshness + importance + tier boosts
+- Tools registered via domain-grouped modules in `src/tools/` with `scope` parameter support
+- Hooks registered via modules in `src/hooks/` — `before-prompt-build` delegates to recall pipeline, `agent-end` to capture pipeline
 - Config resolution: env vars (`MEMORYRELAY_API_KEY`, etc.) override `openclaw.plugin.json` config values
 - API calls to `api.memoryrelay.net` with bearer token auth, 30s timeout, 3 retries with exponential backoff
 
@@ -43,6 +59,5 @@ memory (9), entity (4), agent (3), session (4), decision (4), pattern (4), proje
 - Plugin ID is `plugin-memoryrelay-ai` (not `memory-memoryrelay`) — wrong ID causes "No install record" errors
 - `memory_batch_store` may return 500 on large batches — use individual `memory_store` as workaround
 - `memory_list` limit is capped at 100 to prevent 422 errors (v0.15.6 fix)
-- DebugLogger is duplicated: inlined in `index.ts` AND in `src/debug-logger.ts` — keep both in sync
 - `logFile` config option is deprecated and ignored since v0.8.4 (security compliance)
 - Onboarding state persists at `~/.openclaw/memoryrelay-onboarding.json` — not project-scoped
