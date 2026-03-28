@@ -1,8 +1,8 @@
 import { describe, test, expect, vi } from "vitest";
 import { captureStore } from "../../../src/pipelines/capture/store.js";
-import type { PipelineContext, CaptureInput } from "../../../src/pipelines/types.js";
+import type { PipelineContext, CaptureInput, SessionResolverLike } from "../../../src/pipelines/types.js";
 
-function ctx(tierOverride?: string): PipelineContext {
+function ctx(tierOverride?: string, sessionResolver?: SessionResolverLike): PipelineContext {
   return {
     requestCtx: {
       sessionKey: "s1", agentId: "a1", channel: null, trigger: null,
@@ -19,6 +19,7 @@ function ctx(tierOverride?: string): PipelineContext {
         metadata: {}, entities: [], created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       })),
     },
+    sessionResolver,
   };
 }
 
@@ -94,5 +95,63 @@ describe("captureStore", () => {
     };
     await captureStore.execute(input, pctx);
     expect(pctx.client.store).toHaveBeenCalledTimes(3);
+  });
+
+  test("includes session_id for session-scoped memories when sessionResolver is present", async () => {
+    const resolver: SessionResolverLike = {
+      resolve: vi.fn(async () => ({ sessionId: "uuid-sess-42", externalId: "s1" })),
+    };
+    const pctx = ctx(undefined, resolver);
+    // Content with no long-term signal words resolves to session scope
+    const input: CaptureInput = {
+      messages: [{ role: "user", content: "Let me check the build output for errors" }],
+    };
+    await captureStore.execute(input, pctx);
+    expect(resolver.resolve).toHaveBeenCalledTimes(1);
+    const storeCall = (pctx.client.store as any).mock.calls[0];
+    // Third arg is the options object
+    expect(storeCall[2]).toEqual(expect.objectContaining({ scope: "session", session_id: "uuid-sess-42" }));
+  });
+
+  test("omits session_id for long-term scoped memories even with sessionResolver", async () => {
+    const resolver: SessionResolverLike = {
+      resolve: vi.fn(async () => ({ sessionId: "uuid-sess-42", externalId: "s1" })),
+    };
+    const pctx = ctx(undefined, resolver);
+    // "I always prefer dark mode" triggers long-term signal
+    const input: CaptureInput = {
+      messages: [{ role: "user", content: "I always prefer dark mode for my IDE" }],
+    };
+    await captureStore.execute(input, pctx);
+    const storeCall = (pctx.client.store as any).mock.calls[0];
+    expect(storeCall[2]).toEqual(expect.objectContaining({ scope: "long-term" }));
+    expect(storeCall[2]).not.toHaveProperty("session_id");
+  });
+
+  test("stores without session_id when sessionResolver is absent", async () => {
+    const pctx = ctx();
+    // Content with no long-term signal words resolves to session scope
+    const input: CaptureInput = {
+      messages: [{ role: "user", content: "Let me check the build output for errors" }],
+    };
+    await captureStore.execute(input, pctx);
+    const storeCall = (pctx.client.store as any).mock.calls[0];
+    expect(storeCall[2]).toEqual(expect.objectContaining({ scope: "session" }));
+    expect(storeCall[2]).not.toHaveProperty("session_id");
+  });
+
+  test("continues without session_id when sessionResolver throws", async () => {
+    const resolver: SessionResolverLike = {
+      resolve: vi.fn(async () => { throw new Error("resolver down"); }),
+    };
+    const pctx = ctx(undefined, resolver);
+    // Content with no long-term signal words resolves to session scope
+    const input: CaptureInput = {
+      messages: [{ role: "user", content: "Let me check the build output for errors" }],
+    };
+    await captureStore.execute(input, pctx);
+    const storeCall = (pctx.client.store as any).mock.calls[0];
+    expect(storeCall[2]).toEqual(expect.objectContaining({ scope: "session" }));
+    expect(storeCall[2]).not.toHaveProperty("session_id");
   });
 });

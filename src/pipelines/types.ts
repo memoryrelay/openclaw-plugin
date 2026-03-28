@@ -81,6 +81,7 @@ export interface StoreOptions {
   importance?: number;
   tier?: string;
   scope?: string;
+  session_id?: string;
 }
 
 export interface SearchOptions {
@@ -110,10 +111,15 @@ export interface MemoryRelayClient {
   endSession(sessionId: string, summary?: string): Promise<void>;
 }
 
+export interface SessionResolverLike {
+  resolve(requestCtx: RequestContext): Promise<{ sessionId: string; externalId: string }>;
+}
+
 export interface PipelineContext {
   readonly requestCtx: RequestContext;
   readonly config: PluginConfig;
   readonly client: MemoryRelayClient;
+  readonly sessionResolver?: SessionResolverLike;
 }
 
 export interface RecallInput {
