@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-03-28
+
+### Added
+- **Pipeline architecture**: Decomposed monolithic `index.ts` (5,716 lines) into recall pipeline (5 stages) and capture pipeline (6 stages) with shared filter library
+- **Session-scoped memories**: Dual-scope system (session + long-term) with auto-scoping via `resolveScope()`. Session memories tied to MemoryRelay sessions via `SessionResolver`
+- **Namespace routing**: Configurable agent isolation (`isolateAgents`) and subagent policies (`inherit`, `isolate`, `skip`)
+- **Non-interactive trigger detection**: Shared gate skipping cron, heartbeat, automation, and system triggers for both pipelines
+- **Precision-first noise filtering**: Multi-stage capture pipeline with message-level drop, boilerplate density scoring, content stripping, and truncation
+- **Composite recall ranking**: Semantic similarity + freshness boost + importance boost + tier boost, all configurable
+- **Concurrency-safe request context**: Immutable `RequestContext` per invocation replaces shared mutable `currentSessionId`
+- **Session resolver**: Thread-safe session cache with in-flight deduplication, stale cleanup, and LRU eviction (max 1000 entries)
+- **`scope` parameter** on `memory_store`, `memory_recall`, and `memory_list` tools (`"session"`, `"long-term"`, `"all"`)
+- **`namespace` and `ranking` config sections** in plugin manifest with UI hints
+- **8 hook modules** extracted to `src/hooks/`
+- **9 tool modules** extracted to `src/tools/` grouped by domain
+- **API client module** at `src/client/memoryrelay-client.ts` with scope/namespace search support
+- 256 tests across 23 files (up from 167 across 7 files)
+
+### Changed
+- `index.ts` reduced from 5,716 to ~1,300 lines (wiring only)
+- Auto-recall (`before_prompt_build`) now delegates to recall pipeline
+- Auto-capture (`agent_end`) now delegates to capture pipeline
+- Capture tier now affects max memories stored: conservative=1, smart=3, aggressive=5
+- User-Agent header updated to v0.16.0
+- GitHub Actions CI upgraded from Node.js 20 to Node.js 22 (test matrix: 22.x + 24.x)
+
+### Fixed
+- Unified duplicate `Memory` type (string vs number `created_at`)
+- Dedup search now respects namespace isolation
+- `webhook_url` parameter in `memory_store_async` now correctly forwarded to API
+- `memory_list` `scope` parameter now forwarded to API
+- Session cache bounded with LRU eviction to prevent memory leaks
+- Global regex patterns converted to factories to prevent stateful `g`-flag bugs
+
 ## [0.15.8] - 2026-03-27
 
 ### Added
@@ -216,7 +250,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.8...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.8...v0.16.0
 [0.15.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.6...v0.15.8
 [0.15.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.5...v0.15.6
 [0.15.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.3...v0.15.5
