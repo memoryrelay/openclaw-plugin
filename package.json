@@ -57,5 +57,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0"
+  },
+  "optionalDependencies": {
+    "sqlite-vec": "^0.1.0"
   }
 }
