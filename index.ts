@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.16.2
+ * Version: 0.16.3
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -359,11 +359,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   try {
     const openclawHome = process.env.OPENCLAW_HOME || join(process.env.HOME || "/tmp", ".openclaw");
     const storeDir = join(openclawHome, "memory");
-    const storePath = join(storeDir, "memory.db");
+    // OpenClaw resolves store path as: ~/.openclaw/memory/{agentId}.sqlite
+    const resolvedAgentId = agentId || "main";
+    const storePath = join(storeDir, `${resolvedAgentId}.sqlite`);
     if (!existsSync(storePath)) {
       mkdirSync(storeDir, { recursive: true });
       writeFileSync(storePath, Buffer.alloc(0));
-      api.logger.info?.("memory-memoryrelay: created stub store file for OpenClaw status scanner");
+      api.logger.info?.(`memory-memoryrelay: created stub store file at ${storePath}`);
     }
   } catch (err) {
     api.logger.warn?.(`memory-memoryrelay: failed to create stub store file: ${String(err)}`);
@@ -423,7 +425,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.16.1 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.16.3 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -1312,7 +1314,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     description: "Show how to update the MemoryRelay plugin to the latest version",
     requireAuth: true,
     handler: async (_ctx) => {
-      const currentVersion = "0.16.0";
+      const currentVersion = "0.16.3";
       return {
         text: [
           "MemoryRelay Plugin Update",
