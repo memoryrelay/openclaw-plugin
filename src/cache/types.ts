@@ -26,6 +26,7 @@ export interface SyncState {
 
 export interface CacheStats {
   totalMemories: number;
+  tierBreakdown: { hot: number; warm: number; cold: number };
   bufferDepth: number;
   lastSync: string | null;
   dbSizeBytes: number;

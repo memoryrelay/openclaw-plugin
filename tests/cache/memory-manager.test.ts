@@ -28,6 +28,7 @@ function createMockSyncDaemon(overrides: Partial<SyncDaemon> = {}): SyncDaemon {
     stop: vi.fn(),
     isRunning: vi.fn().mockReturnValue(true),
     lastError: vi.fn().mockReturnValue(null),
+    getConsecutiveErrors: vi.fn().mockReturnValue(0),
     pull: vi.fn().mockResolvedValue({ added: 0, updated: 0 }),
     push: vi.fn().mockResolvedValue({ flushed: 0, failed: 0 }),
     ...overrides,

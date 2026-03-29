@@ -50,6 +50,10 @@ export class SyncDaemon {
     return this._lastError;
   }
 
+  getConsecutiveErrors(): number {
+    return this.consecutiveErrors;
+  }
+
   async pull(): Promise<{ added: number; updated: number }> {
     let added = 0;
     let updated = 0;
