@@ -115,11 +115,17 @@ export interface SessionResolverLike {
   resolve(requestCtx: RequestContext): Promise<{ sessionId: string; externalId: string }>;
 }
 
+export interface LocalCacheLike {
+  bufferWrite(content: string, metadata: Record<string, unknown>): string;
+  bufferDepth(): number;
+}
+
 export interface PipelineContext {
   readonly requestCtx: RequestContext;
   readonly config: PluginConfig;
   readonly client: MemoryRelayClient;
   readonly sessionResolver?: SessionResolverLike;
+  readonly localCache?: LocalCacheLike;
 }
 
 export interface RecallInput {
@@ -147,7 +153,7 @@ export interface CaptureInput {
 }
 
 export type CaptureResult =
-  | { action: "continue"; data: CaptureInput }
+  | { action: "continue"; data: CaptureInput; buffered?: boolean }
   | { action: "skip" };
 
 export interface CaptureStage {
