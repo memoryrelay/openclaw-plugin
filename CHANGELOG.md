@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-03-29
+
+### Added
+- Create minimal stub SQLite store file on startup so OpenClaw 2026.3.28 `existsSync` checks pass (#59)
+- Enriched `memory.probe` gateway method with full `MemoryProviderStatus` data: memory count, vector dimensions, backend info (#59)
+- `openclaw status` now shows `331 files · 331 chunks · plugin plugin-memoryrelay-ai · vector ready` instead of `· unavailable`
+
+### Changed
+- User-Agent updated to v0.16.2
+
 ## [0.16.1] - 2026-03-29
 
 ### Fixed
