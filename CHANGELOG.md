@@ -273,7 +273,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.3...HEAD
+[0.16.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.2...v0.16.3
+[0.16.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.1...v0.16.2
+[0.16.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.8...v0.16.0
 [0.15.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.6...v0.15.8
 [0.15.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.5...v0.15.6

@@ -5,7 +5,7 @@
 Persistent memory, architectural decisions, reusable patterns, and project orchestration for AI agents.
 
 [![npm version](https://img.shields.io/npm/v/@memoryrelay/plugin-memoryrelay-ai.svg)](https://www.npmjs.com/package/@memoryrelay/plugin-memoryrelay-ai)
-[![OpenClaw Compatible](https://img.shields.io/badge/OpenClaw-2026.2.0+-blue.svg)](https://openclaw.ai)
+[![OpenClaw Compatible](https://img.shields.io/badge/OpenClaw-2026.3.28+-blue.svg)](https://openclaw.ai)
 
 ## Why MemoryRelay?
 
@@ -382,6 +382,92 @@ Then inspect with `/memory-logs` or `/memory-metrics` to identify slow or failin
 ### Known Limitations
 
 - `memory_batch_store`: May return 500 errors on large batches (use individual `memory_store` as workaround)
+
+## VPS Setup
+
+Complete guide for running Claude Code with MemoryRelay on a VPS (Ubuntu).
+
+### Prerequisites
+
+- Node.js 20+
+- [OpenClaw](https://openclaw.ai) installed and configured
+- [Claude Code](https://claude.ai/code) CLI installed
+
+### 1. Install the MCP server
+
+```bash
+npm install -g @memoryrelay/mcp-server
+```
+
+### 2. Configure Claude Code settings
+
+Add the MemoryRelay MCP server to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "MemoryRelay": {
+      "command": "memoryrelay-mcp",
+      "args": ["--agent-id", "YOUR_AGENT_UUID"],
+      "env": {
+        "MEMORYRELAY_API_KEY": "mem_prod_your_key_here"
+      }
+    }
+  }
+}
+```
+
+> **Important:** `agentId` must be a UUID obtained from `GET /v1/agents` — not a name string. Using a name string will cause authentication failures.
+
+### 3. Install the OpenClaw plugin
+
+```bash
+openclaw plugins install @memoryrelay/plugin-memoryrelay-ai
+```
+
+### 4. Add `.mcp.json` to each project
+
+Create `.mcp.json` in each project worktree root. This is **required** for MCP tools to be available in Claude sessions (including `claude --print`):
+
+```json
+{
+  "mcpServers": {
+    "MemoryRelay": {
+      "command": "memoryrelay-mcp",
+      "args": ["--agent-id", "YOUR_AGENT_UUID"],
+      "env": {
+        "MEMORYRELAY_API_KEY": "mem_prod_your_key_here"
+      }
+    }
+  }
+}
+```
+
+### 5. Install Alteriom Claude Skills (optional)
+
+```bash
+git clone git@github.com:Alteriom/alteriom-claude-skills.git ~/.alteriom-claude-skills
+```
+
+These provide curated skill files for common workflows across projects.
+
+## Known Issues
+
+| Issue | Status | Workaround |
+|-------|--------|------------|
+| `openclaw status` shows `· unavailable` on OpenClaw 2026.3.28 | Cosmetic — plugin is functional | Fix planned in v0.17.0 (local cache with MemorySearchManager-compatible schema) |
+| `plugins update --all` doesn't reliably update extensions | OpenClaw CLI bug | `rm -rf ~/.openclaw/extensions/plugin-memoryrelay-ai && openclaw plugins install @memoryrelay/plugin-memoryrelay-ai` |
+| `agentId` must be a UUID from `GET /v1/agents` | By design | Do not use agent name strings — retrieve the UUID from the API |
+
+## Roadmap
+
+**v0.17.0** — Local SQLite cache layer ([Epic #62](https://github.com/memoryrelay/openclaw-plugin/issues/62))
+
+- Local SQLite cache for offline-first memory access
+- SyncDaemon for background API synchronization
+- Local vector search via `sqlite-vec`
+- `MemorySearchManager`-compatible schema (fixes `openclaw status` display)
+- Issues [#63](https://github.com/memoryrelay/openclaw-plugin/issues/63)–[#72](https://github.com/memoryrelay/openclaw-plugin/issues/72)
 
 ## Development
 
