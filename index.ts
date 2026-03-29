@@ -34,6 +34,7 @@ import {
 import { SessionResolver } from "./src/context/session-resolver.js";
 import { LocalCache } from "./src/cache/local-cache.js";
 import { SyncDaemon } from "./src/cache/sync-daemon.js";
+import { PluginMemoryManager } from "./src/cache/memory-manager.js";
 import type { LocalCacheConfig } from "./src/cache/types.js";
 
 // --- Hooks ---
@@ -379,6 +380,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
   let localCache: LocalCache | null = null;
   let syncDaemon: SyncDaemon | null = null;
+  let memoryManager: PluginMemoryManager | null = null;
 
   if (localCacheConfig.enabled) {
     try {
@@ -393,6 +395,15 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       syncDaemon = new SyncDaemon(localCache, client, localCacheConfig);
       syncDaemon.start();
 
+      const vectorAvailable = localCacheConfig.vectorSearch.enabled;
+      memoryManager = new PluginMemoryManager(
+        localCache,
+        syncDaemon,
+        localCacheConfig,
+        vectorAvailable,
+        agentId || "main",
+      );
+
       // Initial pull on startup (non-blocking)
       syncDaemon.pull().catch((err) =>
         api.logger.warn?.(`memory-memoryrelay: initial sync failed: ${String(err)}`),
@@ -403,6 +414,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       api.logger.warn?.(`memory-memoryrelay: local cache init failed, falling back to API-only: ${String(err)}`);
       localCache = null;
       syncDaemon = null;
+      memoryManager = null;
     }
   }
 
@@ -502,6 +514,17 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // `openclaw status` shows memory count, vector info, and provider details
   // instead of "unavailable". OpenClaw 2026.3.28+ calls this for all memory plugins.
   api.registerGatewayMethod?.("memory.probe", async ({ respond }) => {
+    // Use local PluginMemoryManager when available (v0.17.0+)
+    if (memoryManager) {
+      try {
+        const status = memoryManager.status();
+        respond(true, { available: true, ...status });
+        return;
+      } catch {
+        // Fall through to API-based probe
+      }
+    }
+
     try {
       const health = await client.health() as { status: string; embedding_info?: { dimension?: number } };
       const healthStatus = String(health.status).toLowerCase();
@@ -541,6 +564,16 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         error: String(_err),
         custom: { endpoint: apiUrl, agentId, tier: "remote" },
       });
+    }
+  });
+
+  // getMemorySearchManager — exposes the PluginMemoryManager so OpenClaw's
+  // status scanner can call status(), probeVectorAvailability(), and close().
+  api.registerGatewayMethod?.("getMemorySearchManager", async ({ respond }) => {
+    if (memoryManager) {
+      respond(true, { manager: memoryManager });
+    } else {
+      respond(false, { error: "Local cache not initialized" });
     }
   });
 
