@@ -72,41 +72,25 @@ export class SyncDaemon {
         }
 
         for (const memory of memories) {
-          const existing = this.cache.get(memory.id);
-          if (existing) {
-            // API wins for edits (same remote_id) — overwrite local
-            this.cache.upsert({
-              id: memory.id,
-              remote_id: memory.id,
-              content: memory.content,
-              agent_id: memory.agent_id,
-              user_id: memory.user_id ?? "",
-              metadata: memory.metadata ?? {},
-              entities: memory.entities ?? [],
-              importance: memory.importance ?? 0.5,
-              tier: memory.tier ?? "warm",
-              scope: "long-term",
-              synced_at: new Date().toISOString(),
-              updated_at: memory.updated_at,
-              created_at: memory.created_at,
-            });
+          const existed = this.cache.get(memory.id) !== null;
+          this.cache.upsert({
+            id: memory.id,
+            remote_id: memory.id,
+            content: memory.content,
+            agent_id: memory.agent_id,
+            user_id: memory.user_id ?? "",
+            metadata: memory.metadata ?? {},
+            entities: memory.entities ?? [],
+            importance: memory.importance ?? 0.5,
+            tier: memory.tier ?? "warm",
+            scope: "long-term",
+            synced_at: new Date().toISOString(),
+            updated_at: memory.updated_at,
+            created_at: memory.created_at,
+          });
+          if (existed) {
             updated++;
           } else {
-            this.cache.upsert({
-              id: memory.id,
-              remote_id: memory.id,
-              content: memory.content,
-              agent_id: memory.agent_id,
-              user_id: memory.user_id ?? "",
-              metadata: memory.metadata ?? {},
-              entities: memory.entities ?? [],
-              importance: memory.importance ?? 0.5,
-              tier: memory.tier ?? "warm",
-              scope: "long-term",
-              synced_at: new Date().toISOString(),
-              updated_at: memory.updated_at,
-              created_at: memory.created_at,
-            });
             added++;
           }
         }

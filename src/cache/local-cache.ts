@@ -1,5 +1,4 @@
 import Database from "better-sqlite3";
-import { randomUUID } from "node:crypto";
 import { statSync } from "node:fs";
 import { migrateIfNeeded } from "./schema.js";
 import type {

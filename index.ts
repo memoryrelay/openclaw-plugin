@@ -472,7 +472,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.16.3 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.17.0 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -532,8 +532,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           consecutiveErrors: daemonInfo.errors,
         });
         return;
-      } catch {
-        // Fall through to API-based probe
+      } catch (err) {
+        api.logger.warn?.(`memory-memoryrelay: memory.probe local cache failed, falling back to API: ${String(err)}`);
       }
     }
 

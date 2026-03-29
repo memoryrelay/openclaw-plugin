@@ -75,14 +75,6 @@ export const CREATE_INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_buffer_flushed     ON session_buffer(flushed, created_at)",
 ];
 
-/**
- * Run a SQL statement on the database.
- * Wrapper around Database.exec to keep schema module self-contained.
- */
-function run(db: Database.Database, sql: string): void {
-  db.prepare(sql).run();
-}
-
 function runDDL(db: Database.Database, sql: string): void {
   // For DDL statements (CREATE TABLE, CREATE INDEX, CREATE TRIGGER, CREATE VIRTUAL TABLE)
   // we need to use the exec method on the database instance

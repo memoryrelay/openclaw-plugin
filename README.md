@@ -250,7 +250,7 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
     "syncIntervalMinutes": 5,
     "maxLocalMemories": 10000,
     "vectorSearch": { "enabled": false, "provider": "sqlite-vec" },
-    "ttl": { "hot": 86400, "warm": 604800, "cold": 2592000 }
+    "ttl": { "hot": 72, "warm": 168, "cold": 720 }
   }
 }
 ```
@@ -263,9 +263,9 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
 | `localCache.maxLocalMemories` | number | `10000` | Max memories stored locally |
 | `localCache.vectorSearch.enabled` | boolean | `false` | Enable sqlite-vec vector search |
 | `localCache.vectorSearch.provider` | string | `sqlite-vec` | Vector extension provider |
-| `localCache.ttl.hot` | number | `86400` | Hot tier TTL in seconds (1 day) |
-| `localCache.ttl.warm` | number | `604800` | Warm tier TTL in seconds (7 days) |
-| `localCache.ttl.cold` | number | `2592000` | Cold tier TTL in seconds (30 days) |
+| `localCache.ttl.hot` | number | `72` | Hot tier TTL in hours (3 days) |
+| `localCache.ttl.warm` | number | `168` | Warm tier TTL in hours (7 days) |
+| `localCache.ttl.cold` | number | `720` | Cold tier TTL in hours (30 days) |
 
 ### Auto-Capture Tiers
 
