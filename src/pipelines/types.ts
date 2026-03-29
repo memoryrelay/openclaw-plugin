@@ -66,6 +66,7 @@ export interface PluginConfig {
     importanceBoost?: boolean;
     tierBoost?: boolean;
   };
+  syncIntervalMinutes?: number;
   sessionTimeoutMinutes?: number;
   sessionCleanupIntervalMinutes?: number;
   debug?: boolean;
@@ -135,6 +136,7 @@ export interface RecallInput {
   resolvedSessionKey?: string;
   longTerm?: ScoredMemory[];
   session?: ScoredMemory[];
+  source?: "local" | "api";
   formatted?: string;
 }
 
