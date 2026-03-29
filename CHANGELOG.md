@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-03-29
+
+### Fixed
+- Register `memory.probe` gateway method so `openclaw status` shows "available" instead of "unavailable" when plugin-memoryrelay-ai holds the memory slot (#57)
+- User-Agent updated to v0.16.1
+
 ## [0.16.0] - 2026-03-28
 
 ### Added
