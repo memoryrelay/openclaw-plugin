@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-03-29
+
+### Fixed
+- **JSDoc header comment version**: Updated top-of-file version comment to 0.17.2 (#85)
+- **Add `openclaw.hooks: []` to package.json**: Silences `package.json missing openclaw.hooks` warning during `openclaw plugins install` (#88)
+
+### Added
+- **RELEASING.md**: Release checklist documenting all 6 version locations and publish workflow (#85)
+
 ## [0.17.1] - 2026-03-29
 
 ### Fixed
