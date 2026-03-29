@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - UNRELEASED
+
+### Added
+- **Local SQLite cache layer**: `LocalCache` class backed by better-sqlite3 with FTS5 full-text search, TTL-based eviction, and schema migrations (#64)
+- **SyncDaemon background sync**: Pull/push sync between local cache and MemoryRelay API with exponential backoff, conflict resolution, and configurable sync intervals (#65)
+- **Local-first recall pipeline**: Recall queries hit local cache first (<5ms), falling back to API on cache miss (#66)
+- **Buffer-first capture pipeline**: Memories are written to local buffer first (<2ms), then flushed to API by SyncDaemon (#67)
+- **Optional sqlite-vec vector search**: When the sqlite-vec extension is available, enables local vector similarity search without API round-trips (#69)
+- **`localCache` config block**: New configuration section for cache settings: `enabled`, `dbPath`, `syncIntervalMinutes`, `maxLocalMemories`, `vectorSearch`, `ttl` (#68)
+- **`openclaw status` shows real memory count**: `memory.probe` gateway method now returns live memory count from local cache instead of hardcoded stub values (#68)
+- 378 tests across 27 files (up from 243 across 22 files)
+
+### Changed
+- Plugin startup now initializes LocalCache and SyncDaemon when `localCache.enabled` is true (default)
+- Recall pipeline checks local cache before issuing API requests
+- Capture pipeline buffers writes locally before syncing to API
+- `memory.probe` gateway method returns data from local cache instead of stub file
+
 ## [0.16.3] - 2026-03-29
 
 ### Fixed
@@ -273,7 +291,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search with configurable threshold
 - Multi-agent support with isolated namespaces
 
-[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.3...v0.17.0
+[0.16.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.2...v0.16.3
+[0.16.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.1...v0.16.2
+[0.16.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.8...v0.16.0
 [0.15.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.6...v0.15.8
 [0.15.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.15.5...v0.15.6

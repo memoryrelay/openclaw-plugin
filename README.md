@@ -226,6 +226,7 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
 | `excludeChannels` | string[] | `[]` | Channel IDs to skip auto-recall |
 | `sessionTimeoutMinutes` | number | `120` | Idle time before session auto-close (10-1440) |
 | `sessionCleanupIntervalMinutes` | number | `30` | Stale session check interval (5-360) |
+| `localCache` | object | see below | Local SQLite cache configuration (v0.17.0+) |
 | `debug` | boolean | `false` | Enable debug logging of API calls |
 | `verbose` | boolean | `false` | Include request/response bodies in logs |
 | `maxLogEntries` | number | `100` | Circular buffer size for in-memory logs (10-10000) |
@@ -238,6 +239,33 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
 | `MEMORYRELAY_AGENT_ID` | `agentId` |
 | `MEMORYRELAY_API_URL` | `apiUrl` |
 | `MEMORYRELAY_DEFAULT_PROJECT` | `defaultProject` |
+
+### Local Cache Configuration (v0.17.0+)
+
+```json
+{
+  "localCache": {
+    "enabled": true,
+    "dbPath": "~/.openclaw/memoryrelay-cache.db",
+    "syncIntervalMinutes": 5,
+    "maxLocalMemories": 10000,
+    "vectorSearch": { "enabled": false, "provider": "sqlite-vec" },
+    "ttl": { "hot": 86400, "warm": 604800, "cold": 2592000 }
+  }
+}
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `localCache.enabled` | boolean | `true` | Enable local SQLite cache |
+| `localCache.dbPath` | string | `~/.openclaw/memoryrelay-cache.db` | Path to SQLite database |
+| `localCache.syncIntervalMinutes` | number | `5` | Background sync interval (1-60) |
+| `localCache.maxLocalMemories` | number | `10000` | Max memories stored locally |
+| `localCache.vectorSearch.enabled` | boolean | `false` | Enable sqlite-vec vector search |
+| `localCache.vectorSearch.provider` | string | `sqlite-vec` | Vector extension provider |
+| `localCache.ttl.hot` | number | `86400` | Hot tier TTL in seconds (1 day) |
+| `localCache.ttl.warm` | number | `604800` | Warm tier TTL in seconds (7 days) |
+| `localCache.ttl.cold` | number | `2592000` | Cold tier TTL in seconds (30 days) |
 
 ### Auto-Capture Tiers
 
@@ -266,6 +294,22 @@ The `confirmFirst` setting (default: `5`) prompts for confirmation on the first 
   }
 }
 ```
+
+## Performance (v0.17.0+)
+
+With local cache enabled (default in v0.17.0), most operations skip API round-trips entirely:
+
+| Operation | API-only (v0.16) | Local cache (v0.17) | Improvement |
+|-----------|------------------|---------------------|-------------|
+| Recall | ~200–500ms | <5ms | 40–100× |
+| Capture | ~150–300ms | <2ms | 75–150× |
+| Status probe | ~100ms | <1ms | 100× |
+
+The local cache uses SQLite (better-sqlite3) with FTS5 for full-text search. An optional sqlite-vec extension enables local vector similarity search without API round-trips.
+
+SyncDaemon runs in the background, pushing buffered writes and pulling remote changes on a configurable interval (default: 5 minutes).
+
+> **Note:** v0.17.0 also fixes the `· unavailable` status display in `openclaw status` — the plugin now returns real memory counts from the local cache.
 
 ## Architecture & Privacy
 
