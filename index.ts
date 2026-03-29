@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.16.0
+ * Version: 0.16.1
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -404,7 +404,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.16.0 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.16.1 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -439,8 +439,34 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // ========================================================================
-  // Gateway Methods (memory.status, memoryrelay.*)
+  // Gateway Methods (memory.probe, memory.status, memoryrelay.*)
   // ========================================================================
+
+  // memory.probe — lightweight probe so `openclaw status` shows "available"
+  // instead of "unavailable". OpenClaw checks this to determine if the memory
+  // slot has a functioning provider.
+  api.registerGatewayMethod?.("memory.probe", async ({ respond }) => {
+    try {
+      const health = await client.health();
+      const healthStatus = String(health.status).toLowerCase();
+      const isConnected = VALID_HEALTH_STATUSES.includes(healthStatus);
+
+      respond(true, {
+        available: isConnected,
+        provider: "memoryrelay",
+        endpoint: apiUrl,
+        vector: { available: true, enabled: true },
+      });
+    } catch (_err) {
+      respond(true, {
+        available: false,
+        provider: "memoryrelay",
+        endpoint: apiUrl,
+        error: String(_err),
+        vector: { available: false, enabled: true },
+      });
+    }
+  });
 
   api.registerGatewayMethod?.("memory.status", async ({ respond }) => {
     try {
