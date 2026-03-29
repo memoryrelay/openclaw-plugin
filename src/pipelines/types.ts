@@ -117,13 +117,8 @@ export interface SessionResolverLike {
 }
 
 export interface LocalCacheLike {
-  search(query: string, opts?: { limit?: number; scope?: string; sessionId?: string; namespace?: string }): Array<{ id: string; content: string; agent_id: string; user_id: string; metadata: Record<string, unknown>; entities: unknown[]; importance: number; tier: "hot" | "warm" | "cold"; scope: "session" | "long-term"; session_id: string | null; namespace: string; created_at: string; updated_at: string }>;
-  getSyncState(): { lastPull: string | null; lastPush: string | null; cursor: string | null };
-  count(): number;
-}
-
-export interface SyncDaemonLike {
-  pull(): Promise<{ upserted: number; deleted: number }>;
+  bufferWrite(content: string, metadata: Record<string, unknown>): string;
+  bufferDepth(): number;
 }
 
 export interface PipelineContext {
@@ -132,7 +127,6 @@ export interface PipelineContext {
   readonly client: MemoryRelayClient;
   readonly sessionResolver?: SessionResolverLike;
   readonly localCache?: LocalCacheLike;
-  readonly syncDaemon?: SyncDaemonLike;
 }
 
 export interface RecallInput {
@@ -161,7 +155,7 @@ export interface CaptureInput {
 }
 
 export type CaptureResult =
-  | { action: "continue"; data: CaptureInput }
+  | { action: "continue"; data: CaptureInput; buffered?: boolean }
   | { action: "skip" };
 
 export interface CaptureStage {
