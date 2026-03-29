@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-03-29
+
+### Fixed
+- **Bundle better-sqlite3 prebuilts**: Added `bundledDependencies` so the npm tarball includes better-sqlite3 native bindings — plugin works immediately after `openclaw plugins install` without a separate `npm install` step (#86)
+- **JSDoc version header**: Updated top-of-file version comment to match current release (#85)
+
 ## [0.17.0] - UNRELEASED
 
 ### Added
