@@ -153,7 +153,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.16.3",
+            "User-Agent": "openclaw-memory-memoryrelay/0.17.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },

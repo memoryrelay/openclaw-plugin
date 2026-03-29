@@ -1,6 +1,6 @@
 // src/hooks/agent-end.ts
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import type { PluginConfig, MemoryRelayClient, ConversationMessage, SessionResolverLike } from "../pipelines/types.js";
+import type { PluginConfig, MemoryRelayClient, ConversationMessage, SessionResolverLike, LocalCacheLike, SyncDaemonLike } from "../pipelines/types.js";
 import { buildRequestContext } from "../context/request-context.js";
 import { runPipeline } from "../pipelines/runner.js";
 import { capturePipeline } from "../pipelines/capture/index.js";
@@ -10,6 +10,8 @@ export function registerAgentEnd(
   config: PluginConfig,
   client: MemoryRelayClient,
   sessionResolver?: SessionResolverLike,
+  localCache?: LocalCacheLike,
+  syncDaemon?: SyncDaemonLike,
 ): void {
   if (!config.autoCapture?.enabled) return;
 
@@ -39,7 +41,7 @@ export function registerAgentEnd(
       if (messages.length === 0) return;
 
       const requestCtx = buildRequestContext(event, config);
-      const pipelineCtx = { requestCtx, config, client, sessionResolver };
+      const pipelineCtx = { requestCtx, config, client, sessionResolver, localCache, syncDaemon };
       await runPipeline(capturePipeline, { messages }, pipelineCtx);
     } catch (err) {
       api.logger.warn?.(`memory-memoryrelay: capture failed: ${String(err)}`);

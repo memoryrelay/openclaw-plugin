@@ -66,6 +66,7 @@ export interface PluginConfig {
     importanceBoost?: boolean;
     tierBoost?: boolean;
   };
+  syncIntervalMinutes?: number;
   sessionTimeoutMinutes?: number;
   sessionCleanupIntervalMinutes?: number;
   debug?: boolean;
@@ -115,11 +116,34 @@ export interface SessionResolverLike {
   resolve(requestCtx: RequestContext): Promise<{ sessionId: string; externalId: string }>;
 }
 
+export interface LocalCacheLike {
+  bufferWrite(content: string, metadata: Record<string, unknown>): string;
+  bufferDepth(): number;
+  count(): number;
+  search(query: string, opts?: { limit?: number; scope?: string; sessionId?: string; namespace?: string }): Array<{
+    id: string; content: string; agent_id: string; user_id: string;
+    metadata: Record<string, unknown>; entities: unknown[];
+    importance: number; tier: "hot" | "warm" | "cold";
+    created_at: string; updated_at: string;
+  }>;
+  getSyncState(): { lastPull: string | null; lastPush: string | null; cursor: string | null };
+  close(): void;
+}
+
+export interface SyncDaemonLike {
+  start(): void;
+  stop(): void;
+  pull(): Promise<{ added: number; updated: number }>;
+  isRunning(): boolean;
+}
+
 export interface PipelineContext {
   readonly requestCtx: RequestContext;
   readonly config: PluginConfig;
   readonly client: MemoryRelayClient;
   readonly sessionResolver?: SessionResolverLike;
+  readonly localCache?: LocalCacheLike;
+  readonly syncDaemon?: SyncDaemonLike;
 }
 
 export interface RecallInput {
@@ -129,6 +153,7 @@ export interface RecallInput {
   resolvedSessionKey?: string;
   longTerm?: ScoredMemory[];
   session?: ScoredMemory[];
+  source?: "local" | "api";
   formatted?: string;
 }
 
@@ -147,7 +172,7 @@ export interface CaptureInput {
 }
 
 export type CaptureResult =
-  | { action: "continue"; data: CaptureInput }
+  | { action: "continue"; data: CaptureInput; buffered?: boolean }
   | { action: "skip" };
 
 export interface CaptureStage {

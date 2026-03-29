@@ -14,7 +14,8 @@
  * Docs: https://memoryrelay.ai
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
@@ -31,6 +32,10 @@ import {
   VALID_HEALTH_STATUSES,
 } from "./src/client/memoryrelay-client.js";
 import { SessionResolver } from "./src/context/session-resolver.js";
+import { LocalCache } from "./src/cache/local-cache.js";
+import { SyncDaemon } from "./src/cache/sync-daemon.js";
+import { PluginMemoryManager } from "./src/cache/memory-manager.js";
+import type { LocalCacheConfig } from "./src/cache/types.js";
 
 // --- Hooks ---
 import { registerBeforeAgentStart } from "./src/hooks/before-agent-start.js";
@@ -98,6 +103,7 @@ interface MemoryRelayConfig {
   maxLogEntries?: number;
   sessionTimeoutMinutes?: number;
   sessionCleanupIntervalMinutes?: number;
+  localCache?: Partial<LocalCacheConfig>;
 }
 
 // ============================================================================
@@ -352,23 +358,64 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     api.logger.error(`memory-memoryrelay: health check failed: ${String(err)}`);
   }
 
-  // --- Create stub store file so OpenClaw's existsSync checks pass ---
-  // OpenClaw 2026.3.28 scanner proceeds for all memory plugins but then checks
-  // existsSync(store.path) for a local SQLite file. Create a minimal empty file
-  // at the expected path so the scanner doesn't bail with "unavailable".
-  try {
-    const openclawHome = process.env.OPENCLAW_HOME || join(process.env.HOME || "/tmp", ".openclaw");
-    const storeDir = join(openclawHome, "memory");
-    // OpenClaw resolves store path as: ~/.openclaw/memory/{agentId}.sqlite
-    const resolvedAgentId = agentId || "main";
-    const storePath = join(storeDir, `${resolvedAgentId}.sqlite`);
-    if (!existsSync(storePath)) {
+  // --- Local Cache + SyncDaemon (v0.17.0) ---
+  // Replaces the stub file hack from v0.16.x. LocalCache creates a real SQLite
+  // database at the expected path, satisfying OpenClaw's existsSync scanner and
+  // enabling local-first recall/capture pipelines.
+  const DEFAULT_CACHE_CONFIG: LocalCacheConfig = {
+    enabled: true,
+    dbPath: "",
+    syncIntervalMinutes: 5,
+    maxLocalMemories: 1000,
+    vectorSearch: { enabled: false, provider: "none" },
+    ttl: { hot: 72, warm: 168, cold: 720 },
+  };
+
+  const localCacheConfig: LocalCacheConfig = {
+    ...DEFAULT_CACHE_CONFIG,
+    ...cfg?.localCache,
+    vectorSearch: { ...DEFAULT_CACHE_CONFIG.vectorSearch, ...cfg?.localCache?.vectorSearch },
+    ttl: { ...DEFAULT_CACHE_CONFIG.ttl, ...cfg?.localCache?.ttl },
+  };
+
+  let localCache: LocalCache | null = null;
+  let syncDaemon: SyncDaemon | null = null;
+  let memoryManager: PluginMemoryManager | null = null;
+
+  if (localCacheConfig.enabled) {
+    try {
+      const openclawHome = process.env.OPENCLAW_HOME || join(homedir(), ".openclaw");
+      const resolvedAgentId = agentId || "main";
+      const storeDir = join(openclawHome, "memory");
       mkdirSync(storeDir, { recursive: true });
-      writeFileSync(storePath, Buffer.alloc(0));
-      api.logger.info?.(`memory-memoryrelay: created stub store file at ${storePath}`);
+      const dbPath = join(storeDir, `${resolvedAgentId}.sqlite`);
+      localCacheConfig.dbPath = dbPath;
+
+      localCache = new LocalCache(dbPath, localCacheConfig);
+      syncDaemon = new SyncDaemon(localCache, client, localCacheConfig);
+      syncDaemon.start();
+
+      const vectorAvailable = localCacheConfig.vectorSearch.enabled;
+      memoryManager = new PluginMemoryManager(
+        localCache,
+        syncDaemon,
+        localCacheConfig,
+        vectorAvailable,
+        agentId || "main",
+      );
+
+      // Initial pull on startup (non-blocking)
+      syncDaemon.pull().catch((err) =>
+        api.logger.warn?.(`memory-memoryrelay: initial sync failed: ${String(err)}`),
+      );
+
+      api.logger.info?.(`memory-memoryrelay: local cache initialized at ${dbPath}`);
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: local cache init failed, falling back to API-only: ${String(err)}`);
+      localCache = null;
+      syncDaemon = null;
+      memoryManager = null;
     }
-  } catch (err) {
-    api.logger.warn?.(`memory-memoryrelay: failed to create stub store file: ${String(err)}`);
   }
 
   // --- Tool enablement filter ---
@@ -398,8 +445,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   registerBeforeAgentStart(api, pluginConfig, isToolEnabled, defaultProject);
-  registerBeforePromptBuild(api, pluginConfig, client, sessionResolver);
-  registerAgentEnd(api, pluginConfig, client, sessionResolver);
+  registerBeforePromptBuild(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
+  registerAgentEnd(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
   registerSessionLifecycle(api, pluginConfig, client, agentId, defaultProject, sessionResolver);
   registerSubagentHooks(api, pluginConfig, client, agentId, autoCaptureConfig, isBlocklisted);
   registerCompactionHooks(api, client, agentId, blocklist, extractRescueContent);
@@ -425,7 +472,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.16.3 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.17.0 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -467,6 +514,29 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // `openclaw status` shows memory count, vector info, and provider details
   // instead of "unavailable". OpenClaw 2026.3.28+ calls this for all memory plugins.
   api.registerGatewayMethod?.("memory.probe", async ({ respond }) => {
+    // Use local PluginMemoryManager when available (v0.17.0+)
+    if (memoryManager) {
+      try {
+        const stats = memoryManager.cacheStats();
+        const daemonInfo = memoryManager.getSyncDaemonInfo();
+        respond(true, {
+          available: true,
+          provider: "memoryrelay",
+          memoryCount: stats.totalMemories,
+          tierBreakdown: stats.tierBreakdown,
+          bufferDepth: stats.bufferDepth,
+          syncActive: daemonInfo.running,
+          lastSync: stats.lastSync,
+          vector: { enabled: localCacheConfig.vectorSearch.enabled, dims: 768 },
+          fts: { enabled: true },
+          consecutiveErrors: daemonInfo.errors,
+        });
+        return;
+      } catch (err) {
+        api.logger.warn?.(`memory-memoryrelay: memory.probe local cache failed, falling back to API: ${String(err)}`);
+      }
+    }
+
     try {
       const health = await client.health() as { status: string; embedding_info?: { dimension?: number } };
       const healthStatus = String(health.status).toLowerCase();
@@ -506,6 +576,16 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         error: String(_err),
         custom: { endpoint: apiUrl, agentId, tier: "remote" },
       });
+    }
+  });
+
+  // getMemorySearchManager — exposes the PluginMemoryManager so OpenClaw's
+  // status scanner can call status(), probeVectorAvailability(), and close().
+  api.registerGatewayMethod?.("getMemorySearchManager", async ({ respond }) => {
+    if (memoryManager) {
+      respond(true, { manager: memoryManager });
+    } else {
+      respond(false, { error: "Local cache not initialized" });
     }
   });
 
@@ -833,7 +913,43 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
         if (statusReporter) {
           const report = statusReporter.buildReport(connectionStatus, reportConfig, { total_memories: memoryCount }, TOOL_GROUPS);
-          return { text: StatusReporter.formatReport(report) };
+          let text = StatusReporter.formatReport(report);
+
+          // Append local cache section when available
+          if (memoryManager) {
+            try {
+              const cacheStats = memoryManager.cacheStats();
+              const daemonInfo = memoryManager.getSyncDaemonInfo();
+              const cacheLines: string[] = [];
+              cacheLines.push("LOCAL CACHE");
+              const { hot, warm, cold } = cacheStats.tierBreakdown;
+              cacheLines.push(`  Total:     ${cacheStats.totalMemories} memories (hot: ${hot}, warm: ${warm}, cold: ${cold})`);
+              cacheLines.push(`  Buffer:    ${cacheStats.bufferDepth} entries pending sync`);
+              if (cacheStats.lastSync) {
+                const ago = StatusReporter.formatTimeAgo(new Date(cacheStats.lastSync));
+                cacheLines.push(`  Last sync: ${ago}`);
+              } else {
+                cacheLines.push("  Last sync: never");
+              }
+              const vecLabel = localCacheConfig.vectorSearch.enabled ? "ready (sqlite-vec, 768 dims)" : "disabled";
+              cacheLines.push(`  Vector:    ${vecLabel}`);
+              cacheLines.push("  FTS:       ready");
+              cacheLines.push("");
+              const daemonStatus = daemonInfo.running ? "running" : "stopped";
+              cacheLines.push(`SYNC DAEMON: ${daemonStatus}`);
+              cacheLines.push(`  Interval:  ${daemonInfo.intervalMinutes} minutes`);
+              cacheLines.push(`  Errors:    ${daemonInfo.errors} consecutive`);
+              if (daemonInfo.lastError) {
+                cacheLines.push(`  Last error: ${daemonInfo.lastError}`);
+              }
+              cacheLines.push("");
+              text += cacheLines.join("\n");
+            } catch {
+              // cache stats unavailable — skip section
+            }
+          }
+
+          return { text };
         }
         return { text: `MemoryRelay: ${isConnected ? "connected" : "disconnected"} | Endpoint: ${apiUrl} | Memories: ${memoryCount} | Agent: ${agentId}` };
       } catch (err) {
@@ -1335,6 +1451,20 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       };
     },
   });
+
+  // ========================================================================
+  // Local Cache Cleanup Service
+  // ========================================================================
+
+  if (localCache || syncDaemon) {
+    api.registerService({
+      id: "memoryrelay-cache-cleanup",
+      stop: async () => {
+        syncDaemon?.stop();
+        localCache?.close();
+      },
+    });
+  }
 
   // ========================================================================
   // Stale Session Cleanup Service

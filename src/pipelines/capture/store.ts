@@ -20,14 +20,38 @@ export const captureStore: CaptureStage = {
       }
     }
 
+    let buffered = false;
+
     for (const msg of toStore) {
       const scope = resolveScope(msg.content);
-      const opts: Record<string, unknown> = { scope };
+      const metadata: Record<string, unknown> = { source: "auto-capture", scope };
       if (scope === "session" && sessionId) {
-        opts.session_id = sessionId;
+        metadata.session_id = sessionId;
       }
-      await ctx.client.store(msg.content, { source: "auto-capture", scope }, opts);
+      metadata.namespace = ctx.requestCtx.namespace;
+
+      if (ctx.localCache) {
+        try {
+          ctx.localCache.bufferWrite(msg.content, metadata);
+          buffered = true;
+        } catch {
+          // Buffer write failed — fall back to direct API call
+          const opts: Record<string, unknown> = { scope };
+          if (scope === "session" && sessionId) {
+            opts.session_id = sessionId;
+          }
+          await ctx.client.store(msg.content, { source: "auto-capture", scope }, opts);
+        }
+      } else {
+        // No local cache — direct API call (existing behavior)
+        const opts: Record<string, unknown> = { scope };
+        if (scope === "session" && sessionId) {
+          opts.session_id = sessionId;
+        }
+        await ctx.client.store(msg.content, { source: "auto-capture", scope }, opts);
+      }
     }
-    return { action: "continue", data: input };
+
+    return { action: "continue", data: input, buffered };
   },
 };

@@ -280,7 +280,7 @@ export class StatusReporter {
   /**
    * Format time ago string
    */
-  private static formatTimeAgo(date: Date): string {
+  static formatTimeAgo(date: Date): string {
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
 
     if (seconds < 60) return `${seconds} seconds ago`;

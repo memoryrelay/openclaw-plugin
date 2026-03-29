@@ -19,7 +19,7 @@ npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report (v8)
 ```
 
-## Architecture (v0.16 Pipeline Pattern)
+## Architecture (v0.17 Pipeline Pattern — v0.16.3 stable, v0.17.0 in development)
 
 - `index.ts` — Plugin entry point: wiring only (~1300 lines). Imports modules, registers hooks/tools, keeps gateway methods and CLI commands inline
 - `openclaw.plugin.json` — Plugin manifest with config schema and UI hints
@@ -29,6 +29,11 @@ npm run test:coverage # Coverage report (v8)
 - `src/pipelines/capture/` — Capture pipeline (6 stages): trigger-gate → message-filter → content-strip → truncate → dedup → store
 - `src/filters/` — Shared filter library: `non-interactive.ts` (trigger detection), `noise-patterns.ts` (message/boilerplate), `content-patterns.ts` (XML stripping, scope resolution)
 - `src/context/` — Context layer: `request-context.ts` (immutable per-invocation context), `namespace-router.ts` (agent isolation), `session-resolver.ts` (concurrency-safe session cache)
+- `src/cache/local-cache.ts` — LocalCache class: SQLite-backed local memory store (better-sqlite3), FTS5 search, TTL eviction
+- `src/cache/sync-daemon.ts` — SyncDaemon class: background pull/push sync between local cache and API, exponential backoff
+- `src/cache/vector.ts` — Optional sqlite-vec vector search extension loader
+- `src/cache/schema.ts` — SQL schema constants, migration logic, version checks
+- `src/cache/types.ts` — Cache-specific types: LocalCacheConfig, SyncState, BufferEntry, CacheStats, LocalMemory
 - `src/client/memoryrelay-client.ts` — API client with scope/namespace support
 - `src/hooks/` — 8 hook modules (before-agent-start, before-prompt-build, agent-end, session-lifecycle, subagent, compaction, activity, privacy)
 - `src/tools/` — 9 tool modules grouped by domain (memory, session, entity, decision, pattern, project, agent, v2, health)
@@ -47,10 +52,11 @@ memory (9), entity (4), agent (3), session (4), decision (4), pattern (4), proje
 
 - Framework: Vitest with `@vitest/coverage-v8`
 - Test files: `index.test.ts`, `src/debug-logger.test.ts`, `src/status-reporter.test.ts`, `tests/pipelines/`, `tests/filters/`, `tests/context/`, `tests/integration/`
-- 243 tests across 22 files
+- 378 tests across 27 files
 - Tests mock the OpenClaw Plugin SDK (`openclaw/plugin-sdk`) — no real API calls
 - Pipeline stages are pure functions — each has independent unit tests
 - Integration tests verify full recall and capture pipelines end-to-end
+- Cache tests use in-memory SQLite (`:memory:`) — no disk I/O in CI
 
 ## Key Patterns
 
@@ -71,3 +77,4 @@ memory (9), entity (4), agent (3), session (4), decision (4), pattern (4), proje
 - `memory_list` limit is capped at 100 to prevent 422 errors (v0.15.6 fix)
 - `logFile` config option is deprecated and ignored since v0.8.4 (security compliance)
 - Onboarding state persists at `~/.openclaw/memoryrelay-onboarding.json` — not project-scoped
+- `.mcp.json` must exist in project root for MCP tools to be available to the plugin
