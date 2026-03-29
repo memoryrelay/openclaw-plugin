@@ -107,6 +107,18 @@ export function createSchema(db: Database.Database): void {
   );
 }
 
+/**
+ * Create the vec0 virtual table for vector search.
+ * Only call after sqlite-vec extension has been loaded.
+ * Separated from createSchema() because it depends on an optional extension.
+ */
+export function createVecSchema(db: Database.Database): void {
+  runDDL(
+    db,
+    "CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(memory_id TEXT PRIMARY KEY, embedding float[768])",
+  );
+}
+
 export function getSchemaVersion(db: Database.Database): number {
   const row = db.prepare("SELECT value FROM cache_meta WHERE key = 'schema_version'").get() as
     | { value: string }
