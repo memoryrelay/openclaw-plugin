@@ -359,11 +359,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   try {
     const openclawHome = process.env.OPENCLAW_HOME || join(process.env.HOME || "/tmp", ".openclaw");
     const storeDir = join(openclawHome, "memory");
-    const storePath = join(storeDir, "memory.db");
+    // OpenClaw resolves store path as: ~/.openclaw/memory/{agentId}.sqlite
+    const resolvedAgentId = agentId || "main";
+    const storePath = join(storeDir, `${resolvedAgentId}.sqlite`);
     if (!existsSync(storePath)) {
       mkdirSync(storeDir, { recursive: true });
       writeFileSync(storePath, Buffer.alloc(0));
-      api.logger.info?.("memory-memoryrelay: created stub store file for OpenClaw status scanner");
+      api.logger.info?.(`memory-memoryrelay: created stub store file at ${storePath}`);
     }
   } catch (err) {
     api.logger.warn?.(`memory-memoryrelay: failed to create stub store file: ${String(err)}`);
