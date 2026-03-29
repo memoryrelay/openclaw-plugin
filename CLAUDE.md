@@ -1,5 +1,15 @@
 # OpenClaw MemoryRelay Plugin
 
+## Current Version
+
+- **Stable**: v0.16.3
+- **In development**: v0.17.0 — local SQLite cache layer, SyncDaemon, vector search via `sqlite-vec`, MemorySearchManager-compatible schema (Epic #62, issues #63–#72)
+
+## Important Notes
+
+- `.mcp.json` must be present in the project root for MCP tools to work in `claude --print` sessions
+- `agentId` must be a UUID from `GET /v1/agents` — not a name string
+
 ## Commands
 
 ```bash
