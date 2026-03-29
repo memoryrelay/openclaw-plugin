@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import type BetterSqlite3 from "better-sqlite3";
 import { statSync } from "node:fs";
 import { migrateIfNeeded } from "./schema.js";
 import type {
@@ -62,21 +62,30 @@ function rowToBuffer(row: BufferRow): BufferEntry {
 }
 
 export class LocalCache {
-  private db: Database.Database;
+  private db: BetterSqlite3.Database;
   private readonly _dbPath: string;
   private readonly config: LocalCacheConfig;
 
   constructor(dbPath: string, config: LocalCacheConfig) {
+    let Database: typeof BetterSqlite3;
+    try {
+      Database = require("better-sqlite3");
+    } catch {
+      throw new Error(
+        "better-sqlite3 not available — run: cd ~/.openclaw/extensions/plugin-memoryrelay-ai && npm install --omit=dev",
+      );
+    }
+
     this._dbPath = dbPath;
     this.config = config;
-    this.db = this.initDb(dbPath);
+    this.db = this.initDb(dbPath, Database);
   }
 
   get dbPath(): string {
     return this._dbPath;
   }
 
-  private initDb(dbPath: string): Database.Database {
+  private initDb(dbPath: string, Database: typeof BetterSqlite3): BetterSqlite3.Database {
     const db = new Database(dbPath);
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");

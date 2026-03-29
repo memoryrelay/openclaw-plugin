@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-03-29
+
+### Fixed
+- **Lazy-load better-sqlite3 with graceful fallback**: Replaced top-level `import` with dynamic `require()` inside the `LocalCache` constructor — if `better-sqlite3` is not installed, the plugin falls back to API-only mode instead of crashing on startup (#86)
+- **Document npm install step**: Added installation note for `openclaw plugins install` users who need local SQLite cache (#86)
+- **JSDoc version header**: Updated top-of-file version comment to match current release (#85)
+
 ## [0.17.0] - UNRELEASED
 
 ### Added
