@@ -1,6 +1,6 @@
 // src/hooks/before-prompt-build.ts
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import type { PluginConfig, MemoryRelayClient, SessionResolverLike } from "../pipelines/types.js";
+import type { PluginConfig, MemoryRelayClient, SessionResolverLike, LocalCacheLike, SyncDaemonLike } from "../pipelines/types.js";
 import { buildRequestContext } from "../context/request-context.js";
 import { runPipeline } from "../pipelines/runner.js";
 import { recallPipeline } from "../pipelines/recall/index.js";
@@ -10,6 +10,8 @@ export function registerBeforePromptBuild(
   config: PluginConfig,
   client: MemoryRelayClient,
   sessionResolver?: SessionResolverLike,
+  localCache?: LocalCacheLike,
+  syncDaemon?: SyncDaemonLike,
 ): void {
   api.on("before_prompt_build", async (event) => {
     if (!config.autoRecall) return;
@@ -29,7 +31,7 @@ export function registerBeforePromptBuild(
 
     try {
       const requestCtx = buildRequestContext(event, config);
-      const pipelineCtx = { requestCtx, config, client, sessionResolver };
+      const pipelineCtx = { requestCtx, config, client, sessionResolver, localCache, syncDaemon };
       const result = await runPipeline(recallPipeline, {
         prompt: requestCtx.prompt, memories: [], scope: "all" as const,
       }, pipelineCtx);
