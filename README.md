@@ -34,6 +34,18 @@ MemoryRelay is designed for engineering teams managing complex, long-running pro
 openclaw plugins install @memoryrelay/plugin-memoryrelay-ai
 ```
 
+**1b. Install native dependencies (for local SQLite cache)**
+
+The local cache requires `better-sqlite3`, which includes native bindings. After plugin installation, run:
+
+```bash
+cd ~/.openclaw/extensions/plugin-memoryrelay-ai && npm install --omit=dev
+```
+
+Or install globally: `npm install -g better-sqlite3`
+
+> **Note:** If you skip this step, the plugin still works — it falls back to API-only mode (no local cache).
+
 **2. Set your API key**
 
 ```bash
