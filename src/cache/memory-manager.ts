@@ -1,6 +1,6 @@
 import type { LocalCache } from "./local-cache.js";
 import type { SyncDaemon } from "./sync-daemon.js";
-import type { LocalCacheConfig } from "./types.js";
+import type { CacheStats, LocalCacheConfig } from "./types.js";
 
 /**
  * MemoryProviderStatus — compatible with OpenClaw's MemorySearchManager interface.
@@ -67,9 +67,25 @@ export class PluginMemoryManager {
         provider: "memoryrelay-api",
         agentId: this.agentId,
         bufferDepth: stats.bufferDepth,
+        tierBreakdown: stats.tierBreakdown,
         lastSync: stats.lastSync,
         syncActive: this.syncDaemon.isRunning(),
+        consecutiveErrors: this.syncDaemon.getConsecutiveErrors(),
+        syncIntervalMinutes: this.config.syncIntervalMinutes,
       },
+    };
+  }
+
+  cacheStats(): CacheStats {
+    return this.cache.stats();
+  }
+
+  getSyncDaemonInfo(): { running: boolean; errors: number; intervalMinutes: number; lastError: string | null } {
+    return {
+      running: this.syncDaemon.isRunning(),
+      errors: this.syncDaemon.getConsecutiveErrors(),
+      intervalMinutes: this.config.syncIntervalMinutes,
+      lastError: this.syncDaemon.lastError(),
     };
   }
 

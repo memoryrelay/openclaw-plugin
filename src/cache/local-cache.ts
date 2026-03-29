@@ -151,6 +151,19 @@ export class LocalCache {
     return row.cnt;
   }
 
+  countByTier(): { hot: number; warm: number; cold: number } {
+    const rows = this.db
+      .prepare("SELECT tier, COUNT(*) as cnt FROM memories GROUP BY tier")
+      .all() as { tier: string; cnt: number }[];
+    const result = { hot: 0, warm: 0, cold: 0 };
+    for (const row of rows) {
+      if (row.tier === "hot" || row.tier === "warm" || row.tier === "cold") {
+        result[row.tier] = row.cnt;
+      }
+    }
+    return result;
+  }
+
   // --- Search ---
 
   search(
@@ -327,6 +340,7 @@ export class LocalCache {
 
   stats(): CacheStats {
     const totalMemories = this.count();
+    const tierBreakdown = this.countByTier();
     const bufferDepth = this.bufferDepth();
     const syncState = this.getSyncState();
     let dbSizeBytes = 0;
@@ -339,6 +353,7 @@ export class LocalCache {
     }
     return {
       totalMemories,
+      tierBreakdown,
       bufferDepth,
       lastSync: syncState.lastPull ?? syncState.lastPush ?? null,
       dbSizeBytes,

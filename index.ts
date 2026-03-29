@@ -517,8 +517,20 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     // Use local PluginMemoryManager when available (v0.17.0+)
     if (memoryManager) {
       try {
-        const status = memoryManager.status();
-        respond(true, { available: true, ...status });
+        const stats = memoryManager.cacheStats();
+        const daemonInfo = memoryManager.getSyncDaemonInfo();
+        respond(true, {
+          available: true,
+          provider: "memoryrelay",
+          memoryCount: stats.totalMemories,
+          tierBreakdown: stats.tierBreakdown,
+          bufferDepth: stats.bufferDepth,
+          syncActive: daemonInfo.running,
+          lastSync: stats.lastSync,
+          vector: { enabled: localCacheConfig.vectorSearch.enabled, dims: 768 },
+          fts: { enabled: true },
+          consecutiveErrors: daemonInfo.errors,
+        });
         return;
       } catch {
         // Fall through to API-based probe
@@ -901,7 +913,43 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
 
         if (statusReporter) {
           const report = statusReporter.buildReport(connectionStatus, reportConfig, { total_memories: memoryCount }, TOOL_GROUPS);
-          return { text: StatusReporter.formatReport(report) };
+          let text = StatusReporter.formatReport(report);
+
+          // Append local cache section when available
+          if (memoryManager) {
+            try {
+              const cacheStats = memoryManager.cacheStats();
+              const daemonInfo = memoryManager.getSyncDaemonInfo();
+              const cacheLines: string[] = [];
+              cacheLines.push("LOCAL CACHE");
+              const { hot, warm, cold } = cacheStats.tierBreakdown;
+              cacheLines.push(`  Total:     ${cacheStats.totalMemories} memories (hot: ${hot}, warm: ${warm}, cold: ${cold})`);
+              cacheLines.push(`  Buffer:    ${cacheStats.bufferDepth} entries pending sync`);
+              if (cacheStats.lastSync) {
+                const ago = StatusReporter.formatTimeAgo(new Date(cacheStats.lastSync));
+                cacheLines.push(`  Last sync: ${ago}`);
+              } else {
+                cacheLines.push("  Last sync: never");
+              }
+              const vecLabel = localCacheConfig.vectorSearch.enabled ? "ready (sqlite-vec, 768 dims)" : "disabled";
+              cacheLines.push(`  Vector:    ${vecLabel}`);
+              cacheLines.push("  FTS:       ready");
+              cacheLines.push("");
+              const daemonStatus = daemonInfo.running ? "running" : "stopped";
+              cacheLines.push(`SYNC DAEMON: ${daemonStatus}`);
+              cacheLines.push(`  Interval:  ${daemonInfo.intervalMinutes} minutes`);
+              cacheLines.push(`  Errors:    ${daemonInfo.errors} consecutive`);
+              if (daemonInfo.lastError) {
+                cacheLines.push(`  Last error: ${daemonInfo.lastError}`);
+              }
+              cacheLines.push("");
+              text += cacheLines.join("\n");
+            } catch {
+              // cache stats unavailable — skip section
+            }
+          }
+
+          return { text };
         }
         return { text: `MemoryRelay: ${isConnected ? "connected" : "disconnected"} | Endpoint: ${apiUrl} | Memories: ${memoryCount} | Agent: ${agentId}` };
       } catch (err) {
