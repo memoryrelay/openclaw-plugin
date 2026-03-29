@@ -4,35 +4,15 @@ export interface LocalCacheConfig {
   syncIntervalMinutes: number;
   maxLocalMemories: number;
   vectorSearch: { enabled: boolean; provider: string };
-  ttl: { hot: number; warm: number; cold: number }; // hours
-}
-
-export interface LocalMemory {
-  id: string;
-  remote_id: string | null;
-  content: string;
-  agent_id: string;
-  user_id: string;
-  metadata: Record<string, unknown>;
-  entities: string[];
-  importance: number;
-  tier: "hot" | "warm" | "cold";
-  scope: "session" | "long-term";
-  session_id: string | null;
-  namespace: string;
-  created_at: string;
-  updated_at: string;
-  synced_at: string | null;
-  expires_at: string | null;
-  embedding: Buffer | null;
+  ttl: { hot: number; warm: number; cold: number };
 }
 
 export interface BufferEntry {
   id: number;
   content: string;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, string>;
   scope: "session" | "long-term";
-  session_id: string | null;
+  session_id?: string;
   namespace: string;
   created_at: string;
   flushed: boolean;
@@ -49,4 +29,24 @@ export interface CacheStats {
   bufferDepth: number;
   lastSync: string | null;
   dbSizeBytes: number;
+}
+
+export interface LocalMemory {
+  id: string;
+  remote_id: string | null;
+  content: string;
+  agent_id: string;
+  user_id: string;
+  metadata: Record<string, unknown>;
+  entities: unknown[];
+  importance: number;
+  tier: "hot" | "warm" | "cold";
+  scope: "session" | "long-term";
+  session_id: string | null;
+  namespace: string;
+  created_at: string;
+  updated_at: string;
+  synced_at: string | null;
+  expires_at: string | null;
+  embedding: Buffer | null;
 }
