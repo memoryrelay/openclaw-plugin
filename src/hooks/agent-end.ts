@@ -4,7 +4,7 @@ import type { PluginConfig, MemoryRelayClient, ConversationMessage, SessionResol
 import { buildRequestContext } from "../context/request-context.js";
 import { runPipeline } from "../pipelines/runner.js";
 import { capturePipeline } from "../pipelines/capture/index.js";
-import { autoSessionMap, DECISION_KEYWORDS } from "./auto-session-store.js";
+import { buildAutoSessionExternalId, DECISION_KEYWORDS } from "./auto-session-store.js";
 
 /**
  * Extract potential decisions from conversation messages using keyword heuristics.
@@ -101,7 +101,17 @@ export function registerAgentEnd(
 
     // --- Auto session lifecycle: decisions + session_end ---
     const sessionKey = event.ctx?.sessionKey || event.sessionId || "";
-    const sessionId = autoSessionMap.get(sessionKey);
+    const externalId = buildAutoSessionExternalId(sessionKey);
+
+    // Look up the session via the same deterministic external_id used at start.
+    // getOrCreateSession is idempotent — it returns the existing session.
+    let sessionId: string | undefined;
+    try {
+      const session = await client.getOrCreateSession(externalId);
+      sessionId = session?.id;
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: auto session lookup failed (non-blocking): ${String(err)}`);
+    }
 
     if (sessionId) {
       try {
@@ -128,11 +138,9 @@ export function registerAgentEnd(
         // End session with summary
         const summary = generateSessionSummary(messages);
         await client.endSession(sessionId, summary);
-        api.logger.debug?.(`memory-memoryrelay: auto-session ended ${sessionId}`);
+        api.logger.debug?.(`memory-memoryrelay: auto-session ended ${sessionId} (external: ${externalId})`);
       } catch (err) {
         api.logger.warn?.(`memory-memoryrelay: auto session_end failed (non-blocking): ${String(err)}`);
-      } finally {
-        autoSessionMap.delete(sessionKey);
       }
     }
 

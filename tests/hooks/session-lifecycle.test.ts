@@ -2,7 +2,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { registerBeforeAgentStart } from "../../src/hooks/before-agent-start.js";
 import { registerAgentEnd, extractDecisions, generateSessionSummary } from "../../src/hooks/agent-end.js";
-import { autoSessionMap } from "../../src/hooks/auto-session-store.js";
+import { buildAutoSessionExternalId } from "../../src/hooks/auto-session-store.js";
 import type { PluginConfig, MemoryRelayClient, ConversationMessage } from "../../src/pipelines/types.js";
 
 // ============================================================================
@@ -20,7 +20,7 @@ function mockClient(): MemoryRelayClient & {
     search: vi.fn(async () => []),
     store: vi.fn(async () => ({ id: "mem-1", content: "", agent_id: "", user_id: "", metadata: {}, entities: [], created_at: "", updated_at: "" })),
     list: vi.fn(async () => []),
-    getOrCreateSession: vi.fn(async () => ({ id: "session-existing" })),
+    getOrCreateSession: vi.fn(async () => ({ id: "auto-session-1" })),
     startSession: vi.fn(async () => ({ id: "auto-session-1" })),
     endSession: vi.fn(async () => {}),
     getProjectContext: vi.fn(async () => ({
@@ -58,21 +58,54 @@ const baseConfig: PluginConfig = {
 };
 
 // ============================================================================
+// buildAutoSessionExternalId
+// ============================================================================
+
+describe("buildAutoSessionExternalId", () => {
+  test("includes session key and date", () => {
+    const date = new Date("2026-03-30T12:00:00Z");
+    const id = buildAutoSessionExternalId("agent:abc:main", date);
+    expect(id).toBe("auto:agent:abc:main:2026-03-30");
+  });
+
+  test("falls back to date-only when no session key", () => {
+    const date = new Date("2026-03-30T12:00:00Z");
+    const id = buildAutoSessionExternalId("", date);
+    expect(id).toBe("auto:2026-03-30");
+  });
+
+  test("same key on same day produces identical external_id", () => {
+    const date = new Date("2026-03-30T08:00:00Z");
+    const id1 = buildAutoSessionExternalId("agent:abc:main", date);
+    const id2 = buildAutoSessionExternalId("agent:abc:main", date);
+    expect(id1).toBe(id2);
+  });
+
+  test("different keys produce different external_ids", () => {
+    const date = new Date("2026-03-30T12:00:00Z");
+    const id1 = buildAutoSessionExternalId("agent:abc:main", date);
+    const id2 = buildAutoSessionExternalId("agent:xyz:main", date);
+    expect(id1).not.toBe(id2);
+  });
+
+  test("different days produce different external_ids", () => {
+    const day1 = new Date("2026-03-30T12:00:00Z");
+    const day2 = new Date("2026-03-31T12:00:00Z");
+    const id1 = buildAutoSessionExternalId("agent:abc:main", day1);
+    const id2 = buildAutoSessionExternalId("agent:abc:main", day2);
+    expect(id1).not.toBe(id2);
+  });
+});
+
+// ============================================================================
 // before-agent-start: auto session lifecycle
 // ============================================================================
 
 describe("before-agent-start: auto session lifecycle", () => {
-  beforeEach(() => {
-    autoSessionMap.clear();
-  });
-  afterEach(() => {
-    autoSessionMap.clear();
-  });
-
-  test("calls session_start on before_agent_start", async () => {
+  test("calls getOrCreateSession on before_agent_start", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project");
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
 
     const handler = handlers.get("before_agent_start")!;
     await handler({
@@ -80,18 +113,57 @@ describe("before-agent-start: auto session lifecycle", () => {
       ctx: { sessionKey: "agent:abc:main" },
     });
 
-    expect(client.startSession).toHaveBeenCalledTimes(1);
-    expect(client.startSession).toHaveBeenCalledWith(
+    expect(client.getOrCreateSession).toHaveBeenCalledTimes(1);
+    expect(client.getOrCreateSession).toHaveBeenCalledWith(
+      expect.stringContaining("auto:agent:abc:main:"),
+      "jarvis",
       expect.stringContaining("Auto session"),
       "test-project",
       expect.objectContaining({ source: "openclaw-plugin" }),
     );
   });
 
+  test("does not call startSession (uses getOrCreateSession instead)", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
+
+    const handler = handlers.get("before_agent_start")!;
+    await handler({
+      prompt: "Implement the feature",
+      ctx: { sessionKey: "agent:abc:main" },
+    });
+
+    expect(client.startSession).not.toHaveBeenCalled();
+  });
+
+  test("reuses same external_id across multiple turns", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
+
+    const handler = handlers.get("before_agent_start")!;
+
+    await handler({
+      prompt: "First message in this session",
+      ctx: { sessionKey: "agent:abc:main" },
+    });
+    const firstCallArgs = client.getOrCreateSession.mock.calls[0];
+
+    await handler({
+      prompt: "Second message in this session",
+      ctx: { sessionKey: "agent:abc:main" },
+    });
+    const secondCallArgs = client.getOrCreateSession.mock.calls[1];
+
+    // Same external_id for both calls
+    expect(firstCallArgs[0]).toBe(secondCallArgs[0]);
+  });
+
   test("calls project_context with detected project", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project");
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
 
     const handler = handlers.get("before_agent_start")!;
     await handler({
@@ -103,24 +175,10 @@ describe("before-agent-start: auto session lifecycle", () => {
     expect(client.getProjectContext).toHaveBeenCalledWith("test-project");
   });
 
-  test("stores session_id in autoSessionMap", async () => {
-    const { api, handlers } = mockApi();
-    const client = mockClient();
-    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project");
-
-    const handler = handlers.get("before_agent_start")!;
-    await handler({
-      prompt: "Implement the feature",
-      ctx: { sessionKey: "agent:abc:main" },
-    });
-
-    expect(autoSessionMap.get("agent:abc:main")).toBe("auto-session-1");
-  });
-
   test("injects project context into prependContext", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project");
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
 
     const handler = handlers.get("before_agent_start")!;
     const result = await handler({
@@ -136,8 +194,8 @@ describe("before-agent-start: auto session lifecycle", () => {
   test("session_start failure does not block the turn", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    client.startSession.mockRejectedValue(new Error("network error"));
-    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project");
+    client.getOrCreateSession.mockRejectedValue(new Error("network error"));
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
 
     const handler = handlers.get("before_agent_start")!;
     const result = await handler({
@@ -154,7 +212,7 @@ describe("before-agent-start: auto session lifecycle", () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
     client.getProjectContext.mockRejectedValue(new Error("project not found"));
-    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project");
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
 
     const handler = handlers.get("before_agent_start")!;
     const result = await handler({
@@ -174,7 +232,7 @@ describe("before-agent-start: auto session lifecycle", () => {
     const originalEnv = process.env.MEMORYRELAY_DEFAULT_PROJECT;
     process.env.MEMORYRELAY_DEFAULT_PROJECT = "env-project";
     try {
-      registerBeforeAgentStart(api, configNoProject, client, () => true, undefined);
+      registerBeforeAgentStart(api, configNoProject, client, () => true, undefined, "jarvis");
       const handler = handlers.get("before_agent_start")!;
       await handler({
         prompt: "Implement the feature",
@@ -194,13 +252,13 @@ describe("before-agent-start: auto session lifecycle", () => {
   test("skips short prompts", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project");
+    registerBeforeAgentStart(api, baseConfig, client, () => true, "test-project", "jarvis");
 
     const handler = handlers.get("before_agent_start")!;
     const result = await handler({ prompt: "hi" });
 
     expect(result).toBeUndefined();
-    expect(client.startSession).not.toHaveBeenCalled();
+    expect(client.getOrCreateSession).not.toHaveBeenCalled();
   });
 });
 
@@ -209,17 +267,9 @@ describe("before-agent-start: auto session lifecycle", () => {
 // ============================================================================
 
 describe("agent-end: auto session lifecycle", () => {
-  beforeEach(() => {
-    autoSessionMap.clear();
-  });
-  afterEach(() => {
-    autoSessionMap.clear();
-  });
-
-  test("calls session_end on agent_end when session was started", async () => {
+  test("looks up session via getOrCreateSession and calls endSession", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    autoSessionMap.set("agent:abc:main", "auto-session-1");
 
     registerAgentEnd(api, baseConfig, client);
 
@@ -233,14 +283,20 @@ describe("agent-end: auto session lifecycle", () => {
       ],
     });
 
+    // Should look up session via getOrCreateSession with same external_id pattern
+    expect(client.getOrCreateSession).toHaveBeenCalledTimes(1);
+    expect(client.getOrCreateSession).toHaveBeenCalledWith(
+      expect.stringContaining("auto:agent:abc:main:"),
+    );
+
     expect(client.endSession).toHaveBeenCalledTimes(1);
     expect(client.endSession).toHaveBeenCalledWith("auto-session-1", expect.any(String));
   });
 
-  test("no session_end if no session was started", async () => {
+  test("session lookup failure does not crash", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    // autoSessionMap is empty — no session started
+    client.getOrCreateSession.mockRejectedValue(new Error("network error"));
 
     registerAgentEnd(api, baseConfig, client);
 
@@ -255,33 +311,13 @@ describe("agent-end: auto session lifecycle", () => {
     });
 
     expect(client.endSession).not.toHaveBeenCalled();
-  });
-
-  test("cleans up session from autoSessionMap after end", async () => {
-    const { api, handlers } = mockApi();
-    const client = mockClient();
-    autoSessionMap.set("agent:abc:main", "auto-session-1");
-
-    registerAgentEnd(api, baseConfig, client);
-
-    const handler = handlers.get("agent_end")!;
-    await handler({
-      success: true,
-      ctx: { sessionKey: "agent:abc:main" },
-      messages: [
-        { role: "user", content: "Do something" },
-        { role: "assistant", content: "Done with the implementation task." },
-      ],
-    });
-
-    expect(autoSessionMap.has("agent:abc:main")).toBe(false);
+    expect(api.logger.warn).toHaveBeenCalled();
   });
 
   test("session_end failure is caught gracefully", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
     client.endSession.mockRejectedValue(new Error("session not found"));
-    autoSessionMap.set("agent:abc:main", "auto-session-1");
 
     registerAgentEnd(api, baseConfig, client);
 
@@ -297,8 +333,6 @@ describe("agent-end: auto session lifecycle", () => {
     });
 
     expect(api.logger.warn).toHaveBeenCalled();
-    // Should still clean up
-    expect(autoSessionMap.has("agent:abc:main")).toBe(false);
   });
 });
 
@@ -337,7 +371,6 @@ describe("extractDecisions", () => {
   test("records decisions via client on agent_end", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
-    autoSessionMap.set("agent:abc:main", "auto-session-1");
 
     registerAgentEnd(api, baseConfig, client);
 
