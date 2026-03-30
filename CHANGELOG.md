@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Project slug detection**: Resolves project from `defaultProject` config, `MEMORYRELAY_DEFAULT_PROJECT` env var, or working directory name (#90)
 - **Shared auto-session store**: `src/hooks/auto-session-store.ts` provides cross-hook session state and decision keywords (#90)
 
+### Fixed
+- **Session proliferation**: Replace `startSession()` with idempotent `getOrCreateSession()` using deterministic `external_id` (`auto:{sessionKey}:{date}`) so multiple turns reuse one session instead of creating a new one per turn (#99)
+- **Unreliable session tracking**: Remove in-memory `autoSessionMap` — session lookup now uses the same deterministic `external_id` at both start and end, surviving process restarts (#99)
+- **Duplicate session creation**: Remove competing `session_start` hook from `session-lifecycle.ts` — session creation consolidated into `before_agent_start` hook only (#99)
+
 ## [0.17.2] - 2026-03-29
 
 ### Fixed

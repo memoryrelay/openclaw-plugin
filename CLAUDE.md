@@ -2,8 +2,8 @@
 
 ## Current Version
 
-- **Stable**: v0.16.3
-- **In development**: v0.17.0 — local SQLite cache layer, SyncDaemon, vector search via `sqlite-vec`, MemorySearchManager-compatible schema (Epic #62, issues #63–#72)
+- **Stable**: v0.18.0
+- **In development**: v0.18.1
 
 ## Important Notes
 
