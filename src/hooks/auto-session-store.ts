@@ -5,6 +5,10 @@
  * Build a deterministic external_id for a session from the session key and date.
  * This ensures that multiple turns within the same OpenClaw session on the same day
  * reuse a single MemoryRelay session instead of creating a new one per turn.
+ *
+ * Note: if a turn spans midnight (before_agent_start at 23:59, agent_end at 00:00),
+ * the external_ids will differ, creating a second session. The old session will be
+ * auto-expired by the server's 24h idle cleanup. This is acceptable behavior.
  */
 export function buildAutoSessionExternalId(sessionKey: string, date?: Date): string {
   const day = (date ?? new Date()).toISOString().slice(0, 10);

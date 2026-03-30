@@ -105,9 +105,20 @@ export function registerAgentEnd(
 
     // Look up the session via the same deterministic external_id used at start.
     // getOrCreateSession is idempotent — it returns the existing session.
+    // We pass full args defensively so that if the before_agent_start call
+    // failed, agent_end still creates a usable session rather than one with
+    // no agent, project, or title.
     let sessionId: string | undefined;
+    const projectSlug = config.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
     try {
-      const session = await client.getOrCreateSession(externalId);
+      const today = new Date().toISOString().slice(0, 10);
+      const session = await client.getOrCreateSession(
+        externalId,
+        undefined,
+        `Auto session ${today}`,
+        projectSlug,
+        { source: "openclaw-plugin", trigger: "agent_end" },
+      );
       sessionId = session?.id;
     } catch (err) {
       api.logger.warn?.(`memory-memoryrelay: auto session lookup failed (non-blocking): ${String(err)}`);

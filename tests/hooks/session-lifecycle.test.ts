@@ -284,9 +284,14 @@ describe("agent-end: auto session lifecycle", () => {
     });
 
     // Should look up session via getOrCreateSession with same external_id pattern
+    // Full args passed defensively in case before_agent_start failed
     expect(client.getOrCreateSession).toHaveBeenCalledTimes(1);
     expect(client.getOrCreateSession).toHaveBeenCalledWith(
       expect.stringContaining("auto:agent:abc:main:"),
+      undefined,
+      expect.stringContaining("Auto session"),
+      "test-project",
+      expect.objectContaining({ source: "openclaw-plugin", trigger: "agent_end" }),
     );
 
     expect(client.endSession).toHaveBeenCalledTimes(1);
