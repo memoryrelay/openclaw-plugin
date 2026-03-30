@@ -444,7 +444,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // Register Hooks (8 modules)
   // ========================================================================
 
-  registerBeforeAgentStart(api, pluginConfig, client, isToolEnabled, defaultProject);
+  registerBeforeAgentStart(api, pluginConfig, client, isToolEnabled, defaultProject, agentId);
   registerBeforePromptBuild(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
   registerAgentEnd(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
   registerSessionLifecycle(api, pluginConfig, client, agentId, defaultProject, sessionResolver);

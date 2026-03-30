@@ -2,7 +2,7 @@
 import { basename } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import type { PluginConfig, MemoryRelayClient } from "../pipelines/types.js";
-import { autoSessionMap } from "./auto-session-store.js";
+import { buildAutoSessionExternalId } from "./auto-session-store.js";
 
 /**
  * Resolve project slug from config, env, or working directory name.
@@ -25,6 +25,7 @@ export function registerBeforeAgentStart(
   client: MemoryRelayClient,
   isToolEnabled: (name: string) => boolean,
   defaultProject: string | undefined,
+  agentId: string,
 ): void {
   api.on("before_agent_start", async (event) => {
     if (!event.prompt || event.prompt.length < 10) {
@@ -49,17 +50,21 @@ export function registerBeforeAgentStart(
     try {
       const sessionKey = event.ctx?.sessionKey || event.sessionId || "";
 
-      // Start a tracked session (non-blocking — we await but don't let failure block the turn)
+      // Use getOrCreateSession with a deterministic external_id so that multiple
+      // turns within the same OpenClaw session reuse a single MemoryRelay session
+      // instead of creating a new one per turn.
       const today = new Date().toISOString().slice(0, 10);
-      const sessionResult = await client.startSession(
+      const externalId = buildAutoSessionExternalId(sessionKey);
+      const sessionResult = await client.getOrCreateSession(
+        externalId,
+        agentId,
         `Auto session ${today}`,
         projectSlug,
         { source: "openclaw-plugin", trigger: "before_agent_start" },
       );
 
-      if (sessionResult?.id && sessionKey) {
-        autoSessionMap.set(sessionKey, sessionResult.id);
-        api.logger.debug?.(`memory-memoryrelay: auto-session started ${sessionResult.id}`);
+      if (sessionResult?.id) {
+        api.logger.debug?.(`memory-memoryrelay: auto-session ${sessionResult.id} (external: ${externalId})`);
       }
     } catch (err) {
       api.logger.warn?.(`memory-memoryrelay: auto session_start failed (non-blocking): ${String(err)}`);

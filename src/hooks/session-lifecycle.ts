@@ -11,25 +11,9 @@ export function registerSessionLifecycle(
   defaultProject: string | undefined,
   sessionResolver: SessionResolver,
 ): void {
-  // Session sync: auto-create MemoryRelay session when OpenClaw session starts
-  api.on("session_start", async (event, _ctx) => {
-    try {
-      const externalId = event.sessionKey || event.sessionId;
-      if (!externalId) return;
-
-      const response = await client.getOrCreateSession(
-        externalId,
-        agentId,
-        `OpenClaw session ${externalId}`,
-        defaultProject || undefined,
-        { source: "openclaw-plugin", agent: agentId, trigger: "session_start_hook" },
-      );
-
-      api.logger.debug?.(`memory-memoryrelay: auto-created session ${response.id} for OpenClaw session ${externalId}`);
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: session_start hook failed: ${String(err)}`);
-    }
-  });
+  // Note: session creation is handled by the before_agent_start hook using
+  // getOrCreateSession with a deterministic external_id. The session_start
+  // hook is intentionally omitted to avoid creating duplicate sessions.
 
   // Session sync: auto-end MemoryRelay session when OpenClaw session ends
   api.on("session_end", async (event, _ctx) => {
