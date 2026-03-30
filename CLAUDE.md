@@ -2,8 +2,7 @@
 
 ## Current Version
 
-- **Stable**: v0.18.0
-- **In development**: v0.18.1
+- **Stable**: v0.18.1
 
 ## Important Notes
 
