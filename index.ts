@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.17.2
+ * Version: 0.18.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -444,7 +444,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // Register Hooks (8 modules)
   // ========================================================================
 
-  registerBeforeAgentStart(api, pluginConfig, isToolEnabled, defaultProject);
+  registerBeforeAgentStart(api, pluginConfig, client, isToolEnabled, defaultProject);
   registerBeforePromptBuild(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
   registerAgentEnd(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
   registerSessionLifecycle(api, pluginConfig, client, agentId, defaultProject, sessionResolver);
@@ -472,7 +472,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.17.2 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v0.18.0 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================

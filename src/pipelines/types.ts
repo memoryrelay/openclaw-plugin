@@ -109,7 +109,18 @@ export interface MemoryRelayClient {
     project?: string,
     metadata?: Record<string, string>,
   ): Promise<{ id: string }>;
+  startSession(title?: string, project?: string, metadata?: Record<string, string>): Promise<{ id: string }>;
   endSession(sessionId: string, summary?: string): Promise<void>;
+  getProjectContext(project: string): Promise<any>;
+  recordDecision(
+    title: string,
+    rationale: string,
+    alternatives?: string,
+    project?: string,
+    tags?: string[],
+    status?: string,
+    metadata?: Record<string, string>,
+  ): Promise<any>;
 }
 
 export interface SessionResolverLike {

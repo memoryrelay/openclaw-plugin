@@ -1,10 +1,28 @@
 // src/hooks/before-agent-start.ts
+import { basename } from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import type { PluginConfig } from "../pipelines/types.js";
+import type { PluginConfig, MemoryRelayClient } from "../pipelines/types.js";
+import { autoSessionMap } from "./auto-session-store.js";
+
+/**
+ * Resolve project slug from config, env, or working directory name.
+ */
+function resolveProjectSlug(config: PluginConfig, defaultProject: string | undefined): string | undefined {
+  if (defaultProject) return defaultProject;
+  if (config.defaultProject) return config.defaultProject;
+  const envProject = process.env.MEMORYRELAY_DEFAULT_PROJECT;
+  if (envProject) return envProject;
+  try {
+    return basename(process.cwd());
+  } catch {
+    return undefined;
+  }
+}
 
 export function registerBeforeAgentStart(
   api: OpenClawPluginApi,
   config: PluginConfig,
+  client: MemoryRelayClient,
   isToolEnabled: (name: string) => boolean,
   defaultProject: string | undefined,
 ): void {
@@ -21,6 +39,62 @@ export function registerBeforeAgentStart(
           `memory-memoryrelay: skipping for excluded channel: ${channelId}`,
         );
         return;
+      }
+    }
+
+    // --- Auto session lifecycle: session_start + project_context ---
+    const projectSlug = resolveProjectSlug(config, defaultProject);
+    let projectContextBlock = "";
+
+    try {
+      const sessionKey = event.ctx?.sessionKey || event.sessionId || "";
+
+      // Start a tracked session (non-blocking — we await but don't let failure block the turn)
+      const today = new Date().toISOString().slice(0, 10);
+      const sessionResult = await client.startSession(
+        `Auto session ${today}`,
+        projectSlug,
+        { source: "openclaw-plugin", trigger: "before_agent_start" },
+      );
+
+      if (sessionResult?.id && sessionKey) {
+        autoSessionMap.set(sessionKey, sessionResult.id);
+        api.logger.debug?.(`memory-memoryrelay: auto-session started ${sessionResult.id}`);
+      }
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: auto session_start failed (non-blocking): ${String(err)}`);
+    }
+
+    // Load project context (hot memories, decisions, patterns)
+    if (projectSlug) {
+      try {
+        const ctx = await client.getProjectContext(projectSlug);
+        if (ctx) {
+          const parts: string[] = [];
+          if (ctx.hot_memories?.length) {
+            parts.push("### Hot Memories");
+            for (const m of ctx.hot_memories.slice(0, 10)) {
+              parts.push(`- ${m.content ?? m}`);
+            }
+          }
+          if (ctx.recent_decisions?.length) {
+            parts.push("### Active Decisions");
+            for (const d of ctx.recent_decisions.slice(0, 5)) {
+              parts.push(`- **${d.title}**: ${(d.rationale ?? "").slice(0, 200)}`);
+            }
+          }
+          if (ctx.active_patterns?.length) {
+            parts.push("### Adopted Patterns");
+            for (const p of ctx.active_patterns.slice(0, 5)) {
+              parts.push(`- **${p.title}**: ${(p.description ?? "").slice(0, 150)}`);
+            }
+          }
+          if (parts.length > 0) {
+            projectContextBlock = `\n\n## Project Context (${projectSlug})\n\n${parts.join("\n")}`;
+          }
+        }
+      } catch (err) {
+        api.logger.warn?.(`memory-memoryrelay: project_context failed (non-blocking): ${String(err)}`);
       }
     }
 
@@ -102,7 +176,7 @@ export function registerBeforeAgentStart(
 
     const workflowInstructions = lines.join("\n");
 
-    const prependContext = `<memoryrelay-workflow>\n${workflowInstructions}\n</memoryrelay-workflow>`;
+    const prependContext = `<memoryrelay-workflow>\n${workflowInstructions}${projectContextBlock}\n</memoryrelay-workflow>`;
 
     return { prependContext };
   });

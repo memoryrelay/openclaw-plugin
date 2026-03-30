@@ -10,7 +10,10 @@ function mockClient(): MemoryRelayClient {
     store: vi.fn(),
     list: vi.fn(),
     getOrCreateSession: vi.fn(async () => ({ id: `session-${nextId++}` })),
+    startSession: vi.fn(async () => ({ id: `session-${nextId++}` })),
     endSession: vi.fn(async () => {}),
+    getProjectContext: vi.fn(async () => ({})),
+    recordDecision: vi.fn(async () => ({})),
   };
 }
 

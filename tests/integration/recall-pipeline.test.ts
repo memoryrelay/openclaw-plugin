@@ -12,7 +12,7 @@ function mockClient(longTermResults: any[] = [], sessionResults: any[] = []): Me
       if (opts?.scope === "session") return sessionResults;
       return [];
     }),
-    store: vi.fn(), list: vi.fn(), getOrCreateSession: vi.fn(), endSession: vi.fn(),
+    store: vi.fn(), list: vi.fn(), getOrCreateSession: vi.fn(), startSession: vi.fn(), endSession: vi.fn(), getProjectContext: vi.fn(), recordDecision: vi.fn(),
   };
 }
 

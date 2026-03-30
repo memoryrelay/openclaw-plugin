@@ -14,7 +14,7 @@ function mockClient(): MemoryRelayClient {
       metadata: {}, entities: [],
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     })),
-    list: vi.fn(), getOrCreateSession: vi.fn(), endSession: vi.fn(),
+    list: vi.fn(), getOrCreateSession: vi.fn(), startSession: vi.fn(), endSession: vi.fn(), getProjectContext: vi.fn(), recordDecision: vi.fn(),
   };
 }
 

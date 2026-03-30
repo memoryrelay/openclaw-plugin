@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-03-30
+
+### Added
+- **Auto session lifecycle**: `before_agent_start` hook now calls `session_start` and `project_context` automatically, injecting hot memories, decisions, and patterns into the prompt (#90)
+- **Auto decision extraction**: `agent_end` hook detects decisions from conversation using keyword heuristics and records them via `decision_record` (#90)
+- **Auto session end**: `agent_end` hook calls `session_end` with a generated summary from the last significant assistant messages (#90)
+- **Project slug detection**: Resolves project from `defaultProject` config, `MEMORYRELAY_DEFAULT_PROJECT` env var, or working directory name (#90)
+- **Shared auto-session store**: `src/hooks/auto-session-store.ts` provides cross-hook session state and decision keywords (#90)
+
 ## [0.17.2] - 2026-03-29
 
 ### Fixed
