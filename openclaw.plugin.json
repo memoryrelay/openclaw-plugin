@@ -58,15 +58,45 @@
       "advanced": true,
       "help": "How often to check for stale sessions (default: 30)"
     },
+    "maxSessionAgeHours": {
+      "label": "Max Session Age (hours)",
+      "placeholder": "24",
+      "advanced": true,
+      "help": "Automatically close sessions older than this (default: 24, 0 to disable)"
+    },
+    "idleTimeoutMinutes": {
+      "label": "Idle Timeout (minutes)",
+      "placeholder": "60",
+      "advanced": true,
+      "help": "Close sessions inactive for this long (default: 60)"
+    },
+    "maxSessions": {
+      "label": "Max Active Sessions",
+      "placeholder": "50",
+      "advanced": true,
+      "help": "Stop creating new sessions when this limit is reached (default: 50, 0 for unlimited)"
+    },
     "recallLimit": {
       "label": "Recall Limit",
-      "placeholder": "5",
+      "placeholder": "3",
       "help": "Maximum number of memories to inject per auto-recall (1-20)"
     },
     "recallThreshold": {
       "label": "Recall Threshold",
-      "placeholder": "0.3",
-      "help": "Minimum similarity score for auto-recall (0-1, lower = more results)"
+      "placeholder": "0.65",
+      "help": "Minimum similarity score for auto-recall (0-1, higher = stricter matching)"
+    },
+    "warnAtPercent": {
+      "label": "Warn at Quota %",
+      "placeholder": "75",
+      "advanced": true,
+      "help": "Log warning when API usage exceeds this percentage of quota (default: 75)"
+    },
+    "criticalAtPercent": {
+      "label": "Critical at Quota %",
+      "placeholder": "90",
+      "advanced": true,
+      "help": "Log critical alert when API usage exceeds this percentage of quota (default: 90)"
     },
     "debug": {
       "label": "Debug Logging",
@@ -134,7 +164,7 @@
             "type": "object",
             "properties": {
               "enabled": { "type": "boolean", "default": true },
-              "tier": { "type": "string", "enum": ["off", "conservative", "smart", "aggressive"], "default": "smart" },
+              "tier": { "type": "string", "enum": ["off", "conservative", "smart", "aggressive"], "default": "conservative" },
               "confirmFirst": { "type": "number", "default": 5, "minimum": 0, "description": "Number of captures to confirm before auto-accepting" },
               "categories": {
                 "type": "object",
@@ -165,13 +195,13 @@
       },
       "recallLimit": {
         "type": "number",
-        "default": 5,
+        "default": 3,
         "minimum": 1,
         "maximum": 20
       },
       "recallThreshold": {
         "type": "number",
-        "default": 0.3,
+        "default": 0.65,
         "minimum": 0,
         "maximum": 1
       },
@@ -196,6 +226,41 @@
         "minimum": 5,
         "maximum": 360,
         "description": "How often to check for stale sessions (minutes)"
+      },
+      "maxSessionAgeHours": {
+        "type": "number",
+        "default": 24,
+        "minimum": 0,
+        "maximum": 8760,
+        "description": "Automatically close sessions older than this many hours (0 to disable)"
+      },
+      "idleTimeoutMinutes": {
+        "type": "number",
+        "default": 60,
+        "minimum": 5,
+        "maximum": 10080,
+        "description": "Close sessions idle for this many minutes"
+      },
+      "maxSessions": {
+        "type": "number",
+        "default": 50,
+        "minimum": 0,
+        "maximum": 10000,
+        "description": "Maximum active sessions before rejecting new ones (0 for unlimited)"
+      },
+      "warnAtPercent": {
+        "type": "number",
+        "default": 75,
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Log warning when quota usage exceeds this percentage"
+      },
+      "criticalAtPercent": {
+        "type": "number",
+        "default": 90,
+        "minimum": 0,
+        "maximum": 100,
+        "description": "Log critical alert when quota usage exceeds this percentage"
       },
       "debug": {
         "type": "boolean",
