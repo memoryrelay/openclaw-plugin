@@ -103,6 +103,11 @@ interface MemoryRelayConfig {
   maxLogEntries?: number;
   sessionTimeoutMinutes?: number;
   sessionCleanupIntervalMinutes?: number;
+  maxSessionAgeHours?: number;
+  idleTimeoutMinutes?: number;
+  maxSessions?: number;
+  warnAtPercent?: number;
+  criticalAtPercent?: number;
   localCache?: Partial<LocalCacheConfig>;
 }
 
@@ -115,7 +120,7 @@ function normalizeAutoCaptureConfig(
 ): AutoCaptureConfig {
   const defaultConfig: AutoCaptureConfig = {
     enabled: true,
-    tier: "smart" as AutoCaptureTier,
+    tier: "conservative" as AutoCaptureTier,
     confirmFirst: 5,
     categories: {
       credentials: true,
@@ -335,12 +340,17 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     apiUrl,
     defaultProject,
     autoRecall: cfg?.autoRecall ?? true,
-    recallLimit: cfg?.recallLimit ?? 5,
-    recallThreshold: cfg?.recallThreshold ?? 0.3,
+    recallLimit: cfg?.recallLimit ?? 3,
+    recallThreshold: cfg?.recallThreshold ?? 0.65,
     excludeChannels: cfg?.excludeChannels ?? [],
     autoCapture: autoCaptureConfig,
     sessionTimeoutMinutes: cfg?.sessionTimeoutMinutes,
     sessionCleanupIntervalMinutes: cfg?.sessionCleanupIntervalMinutes,
+    maxSessionAgeHours: cfg?.maxSessionAgeHours,
+    idleTimeoutMinutes: cfg?.idleTimeoutMinutes,
+    maxSessions: cfg?.maxSessions,
+    warnAtPercent: cfg?.warnAtPercent,
+    criticalAtPercent: cfg?.criticalAtPercent,
     debug: cfg?.debug,
     verbose: cfg?.verbose,
     maxLogEntries: cfg?.maxLogEntries,

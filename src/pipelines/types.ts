@@ -69,6 +69,11 @@ export interface PluginConfig {
   syncIntervalMinutes?: number;
   sessionTimeoutMinutes?: number;
   sessionCleanupIntervalMinutes?: number;
+  maxSessionAgeHours?: number;
+  idleTimeoutMinutes?: number;
+  maxSessions?: number;
+  warnAtPercent?: number;
+  criticalAtPercent?: number;
   debug?: boolean;
   verbose?: boolean;
   maxLogEntries?: number;
