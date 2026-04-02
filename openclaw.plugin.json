@@ -41,6 +41,10 @@
       "label": "Auto-Recall",
       "help": "Automatically inject relevant memories into context"
     },
+    "autoSessions": {
+      "label": "Auto-Sessions",
+      "help": "Automatically create/close MemoryRelay sessions on agent start/end"
+    },
     "excludeChannels": {
       "label": "Exclude Channels",
       "help": "List of channel IDs to skip auto-recall (e.g., ['whatsapp:group_123', 'telegram:456'])",
@@ -192,6 +196,11 @@
       "autoRecall": {
         "type": "boolean",
         "default": true
+      },
+      "autoSessions": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically create and close MemoryRelay sessions on agent start/end. Disable to prevent session proliferation."
       },
       "recallLimit": {
         "type": "number",

@@ -340,6 +340,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     apiUrl,
     defaultProject,
     autoRecall: cfg?.autoRecall ?? true,
+    autoSessions: cfg?.autoSessions ?? true,
     recallLimit: cfg?.recallLimit ?? 3,
     recallThreshold: cfg?.recallThreshold ?? 0.65,
     excludeChannels: cfg?.excludeChannels ?? [],

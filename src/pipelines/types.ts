@@ -39,6 +39,7 @@ export interface PluginConfig {
   apiUrl?: string;
   defaultProject?: string;
   autoRecall?: boolean;
+  autoSessions?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
   excludeChannels?: string[];

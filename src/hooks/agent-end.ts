@@ -72,8 +72,6 @@ export function registerAgentEnd(
   localCache?: LocalCacheLike,
   syncDaemon?: SyncDaemonLike,
 ): void {
-  if (!config.autoCapture?.enabled) return;
-
   api.on("agent_end", async (event) => {
     if (!event.success || !event.messages || event.messages.length === 0) return;
 
@@ -100,62 +98,64 @@ export function registerAgentEnd(
     if (messages.length === 0) return;
 
     // --- Auto session lifecycle: decisions + session_end ---
-    const sessionKey = event.ctx?.sessionKey || event.sessionId || "";
-    const externalId = buildAutoSessionExternalId(sessionKey);
+    // Always close sessions regardless of autoCapture setting to prevent session leak.
+    // Only skip if autoSessions is explicitly disabled.
+    if (config.autoSessions !== false) {
+      const sessionKey = event.ctx?.sessionKey || event.sessionId || "";
+      const externalId = buildAutoSessionExternalId(sessionKey);
 
-    // Look up the session via the same deterministic external_id used at start.
-    // getOrCreateSession is idempotent — it returns the existing session.
-    // We pass full args defensively so that if the before_agent_start call
-    // failed, agent_end still creates a usable session rather than one with
-    // no agent, project, or title.
-    let sessionId: string | undefined;
-    const projectSlug = config.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const session = await client.getOrCreateSession(
-        externalId,
-        undefined,
-        `Auto session ${today}`,
-        projectSlug,
-        { source: "openclaw-plugin", trigger: "agent_end" },
-      );
-      sessionId = session?.id;
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: auto session lookup failed (non-blocking): ${String(err)}`);
-    }
-
-    if (sessionId) {
+      // Look up the session via the same deterministic external_id used at start.
+      // getOrCreateSession is idempotent — it returns the existing session.
+      let sessionId: string | undefined;
+      const projectSlug = config.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
       try {
-        // Extract and record decisions
-        const decisions = extractDecisions(messages);
-        const projectSlug = config.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
-
-        for (const decision of decisions) {
-          try {
-            await client.recordDecision(
-              decision.title,
-              decision.rationale,
-              undefined,
-              projectSlug,
-              ["auto-detected"],
-              undefined,
-              { source: "auto-session-lifecycle", session_id: sessionId },
-            );
-          } catch (err) {
-            api.logger.warn?.(`memory-memoryrelay: auto decision_record failed: ${String(err)}`);
-          }
-        }
-
-        // End session with summary
-        const summary = generateSessionSummary(messages);
-        await client.endSession(sessionId, summary);
-        api.logger.debug?.(`memory-memoryrelay: auto-session ended ${sessionId} (external: ${externalId})`);
+        const today = new Date().toISOString().slice(0, 10);
+        const session = await client.getOrCreateSession(
+          externalId,
+          undefined,
+          `Auto session ${today}`,
+          projectSlug,
+          { source: "openclaw-plugin", trigger: "agent_end" },
+        );
+        sessionId = session?.id;
       } catch (err) {
-        api.logger.warn?.(`memory-memoryrelay: auto session_end failed (non-blocking): ${String(err)}`);
+        api.logger.warn?.(`memory-memoryrelay: auto session lookup failed (non-blocking): ${String(err)}`);
+      }
+
+      if (sessionId) {
+        try {
+          // Extract and record decisions
+          const decisions = extractDecisions(messages);
+
+          for (const decision of decisions) {
+            try {
+              await client.recordDecision(
+                decision.title,
+                decision.rationale,
+                undefined,
+                projectSlug,
+                ["auto-detected"],
+                undefined,
+                { source: "auto-session-lifecycle", session_id: sessionId },
+              );
+            } catch (err) {
+              api.logger.warn?.(`memory-memoryrelay: auto decision_record failed: ${String(err)}`);
+            }
+          }
+
+          // End session with summary
+          const summary = generateSessionSummary(messages);
+          await client.endSession(sessionId, summary);
+          api.logger.debug?.(`memory-memoryrelay: auto-session ended ${sessionId} (external: ${externalId})`);
+        } catch (err) {
+          api.logger.warn?.(`memory-memoryrelay: auto session_end failed (non-blocking): ${String(err)}`);
+        }
       }
     }
 
-    // --- Existing capture pipeline ---
+    // --- Capture pipeline (only when autoCapture is enabled) ---
+    if (!config.autoCapture?.enabled) return;
+
     try {
       const requestCtx = buildRequestContext(event, config);
       const pipelineCtx = { requestCtx, config, client, sessionResolver, localCache, syncDaemon };

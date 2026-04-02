@@ -11,6 +11,12 @@ export function registerSessionLifecycle(
   defaultProject: string | undefined,
   sessionResolver: SessionResolver,
 ): void {
+  // Skip session lifecycle hooks entirely if autoSessions is disabled
+  if (config.autoSessions === false) {
+    api.logger.debug?.("memory-memoryrelay: session lifecycle hooks disabled (autoSessions: false)");
+    return;
+  }
+
   // Note: session creation is handled by the before_agent_start hook using
   // getOrCreateSession with a deterministic external_id. The session_start
   // hook is intentionally omitted to avoid creating duplicate sessions.
