@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.18.1
+ * Version: 0.18.4
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -14,10 +14,15 @@
  * Docs: https://memoryrelay.ai
  */
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const _pkg = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf8")) as { version: string };
+const PLUGIN_VERSION = _pkg.version;
 
 // --- Core services ---
 import { DebugLogger } from "./src/debug-logger.js";
@@ -492,7 +497,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   api.logger.info?.(
-    `memory-memoryrelay: plugin v0.18.1 loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
+    `memory-memoryrelay: plugin v${PLUGIN_VERSION} loaded (${Object.values(TOOL_GROUPS).flat().length} tools, autoRecall: ${pluginConfig.autoRecall}, autoCapture: ${autoCaptureConfig.enabled ? autoCaptureConfig.tier : "off"}, debug: ${debugEnabled})`,
   );
 
   // ========================================================================
@@ -1450,7 +1455,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     description: "Show how to update the MemoryRelay plugin to the latest version",
     requireAuth: true,
     handler: async (_ctx) => {
-      const currentVersion = "0.16.3";
+      const currentVersion = PLUGIN_VERSION;
       return {
         text: [
           "MemoryRelay Plugin Update",
