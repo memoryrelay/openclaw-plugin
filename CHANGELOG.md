@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.5] - 2026-04-03
+
+### Fixed
+- **SQLite graceful degradation**: All `db.prepare()` / `db.transaction()` calls guarded with `if (!this.db) return` — plugin no longer crashes when `better-sqlite3` native binary is missing, falls back to API-only mode (#104)
+- **Post-install verification**: New `scripts/postinstall.cjs` verifies `better-sqlite3` at install time, warns if unavailable, exits 0 so plugin always installs successfully (#104)
+- **Auto plugins.allow**: Post-install script auto-adds `plugin-memoryrelay-ai` to `plugins.allow` in `~/.openclaw/openclaw.json`, eliminating CRITICAL security warning on first install (#105)
+- **Dynamic version**: `PLUGIN_VERSION` constant now reads from `package.json` at runtime — startup log and `memory-update` command always show the actual installed version instead of hardcoded strings (#106)
+
 ## [0.18.1] - 2026-03-30
 
 ### Fixed
