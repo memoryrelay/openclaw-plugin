@@ -43,7 +43,8 @@
     },
     "autoSessions": {
       "label": "Auto-Sessions",
-      "help": "Automatically create/close MemoryRelay sessions on agent start/end"
+      "help": "Automatically create/close MemoryRelay sessions on agent start/end",
+      "advanced": true
     },
     "excludeChannels": {
       "label": "Exclude Channels",
