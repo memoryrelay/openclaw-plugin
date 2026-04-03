@@ -403,24 +403,33 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       localCacheConfig.dbPath = dbPath;
 
       localCache = new LocalCache(dbPath, localCacheConfig);
-      syncDaemon = new SyncDaemon(localCache, client, localCacheConfig);
-      syncDaemon.start();
 
-      const vectorAvailable = localCacheConfig.vectorSearch.enabled;
-      memoryManager = new PluginMemoryManager(
-        localCache,
-        syncDaemon,
-        localCacheConfig,
-        vectorAvailable,
-        agentId || "main",
-      );
+      if (!localCache.isAvailable) {
+        api.logger.warn?.(
+          "memory-memoryrelay: local cache unavailable (better-sqlite3 not available). " +
+          "Plugin will use API-only mode. To fix: run `npm rebuild better-sqlite3` in the plugin directory.",
+        );
+        localCache = null;
+      } else {
+        syncDaemon = new SyncDaemon(localCache, client, localCacheConfig);
+        syncDaemon.start();
 
-      // Initial pull on startup (non-blocking)
-      syncDaemon.pull().catch((err) =>
-        api.logger.warn?.(`memory-memoryrelay: initial sync failed: ${String(err)}`),
-      );
+        const vectorAvailable = localCacheConfig.vectorSearch.enabled;
+        memoryManager = new PluginMemoryManager(
+          localCache,
+          syncDaemon,
+          localCacheConfig,
+          vectorAvailable,
+          agentId || "main",
+        );
 
-      api.logger.info?.(`memory-memoryrelay: local cache initialized at ${dbPath}`);
+        // Initial pull on startup (non-blocking)
+        syncDaemon.pull().catch((err) =>
+          api.logger.warn?.(`memory-memoryrelay: initial sync failed: ${String(err)}`),
+        );
+
+        api.logger.info?.(`memory-memoryrelay: local cache initialized at ${dbPath}`);
+      }
     } catch (err) {
       api.logger.warn?.(`memory-memoryrelay: local cache init failed, falling back to API-only: ${String(err)}`);
       localCache = null;
