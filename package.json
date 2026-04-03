@@ -1,6 +1,6 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.18.3",
+  "version": "0.18.4",
   "description": "OpenClaw memory plugin for MemoryRelay API - 42 tools, 17 commands, V2 async, sessions, decisions, patterns, projects & semantic search",
   "type": "module",
   "main": "index.ts",
