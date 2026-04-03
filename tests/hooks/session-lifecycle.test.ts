@@ -342,6 +342,131 @@ describe("agent-end: auto session lifecycle", () => {
 });
 
 // ============================================================================
+// autoSessions: false — disables all session hooks
+// ============================================================================
+
+describe("autoSessions: false", () => {
+  const noSessionsConfig: PluginConfig = {
+    ...baseConfig,
+    autoSessions: false,
+  };
+
+  test("before-agent-start does not call getOrCreateSession when autoSessions is false", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    registerBeforeAgentStart(api, noSessionsConfig, client, () => true, "test-project", "jarvis");
+
+    const handler = handlers.get("before_agent_start")!;
+    await handler({
+      prompt: "Implement the feature",
+      ctx: { sessionKey: "agent:abc:main" },
+    });
+
+    expect(client.getOrCreateSession).not.toHaveBeenCalled();
+    expect(client.startSession).not.toHaveBeenCalled();
+  });
+
+  test("before-agent-start still returns workflow instructions when autoSessions is false", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    registerBeforeAgentStart(api, noSessionsConfig, client, () => true, "test-project", "jarvis");
+
+    const handler = handlers.get("before_agent_start")!;
+    const result = await handler({
+      prompt: "Implement the feature",
+      ctx: { sessionKey: "agent:abc:main" },
+    });
+
+    expect(result.prependContext).toContain("memoryrelay-workflow");
+  });
+
+  test("agent-end does not call getOrCreateSession or endSession when autoSessions is false", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    registerAgentEnd(api, noSessionsConfig, client);
+
+    const handler = handlers.get("agent_end")!;
+    await handler({
+      success: true,
+      ctx: { sessionKey: "agent:abc:main" },
+      messages: [
+        { role: "user", content: "Fix the bug" },
+        { role: "assistant", content: "I fixed the null pointer exception in the data processor." },
+      ],
+    });
+
+    expect(client.getOrCreateSession).not.toHaveBeenCalled();
+    expect(client.endSession).not.toHaveBeenCalled();
+  });
+
+  test("session-lifecycle does not register session_end handler when autoSessions is false", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    const { registerSessionLifecycle } = await import("../../src/hooks/session-lifecycle.js");
+    const { SessionResolver } = await import("../../src/context/session-resolver.js");
+    const resolver = new SessionResolver(client, noSessionsConfig);
+
+    registerSessionLifecycle(api, noSessionsConfig, client, "jarvis", "test-project", resolver);
+
+    expect(handlers.has("session_end")).toBe(false);
+  });
+});
+
+// ============================================================================
+// autoCapture: false does NOT block session cleanup (regression test)
+// ============================================================================
+
+describe("autoCapture: false still closes sessions", () => {
+  const noCaptureConfig: PluginConfig = {
+    defaultProject: "test-project",
+    autoCapture: { enabled: false, tier: "off" },
+  };
+
+  test("agent-end still calls endSession when autoCapture is disabled", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    registerAgentEnd(api, noCaptureConfig, client);
+
+    // The handler should be registered even with autoCapture: false
+    expect(handlers.has("agent_end")).toBe(true);
+
+    const handler = handlers.get("agent_end")!;
+    await handler({
+      success: true,
+      ctx: { sessionKey: "agent:abc:main" },
+      messages: [
+        { role: "user", content: "Fix the bug" },
+        { role: "assistant", content: "I fixed the null pointer exception in the data processor." },
+      ],
+    });
+
+    expect(client.getOrCreateSession).toHaveBeenCalledTimes(1);
+    expect(client.endSession).toHaveBeenCalledTimes(1);
+  });
+
+  test("agent-end does not run capture pipeline when autoCapture is disabled", async () => {
+    const { api, handlers } = mockApi();
+    const client = mockClient();
+    registerAgentEnd(api, noCaptureConfig, client);
+
+    const handler = handlers.get("agent_end")!;
+    await handler({
+      success: true,
+      ctx: { sessionKey: "agent:abc:main" },
+      messages: [
+        { role: "user", content: "Fix the bug" },
+        { role: "assistant", content: "Done fixing the bug with proper validation." },
+      ],
+    });
+
+    // Session should be closed
+    expect(client.endSession).toHaveBeenCalledTimes(1);
+    // But capture pipeline should not have run (no store calls beyond session lifecycle)
+    expect(client.store).not.toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
 // Decision extraction heuristics
 // ============================================================================
 

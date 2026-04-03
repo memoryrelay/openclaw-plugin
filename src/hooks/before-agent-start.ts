@@ -47,27 +47,30 @@ export function registerBeforeAgentStart(
     const projectSlug = resolveProjectSlug(config, defaultProject);
     let projectContextBlock = "";
 
-    try {
-      const sessionKey = event.ctx?.sessionKey || event.sessionId || "";
+    // Only create sessions if autoSessions is enabled (default: true for backward compat)
+    if (config.autoSessions !== false) {
+      try {
+        const sessionKey = event.ctx?.sessionKey || event.sessionId || "";
 
-      // Use getOrCreateSession with a deterministic external_id so that multiple
-      // turns within the same OpenClaw session reuse a single MemoryRelay session
-      // instead of creating a new one per turn.
-      const today = new Date().toISOString().slice(0, 10);
-      const externalId = buildAutoSessionExternalId(sessionKey);
-      const sessionResult = await client.getOrCreateSession(
-        externalId,
-        agentId,
-        `Auto session ${today}`,
-        projectSlug,
-        { source: "openclaw-plugin", trigger: "before_agent_start" },
-      );
+        // Use getOrCreateSession with a deterministic external_id so that multiple
+        // turns within the same OpenClaw session reuse a single MemoryRelay session
+        // instead of creating a new one per turn.
+        const today = new Date().toISOString().slice(0, 10);
+        const externalId = buildAutoSessionExternalId(sessionKey);
+        const sessionResult = await client.getOrCreateSession(
+          externalId,
+          agentId,
+          `Auto session ${today}`,
+          projectSlug,
+          { source: "openclaw-plugin", trigger: "before_agent_start" },
+        );
 
-      if (sessionResult?.id) {
-        api.logger.debug?.(`memory-memoryrelay: auto-session ${sessionResult.id} (external: ${externalId})`);
+        if (sessionResult?.id) {
+          api.logger.debug?.(`memory-memoryrelay: auto-session ${sessionResult.id} (external: ${externalId})`);
+        }
+      } catch (err) {
+        api.logger.warn?.(`memory-memoryrelay: auto session_start failed (non-blocking): ${String(err)}`);
       }
-    } catch (err) {
-      api.logger.warn?.(`memory-memoryrelay: auto session_start failed (non-blocking): ${String(err)}`);
     }
 
     // Load project context (hot memories, decisions, patterns)
