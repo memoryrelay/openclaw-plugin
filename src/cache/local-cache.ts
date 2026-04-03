@@ -67,13 +67,24 @@ export class LocalCache {
   private readonly config: LocalCacheConfig;
 
   constructor(dbPath: string, config: LocalCacheConfig) {
-    let Database: typeof BetterSqlite3;
+    let Database: typeof BetterSqlite3 | undefined;
+    // Suppress bindings warning to stderr by redirecting it temporarily
+    // The 'bindings' package prints "Could not locate the bindings file" before throwing
+    const origStderr = process.stderr.write;
+    process.stderr.write = () => true; // discard
     try {
       Database = require("better-sqlite3");
     } catch {
-      throw new Error(
-        "better-sqlite3 not available — run: cd ~/.openclaw/extensions/plugin-memoryrelay-ai && npm install --omit=dev",
-      );
+      // silently fall through - localCache will be undefined
+    } finally {
+      process.stderr.write = origStderr;
+    }
+    if (!Database) {
+      // Will be handled upstream as cache unavailable
+      this._dbPath = dbPath;
+      this.config = config;
+      this.db = undefined as unknown as BetterSqlite3.Database;
+      return;
     }
 
     this._dbPath = dbPath;
