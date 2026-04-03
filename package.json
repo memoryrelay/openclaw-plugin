@@ -5,6 +5,7 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
+    "postinstall": "node scripts/postinstall.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

@@ -62,11 +62,15 @@ function rowToBuffer(row: BufferRow): BufferEntry {
 }
 
 export class LocalCache {
-  private db: BetterSqlite3.Database;
+  private db: BetterSqlite3.Database | null;
   private readonly _dbPath: string;
   private readonly config: LocalCacheConfig;
 
   constructor(dbPath: string, config: LocalCacheConfig) {
+    this._dbPath = dbPath;
+    this.config = config;
+    this.db = null;
+
     let Database: typeof BetterSqlite3 | undefined;
     // Suppress bindings warning to stderr by redirecting it temporarily
     // The 'bindings' package prints "Could not locate the bindings file" before throwing
@@ -75,21 +79,33 @@ export class LocalCache {
     try {
       Database = require("better-sqlite3");
     } catch {
-      // silently fall through - localCache will be undefined
+      // silently fall through - db remains null (API-only mode)
     } finally {
       process.stderr.write = origStderr;
     }
+
     if (!Database) {
-      // Will be handled upstream as cache unavailable
-      this._dbPath = dbPath;
-      this.config = config;
-      this.db = undefined as unknown as BetterSqlite3.Database;
+      // better-sqlite3 native binary not available — API-only mode
       return;
     }
 
-    this._dbPath = dbPath;
-    this.config = config;
-    this.db = this.initDb(dbPath, Database);
+    try {
+      this.db = this.initDb(dbPath, Database);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Log to stderr so callers can surface it; db remains null (API-only mode)
+      process.stderr.write(
+        `[memoryrelay] Local cache unavailable — SQLite initialization failed. ` +
+        `Plugin will use API-only mode (no offline caching). ` +
+        `To fix: run \`npm rebuild better-sqlite3\` in the plugin directory. ` +
+        `Error: ${msg}\n`,
+      );
+    }
+  }
+
+  /** Returns true when the local SQLite cache is available. */
+  get isAvailable(): boolean {
+    return this.db !== null;
   }
 
   get dbPath(): string {
@@ -108,6 +124,7 @@ export class LocalCache {
   // --- Memory CRUD ---
 
   upsert(memory: Partial<LocalMemory> & { id: string; content: string; agent_id: string }): void {
+    if (!this.db) return;
     const now = new Date().toISOString();
     const stmt = this.db.prepare(`
       INSERT INTO memories (id, remote_id, content, agent_id, user_id, metadata, entities,
@@ -154,6 +171,7 @@ export class LocalCache {
   }
 
   get(id: string): LocalMemory | null {
+    if (!this.db) return null;
     const row = this.db
       .prepare("SELECT * FROM memories WHERE id = ?")
       .get(id) as MemoryRow | undefined;
@@ -161,16 +179,19 @@ export class LocalCache {
   }
 
   delete(id: string): boolean {
+    if (!this.db) return false;
     const result = this.db.prepare("DELETE FROM memories WHERE id = ?").run(id);
     return result.changes > 0;
   }
 
   count(): number {
+    if (!this.db) return 0;
     const row = this.db.prepare("SELECT COUNT(*) as cnt FROM memories").get() as { cnt: number };
     return row.cnt;
   }
 
   countByTier(): { hot: number; warm: number; cold: number } {
+    if (!this.db) return { hot: 0, warm: 0, cold: 0 };
     const rows = this.db
       .prepare("SELECT tier, COUNT(*) as cnt FROM memories GROUP BY tier")
       .all() as { tier: string; cnt: number }[];
@@ -189,6 +210,7 @@ export class LocalCache {
     query: string,
     opts?: { limit?: number; scope?: string; sessionId?: string; namespace?: string },
   ): LocalMemory[] {
+    if (!this.db) return [];
     if (!query.trim()) return [];
 
     const limit = opts?.limit ?? 20;
@@ -235,6 +257,7 @@ export class LocalCache {
     sessionId?: string,
     opts?: { namespace?: string; limit?: number },
   ): LocalMemory[] {
+    if (!this.db) return [];
     let sql = "SELECT * FROM memories WHERE scope = ?";
     const params: (string | number)[] = [scope];
 
@@ -257,6 +280,7 @@ export class LocalCache {
   // --- Buffer (capture pipeline) ---
 
   bufferWrite(content: string, metadata: Record<string, unknown>): string {
+    if (!this.db) return "";
     const now = new Date().toISOString();
     const stmt = this.db.prepare(`
       INSERT INTO session_buffer (content, metadata, scope, session_id, namespace, created_at)
@@ -278,6 +302,7 @@ export class LocalCache {
   }
 
   bufferReadPending(): BufferEntry[] {
+    if (!this.db) return [];
     const rows = this.db
       .prepare("SELECT * FROM session_buffer WHERE flushed = 0 ORDER BY created_at ASC")
       .all() as BufferRow[];
@@ -285,6 +310,7 @@ export class LocalCache {
   }
 
   bufferMarkFlushed(ids: string[]): void {
+    if (!this.db) return;
     if (ids.length === 0) return;
     const placeholders = ids.map(() => "?").join(",");
     this.db
@@ -293,6 +319,7 @@ export class LocalCache {
   }
 
   bufferDepth(): number {
+    if (!this.db) return 0;
     const row = this.db
       .prepare("SELECT COUNT(*) as cnt FROM session_buffer WHERE flushed = 0")
       .get() as { cnt: number };
@@ -302,6 +329,7 @@ export class LocalCache {
   // --- Sync state ---
 
   getSyncState(): SyncState {
+    if (!this.db) return { lastPull: null, lastPush: null, cursor: null };
     const rows = this.db.prepare("SELECT key, value FROM sync_state").all() as {
       key: string;
       value: string;
@@ -315,6 +343,7 @@ export class LocalCache {
   }
 
   setSyncState(state: Partial<SyncState>): void {
+    if (!this.db) return;
     const now = new Date().toISOString();
     const stmt = this.db.prepare(
       "INSERT OR REPLACE INTO sync_state (key, value, updated_at) VALUES (?, ?, ?)",
@@ -330,6 +359,7 @@ export class LocalCache {
   // --- Maintenance ---
 
   evictExpired(): number {
+    if (!this.db) return 0;
     const now = new Date().toISOString();
     const result = this.db
       .prepare("DELETE FROM memories WHERE expires_at IS NOT NULL AND expires_at < ?")
@@ -338,6 +368,7 @@ export class LocalCache {
   }
 
   enforceCapLimit(): number {
+    if (!this.db) return 0;
     const max = this.config.maxLocalMemories;
     const total = this.count();
     if (total <= max) return 0;
@@ -380,6 +411,6 @@ export class LocalCache {
   }
 
   close(): void {
-    this.db.close();
+    this.db?.close();
   }
 }
