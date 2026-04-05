@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-04-05
+
+### Fixed
+- **Publish**: Re-publish of v0.19.2 — tarball was missing from NPM CDN after initial publish
+
 ## [0.19.2] - 2026-04-05
 
 ### Added
@@ -374,6 +379,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.2...v0.19.3
 [0.19.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.18.5...v0.19.0
