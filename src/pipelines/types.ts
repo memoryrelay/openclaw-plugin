@@ -68,6 +68,10 @@ export interface PluginConfig {
     importanceBoost?: boolean;
     tierBoost?: boolean;
   };
+  vectorSearch?: {
+    enabled?: boolean;
+    provider?: string;
+  };
   syncIntervalMinutes?: number;
   sessionTimeoutMinutes?: number;
   sessionCleanupIntervalMinutes?: number;
@@ -130,6 +134,10 @@ export interface MemoryRelayClient {
   ): Promise<any>;
 }
 
+export interface EmbeddingService {
+  generateQuery(text: string): Promise<Float32Array>;
+}
+
 export interface SessionResolverLike {
   resolve(requestCtx: RequestContext): Promise<{ sessionId: string; externalId: string }>;
 }
@@ -162,6 +170,7 @@ export interface PipelineContext {
   readonly sessionResolver?: SessionResolverLike;
   readonly localCache?: LocalCacheLike;
   readonly syncDaemon?: SyncDaemonLike;
+  readonly embeddingService?: EmbeddingService;
 }
 
 export interface RecallInput {
