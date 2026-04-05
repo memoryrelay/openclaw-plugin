@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.6] - 2026-04-05
+
+### Fixed
+- **Auto-rebuild better-sqlite3**: When `sudo npm install -g --ignore-scripts` is used (or when the native binary is missing after upgrade), `postinstall.cjs` now attempts `npm rebuild better-sqlite3` automatically before falling back to API-only mode (#112)
+
 ## [0.19.5] - 2026-04-05
 
 ### Fixed
@@ -389,6 +394,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.5...v0.19.6
 [0.19.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.4...v0.19.5
 [0.19.4]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.3...v0.19.4
 [0.19.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.2...v0.19.3

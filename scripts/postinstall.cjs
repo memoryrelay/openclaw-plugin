@@ -12,16 +12,34 @@ const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
 
-// ─── 1. Verify better-sqlite3 ────────────────────────────────────────────────
-try {
+// ─── 1. Verify better-sqlite3 (rebuild if missing) ──────────────────────────
+function tryLoadSqlite() {
   const Database = require('better-sqlite3');
   const db = new Database(':memory:');
   db.prepare('SELECT 1').get();
   db.close();
+}
+
+try {
+  tryLoadSqlite();
   console.log('✅ better-sqlite3 native binary OK');
-} catch (err) {
-  console.warn('⚠️  better-sqlite3 native binary not available — local cache disabled (API-only mode).');
-  console.warn('   To enable: npm rebuild better-sqlite3');
+} catch (loadErr) {
+  // Binary missing — try rebuilding it in place
+  console.warn('⚠️  better-sqlite3 native binary missing — attempting rebuild...');
+  try {
+    const { execSync } = require('child_process');
+    const pkgDir = path.resolve(__dirname, '..');
+    execSync(`npm rebuild better-sqlite3 --prefix "${pkgDir}"`, {
+      timeout: 120000,
+      stdio: 'pipe',
+      env: { ...process.env, PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' },
+    });
+    tryLoadSqlite();
+    console.log('✅ better-sqlite3 rebuilt and loaded OK');
+  } catch (rebuildErr) {
+    console.warn('⚠️  better-sqlite3 rebuild failed — local cache disabled (API-only mode).');
+    console.warn('   To enable: sudo npm rebuild better-sqlite3 --prefix /usr/lib/node_modules/@memoryrelay/plugin-memoryrelay-ai');
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
