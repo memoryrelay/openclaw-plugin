@@ -48,6 +48,19 @@ describe("recallEmbedQuery", () => {
     expect(recallEmbedQuery.enabled(ctx)).toBe(false);
   });
 
+  test("is disabled when vectorSearch.enabled is undefined (key present, value unset)", () => {
+    const ctx: PipelineContext = {
+      requestCtx: {
+        sessionKey: "agent:main:abc", agentId: "a1", channel: null, trigger: null,
+        prompt: "test query", isSubagent: false, parentSessionKey: null,
+        namespace: "default", timestamp: Date.now(),
+      },
+      config: { autoRecall: true, vectorSearch: { enabled: undefined } } as any,
+      client: {} as any,
+    };
+    expect(recallEmbedQuery.enabled(ctx)).toBe(false);
+  });
+
   test("sets queryEmbedding when embeddingService returns a vector", async () => {
     const embedding = new Float32Array(EMBEDDING_DIM).fill(0.1);
     const embeddingService: EmbeddingService = {
