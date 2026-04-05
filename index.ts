@@ -84,7 +84,7 @@ import {
 } from "./src/onboarding/first-run.js";
 
 // --- Pipeline types (used for PluginConfig interface) ---
-import type { PluginConfig } from "./src/pipelines/types.js";
+import type { PluginConfig, EmbeddingService } from "./src/pipelines/types.js";
 
 // ============================================================================
 // Config type for raw plugin JSON (superset of PluginConfig)
@@ -350,6 +350,10 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     recallThreshold: cfg?.recallThreshold ?? 0.65,
     excludeChannels: cfg?.excludeChannels ?? [],
     autoCapture: autoCaptureConfig,
+    vectorSearch: {
+      enabled: cfg?.localCache?.vectorSearch?.enabled ?? false,
+      provider: cfg?.localCache?.vectorSearch?.provider ?? "none",
+    },
     sessionTimeoutMinutes: cfg?.sessionTimeoutMinutes,
     sessionCleanupIntervalMinutes: cfg?.sessionCleanupIntervalMinutes,
     maxSessionAgeHours: cfg?.maxSessionAgeHours,
@@ -443,6 +447,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     }
   }
 
+  // --- Embedding service (for hybrid vector search in recall pipeline) ---
+  // No concrete implementation is bundled yet. Set to a real EmbeddingService
+  // instance (e.g. a Nomic ONNX wrapper) when vectorSearch.enabled = true.
+  const embeddingService: EmbeddingService | undefined = undefined;
+
   // --- Tool enablement filter ---
   const enabledToolNames: Set<string> | null = (() => {
     if (!cfg?.enabledTools) return null;
@@ -470,7 +479,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // ========================================================================
 
   registerBeforeAgentStart(api, pluginConfig, client, isToolEnabled, defaultProject, agentId);
-  registerBeforePromptBuild(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
+  registerBeforePromptBuild(api, pluginConfig, client, sessionResolver, localCache, syncDaemon, embeddingService);
   registerAgentEnd(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
   registerSessionLifecycle(api, pluginConfig, client, agentId, defaultProject, sessionResolver);
   registerSubagentHooks(api, pluginConfig, client, agentId, autoCaptureConfig, isBlocklisted);
