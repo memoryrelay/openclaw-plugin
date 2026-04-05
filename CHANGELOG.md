@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-04-05
+
+### Added
+- **Plug-and-play install**: `postinstall.cjs` now auto-syncs the plugin to `~/.openclaw/extensions/` after `npm install -g`, so OpenClaw picks up the new version without manual file copying (#113)
+- **Auto gateway restart**: If the OpenClaw gateway is already running at install time, `postinstall.cjs` restarts it automatically so the new version loads immediately. Set `OPENCLAW_POSTINSTALL_NO_RESTART=1` to skip (useful in CI). (#113)
+
 ## [0.19.1] - 2026-04-05
 
 ### Fixed
@@ -368,6 +374,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.18.5...v0.19.0
 [0.18.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.18.1...v0.18.5
