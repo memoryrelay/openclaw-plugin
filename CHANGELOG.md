@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-04-05
+
+### Added
+- **Hybrid FTS5+Vector Search**: Local SQLite cache now supports semantic similarity search alongside full-text search using sqlite-vec (vec0 extension). Activate with `localCache.vectorSearch.enabled = true` (#107)
+- **recallEmbedQuery pipeline stage**: New Stage 3 in the recall pipeline generates a query embedding before search, enabling hybrid ranked results. Falls back silently to FTS5-only when embedding service is unavailable (#109)
+- **ApiEmbeddingService**: Server-side query embedding via the MemoryRelay API (`POST /v1/embed`) — no local model required. Automatically used when `vectorSearch.enabled = true` (#110)
+- **Embedding sync**: Sync daemon requests embedding vectors from the API (`include_embeddings=true`) during pulls and stores them in the local vec0 table (#110)
+- **client.embed()**: New `MemoryRelayClient.embed(text, prefix)` method for server-side embedding generation via `POST /v1/embed` (#110)
+
+### Changed
+- **client.list()**: Now accepts `include_embeddings?: boolean` option, appended as a query param when set (#110)
+
 ## [0.18.5] - 2026-04-03
 
 ### Fixed
@@ -351,6 +363,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.18.5...v0.19.0
+[0.18.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.18.1...v0.18.5
 [0.12.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.8.0...v0.12.0
 [0.8.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.6.2...v0.7.0
