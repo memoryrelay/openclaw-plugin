@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.8] - 2026-04-05
+
+### Fixed
+- **Root cause of spawn sh ENOENT**: Moved `better-sqlite3` from `dependencies` to `optionalDependencies`. npm runs native build scripts for regular deps but gracefully skips failed optional deps. This prevents the `prebuild-install || node-gyp rebuild` script from being invoked by npm (which was failing because `prebuild-install` wasn't in PATH during npm's lifecycle execution). The binary is now installed in `postinstall.cjs` using direct paths. (#112)
+- **postinstall better-sqlite3 install**: When binary is missing, postinstall now runs `prebuild-install` directly with explicit PATH, downloads the prebuilt binary from GitHub releases, and falls back to `node-gyp rebuild` from source if needed.
+
 ## [0.19.7] - 2026-04-05
 
 ### Fixed
@@ -399,6 +405,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.7...v0.19.8
 [0.19.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.6...v0.19.7
 [0.19.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.5...v0.19.6
 [0.19.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.4...v0.19.5

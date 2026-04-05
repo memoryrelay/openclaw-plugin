@@ -24,21 +24,49 @@ try {
   tryLoadSqlite();
   console.log('✅ better-sqlite3 native binary OK');
 } catch (loadErr) {
-  // Binary missing — try rebuilding it in place
-  console.warn('⚠️  better-sqlite3 native binary missing — attempting rebuild...');
+  // Binary missing (native build skipped because better-sqlite3 is an optionalDependency).
+  // Run prebuild-install to download the prebuilt binary for this platform/ABI.
+  console.warn('⚠️  better-sqlite3 binary missing — downloading prebuilt binary...');
   try {
     const { execSync } = require('child_process');
-    const pkgDir = path.resolve(__dirname, '..');
-    execSync(`npm rebuild better-sqlite3 --prefix "${pkgDir}"`, {
-      timeout: 120000,
-      stdio: 'pipe',
-      env: { ...process.env, PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' },
-    });
+    const pkgDir  = path.resolve(__dirname, '..');
+    const sqDir   = path.join(pkgDir, 'node_modules', 'better-sqlite3');
+    const PATH    = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+
+    if (!fs.existsSync(sqDir)) {
+      // better-sqlite3 wasn't installed at all — install it with scripts enabled
+      execSync('npm install better-sqlite3', {
+        cwd: pkgDir, timeout: 180000, stdio: 'pipe',
+        env: { ...process.env, PATH },
+      });
+    } else {
+      // Package dir exists but binary is missing — run prebuild-install directly
+      const prebuild = [
+        path.join(sqDir, 'node_modules', '.bin', 'prebuild-install'),
+        path.join(pkgDir, 'node_modules', '.bin', 'prebuild-install'),
+      ].find(p => fs.existsSync(p));
+
+      if (prebuild) {
+        execSync(`"${prebuild}" --runtime=node --tag-prefix=v`, {
+          cwd: sqDir, timeout: 60000, stdio: 'pipe',
+          env: { ...process.env, PATH },
+        });
+      } else {
+        // prebuild-install not available — rebuild from source via node-gyp
+        execSync('node-gyp rebuild --release', {
+          cwd: sqDir, timeout: 180000, stdio: 'pipe',
+          env: { ...process.env, PATH },
+        });
+      }
+    }
+
     tryLoadSqlite();
-    console.log('✅ better-sqlite3 rebuilt and loaded OK');
+    console.log('✅ better-sqlite3 binary installed OK');
   } catch (rebuildErr) {
-    console.warn('⚠️  better-sqlite3 rebuild failed — local cache disabled (API-only mode).');
-    console.warn('   To enable: sudo npm rebuild better-sqlite3 --prefix /usr/lib/node_modules/@memoryrelay/plugin-memoryrelay-ai');
+    console.warn('⚠️  better-sqlite3 binary install failed — local cache disabled (API-only mode).');
+    console.warn('   To enable manually:');
+    console.warn('     cd /usr/lib/node_modules/@memoryrelay/plugin-memoryrelay-ai');
+    console.warn('     sudo npm install better-sqlite3');
   }
 }
 
