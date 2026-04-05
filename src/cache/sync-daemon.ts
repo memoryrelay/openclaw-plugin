@@ -66,7 +66,9 @@ export class SyncDaemon {
       let hasMore = true;
 
       while (hasMore) {
-        const memories: Memory[] = await this.client.list(PULL_PAGE_SIZE, offset);
+        const memories: Memory[] = await this.client.list(PULL_PAGE_SIZE, offset, {
+          include_embeddings: this.vectorAvailable,
+        });
 
         if (memories.length === 0) {
           hasMore = false;

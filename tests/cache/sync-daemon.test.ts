@@ -145,7 +145,7 @@ describe("SyncDaemon", () => {
       ]);
       await daemon.pull();
 
-      expect(client.list).toHaveBeenLastCalledWith(100, expect.any(Number));
+      expect(client.list).toHaveBeenLastCalledWith(100, expect.any(Number), expect.any(Object));
       expect(cache.get("m-3")).not.toBeNull();
     });
 

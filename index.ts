@@ -85,6 +85,7 @@ import {
 
 // --- Pipeline types (used for PluginConfig interface) ---
 import type { PluginConfig, EmbeddingService } from "./src/pipelines/types.js";
+import { ApiEmbeddingService } from "./src/cache/api-embedding-service.js";
 
 // ============================================================================
 // Config type for raw plugin JSON (superset of PluginConfig)
@@ -448,9 +449,12 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // --- Embedding service (for hybrid vector search in recall pipeline) ---
-  // No concrete implementation is bundled yet. Set to a real EmbeddingService
-  // instance (e.g. a Nomic ONNX wrapper) when vectorSearch.enabled = true.
-  const embeddingService: EmbeddingService | undefined = undefined;
+  // Use ApiEmbeddingService (server-side embeddings via POST /v1/embed) when
+  // vectorSearch is enabled. Falls back gracefully to FTS5-only if the API
+  // endpoint is unavailable. Replace with NomicEmbeddingProvider for local
+  // inference once that is bundled.
+  const embeddingService: EmbeddingService | undefined =
+    pluginConfig.vectorSearch?.enabled ? new ApiEmbeddingService(client) : undefined;
 
   // --- Tool enablement filter ---
   const enabledToolNames: Set<string> | null = (() => {

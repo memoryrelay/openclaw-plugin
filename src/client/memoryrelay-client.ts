@@ -340,10 +340,11 @@ export class MemoryRelayClient implements IMemoryRelayClient {
     return response.data || [];
   }
 
-  async list(limit: number = 20, offset: number = 0, opts?: { scope?: string }): Promise<Memory[]> {
+  async list(limit: number = 20, offset: number = 0, opts?: { scope?: string; include_embeddings?: boolean }): Promise<Memory[]> {
     const cappedLimit = Math.min(limit, 100);
     let path = `/v1/memories?limit=${cappedLimit}&offset=${offset}&agent_id=${encodeURIComponent(this.agentId)}`;
     if (opts?.scope) path += `&scope=${encodeURIComponent(opts.scope)}`;
+    if (opts?.include_embeddings) path += `&include_embeddings=true`;
     const response = await this.request<{ data: Memory[] }>(
       "GET",
       path,
@@ -353,6 +354,19 @@ export class MemoryRelayClient implements IMemoryRelayClient {
 
   async get(id: string): Promise<Memory> {
     return this.request<Memory>("GET", `/v1/memories/${id}`);
+  }
+
+  /**
+   * Generate an embedding vector for the given text via the API.
+   * Used by ApiEmbeddingService for server-side query embedding.
+   * Requires POST /v1/embed endpoint (memoryrelay/api #375).
+   */
+  async embed(text: string, prefix: "search_query" | "search_document" = "search_query"): Promise<number[]> {
+    const response = await this.request<{ embedding: number[] }>("POST", "/v1/embed", {
+      text,
+      prefix,
+    });
+    return response.embedding;
   }
 
   async update(id: string, content: string, metadata?: Record<string, string>): Promise<Memory> {
