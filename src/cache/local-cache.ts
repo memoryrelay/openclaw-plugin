@@ -217,15 +217,20 @@ export class LocalCache {
 
     const limit = opts?.limit ?? 20;
 
-    // Route to hybrid search when queryEmbedding provided and vector extension is available
+    // Route to hybrid search when queryEmbedding provided and vector extension is available.
+    // Overfetch by 3× so that post-filtering by scope/sessionId/namespace still returns
+    // up to `limit` results even when some hybrid results are from a different scope.
     if (opts?.queryEmbedding && this.vectorAvailable) {
-      const results = searchHybrid(this.db, query, opts.queryEmbedding, limit, /* vectorAvailable= */ true);
-      return results.filter(
-        (m) =>
-          (!opts.scope || m.scope === opts.scope) &&
-          (!opts.sessionId || m.session_id === opts.sessionId) &&
-          (!opts.namespace || m.namespace === opts.namespace),
-      );
+      const overfetch = limit * 3;
+      const all = searchHybrid(this.db, query, opts.queryEmbedding, overfetch, /* vectorAvailable= */ true);
+      return all
+        .filter(
+          (m) =>
+            (!opts.scope || m.scope === opts.scope) &&
+            (!opts.sessionId || m.session_id === opts.sessionId) &&
+            (!opts.namespace || m.namespace === opts.namespace),
+        )
+        .slice(0, limit);
     }
 
     if (!query.trim()) return [];

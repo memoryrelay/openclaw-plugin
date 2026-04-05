@@ -510,7 +510,9 @@ describe("LocalCache", () => {
       vecCache.upsert(makeMemory({ id: "s1", content: "session memory", scope: "session", session_id: "sess-1" }));
 
       const embedding = new Float32Array(768);
-      // Vector search will throw (no vec0 table) → falls back to FTS5 results → then filtered
+      // searchHybrid catches the vec0 error and returns FTS5 results (all scopes, up to overfetch limit).
+      // The scope filter in search() then narrows to the requested scope.
+      // Note: overfetch (limit * 3) ensures the slice still returns up to `limit` after filtering.
       const results = vecCache.search("memory", {
         queryEmbedding: embedding,
         scope: "long-term",
@@ -524,6 +526,33 @@ describe("LocalCache", () => {
       cache.upsert(makeMemory({ id: "m1", content: "TypeScript test" }));
       const results = cache.search("TypeScript", { queryEmbedding: null });
       expect(results.length).toBe(1);
+    });
+
+    test("overfetch ensures limit is honoured after scope filter (vectorAvailable=true, no vec table)", () => {
+      const vecConfig: LocalCacheConfig = {
+        ...DEFAULT_CONFIG,
+        vectorSearch: { enabled: true, provider: "sqlite-vec" },
+      };
+      const vecCache = new LocalCache(":memory:", vecConfig);
+
+      // Insert 3 long-term + 3 session memories all matching "memory"
+      for (let i = 1; i <= 3; i++) {
+        vecCache.upsert(makeMemory({ id: `lt-${i}`, content: `long-term memory ${i}`, scope: "long-term" }));
+        vecCache.upsert(makeMemory({ id: `s-${i}`, content: `session memory ${i}`, scope: "session", session_id: "sess-1" }));
+      }
+
+      const embedding = new Float32Array(768);
+      // limit=3, but hybrid (here FTS5) returns up to 9 (limit*3). After scope filter we should
+      // still get 3 long-term results rather than fewer.
+      const results = vecCache.search("memory", {
+        queryEmbedding: embedding,
+        scope: "long-term",
+        limit: 3,
+      });
+      expect(results.length).toBe(3);
+      expect(results.every((m) => m.scope === "long-term")).toBe(true);
+
+      vecCache.close();
     });
   });
 });
