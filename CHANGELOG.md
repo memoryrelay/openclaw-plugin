@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.5] - 2026-04-05
+
+### Fixed
+- **ENOTEMPTY on global upgrade**: Added `preinstall` script that detects an existing installation and removes it before npm attempts the rename. Prevents `ENOTEMPTY: directory not empty` errors caused by locked native `.node` binaries (better-sqlite3, @matrix-org/...) when running `sudo npm install -g @memoryrelay/plugin-memoryrelay-ai@latest` (#112)
+
 ## [0.19.4] - 2026-04-05
 
 ### Fixed
@@ -384,6 +389,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.4...v0.19.5
 [0.19.4]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.3...v0.19.4
 [0.19.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.2...v0.19.3
 [0.19.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.1...v0.19.2

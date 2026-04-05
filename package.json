@@ -1,6 +1,6 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.19.4",
+  "version": "0.19.5",
   "description": "OpenClaw memory plugin for MemoryRelay API - 42 tools, 17 commands, V2 async, sessions, decisions, patterns, projects & semantic search",
   "type": "module",
   "main": "index.ts",
@@ -8,7 +8,8 @@
     "postinstall": "node scripts/postinstall.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "preinstall": "node scripts/preinstall.cjs"
   },
   "keywords": [
     "openclaw",
