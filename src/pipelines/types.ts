@@ -9,6 +9,7 @@ export interface Memory {
   updated_at: string;
   importance?: number;
   tier?: "hot" | "warm" | "cold";
+  embedding?: Buffer | null;
 }
 
 export interface ConversationMessage {
@@ -137,7 +138,7 @@ export interface LocalCacheLike {
   bufferWrite(content: string, metadata: Record<string, unknown>): string;
   bufferDepth(): number;
   count(): number;
-  search(query: string, opts?: { limit?: number; scope?: string; sessionId?: string; namespace?: string }): Array<{
+  search(query: string, opts?: { limit?: number; scope?: string; sessionId?: string; namespace?: string; queryEmbedding?: Float32Array | null }): Array<{
     id: string; content: string; agent_id: string; user_id: string;
     metadata: Record<string, unknown>; entities: unknown[];
     importance: number; tier: "hot" | "warm" | "cold";
@@ -172,6 +173,7 @@ export interface RecallInput {
   session?: ScoredMemory[];
   source?: "local" | "api";
   formatted?: string;
+  queryEmbedding?: Float32Array | null;
 }
 
 export type RecallResult =

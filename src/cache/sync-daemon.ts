@@ -17,6 +17,7 @@ export class SyncDaemon {
   private readonly cache: LocalCache;
   private readonly client: MemoryRelayClient;
   private readonly config: LocalCacheConfig;
+  private readonly vectorAvailable: boolean;
 
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private consecutiveErrors = 0;
@@ -26,6 +27,7 @@ export class SyncDaemon {
     this.cache = cache;
     this.client = client;
     this.config = config;
+    this.vectorAvailable = config.vectorSearch.enabled;
   }
 
   start(): void {
@@ -87,11 +89,25 @@ export class SyncDaemon {
             synced_at: new Date().toISOString(),
             updated_at: memory.updated_at,
             created_at: memory.created_at,
+            embedding: memory.embedding ?? null,
           });
           if (existed) {
             updated++;
           } else {
             added++;
+          }
+        }
+
+        // Batch-insert embeddings into the vec0 table for any memories that include them
+        if (this.vectorAvailable) {
+          const withEmbeddings = memories.filter(
+            (m): m is typeof m & { embedding: Buffer } => m.embedding !== null && m.embedding !== undefined,
+          );
+          if (withEmbeddings.length > 0) {
+            const BATCH_SIZE = 64;
+            for (let i = 0; i < withEmbeddings.length; i += BATCH_SIZE) {
+              this.cache.storeEmbeddingBatch(withEmbeddings.slice(i, i + BATCH_SIZE));
+            }
           }
         }
 

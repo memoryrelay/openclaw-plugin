@@ -43,12 +43,14 @@ export const recallSearch: RecallStage = {
             limit,
             scope: "long-term",
             namespace,
+            queryEmbedding: input.queryEmbedding,
           });
           const localSession = ctx.localCache.search(input.prompt, {
             limit,
             scope: "session",
             sessionId,
             namespace,
+            queryEmbedding: input.queryEmbedding,
           });
 
           if (localLongTerm.length > 0 || localSession.length > 0) {
