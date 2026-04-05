@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.7] - 2026-04-05
+
+### Fixed
+- **Openclaw not re-installed on upgrade**: Marked `openclaw` peer dependency as `optional: true` in `peerDependenciesMeta`. npm v10+ was auto-installing `openclaw` (and all its native deps: sharp, koffi, better-sqlite3) as a nested dependency on global install, causing `spawn sh ENOENT` build failures. Since the plugin always runs inside an existing openclaw installation, this peer dep never needs to be installed separately (#112)
+
 ## [0.19.6] - 2026-04-05
 
 ### Fixed
@@ -394,6 +399,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.6...v0.19.7
 [0.19.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.5...v0.19.6
 [0.19.5]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.4...v0.19.5
 [0.19.4]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.3...v0.19.4
