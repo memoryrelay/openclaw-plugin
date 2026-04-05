@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.4] - 2026-04-05
+
+### Fixed
+- **Sudo-aware postinstall**: When installed with `sudo npm install -g`, detect the real user via `SUDO_USER` env var and read their home from `/etc/passwd`, so the extensions sync and gateway restart target the correct user's `~/.openclaw/` instead of root's
+
 ## [0.19.3] - 2026-04-05
 
 ### Fixed
@@ -379,6 +384,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.4]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.3...v0.19.4
 [0.19.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.2...v0.19.3
 [0.19.2]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.0...v0.19.1

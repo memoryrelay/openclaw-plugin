@@ -25,8 +25,25 @@ try {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const configPath     = path.join(os.homedir(), '.openclaw', 'openclaw.json');
-const extensionsDir  = path.join(os.homedir(), '.openclaw', 'extensions');
+// When installed with `sudo npm install -g`, os.homedir() returns /root.
+// Use SUDO_USER or npm_config_cache hints to find the real user's home.
+function getRealHome() {
+  const sudoUser = process.env.SUDO_USER;
+  if (sudoUser && sudoUser !== 'root') {
+    // Parse /etc/passwd for the real home dir
+    try {
+      const passwd = require('fs').readFileSync('/etc/passwd', 'utf8');
+      const line = passwd.split('\n').find(l => l.startsWith(sudoUser + ':'));
+      if (line) return line.split(':')[5];
+    } catch {}
+    return path.join('/home', sudoUser);
+  }
+  return os.homedir();
+}
+
+const realHome     = getRealHome();
+const configPath     = path.join(realHome, '.openclaw', 'openclaw.json');
+const extensionsDir  = path.join(realHome, '.openclaw', 'extensions');
 const PLUGIN_NAME    = 'plugin-memoryrelay-ai';
 const selfDir        = path.resolve(__dirname, '..');   // root of this package
 
