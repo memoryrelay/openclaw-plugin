@@ -211,6 +211,83 @@ describe("SyncDaemon", () => {
       const mem = cache.get("m-1");
       expect(mem?.synced_at).not.toBeNull();
     });
+
+    test("stores embedding from API memory in the memories table", async () => {
+      const embeddingBuf = Buffer.alloc(768 * 4);
+      embeddingBuf[0] = 1;
+      (client.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        makeApiMemory({ id: "m-emb", embedding: embeddingBuf }),
+      ]);
+
+      await daemon.pull();
+
+      const mem = cache.get("m-emb");
+      expect(mem).not.toBeNull();
+      // embedding is stored in the memories row
+      expect(mem!.embedding).toBeInstanceOf(Buffer);
+    });
+
+    test("does not call storeEmbeddingBatch when vectorAvailable is false", async () => {
+      const embeddingBuf = Buffer.alloc(768 * 4);
+      (client.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        makeApiMemory({ id: "m-1", embedding: embeddingBuf }),
+      ]);
+
+      const batchSpy = vi.spyOn(cache, "storeEmbeddingBatch");
+      await daemon.pull();
+
+      // vectorSearch.enabled is false in DEFAULT_CONFIG → storeEmbeddingBatch not called
+      expect(batchSpy).not.toHaveBeenCalled();
+    });
+
+    test("calls storeEmbeddingBatch when vectorAvailable is true and memories have embeddings", async () => {
+      const vecConfig = { ...DEFAULT_CONFIG, vectorSearch: { enabled: true, provider: "sqlite-vec" } };
+      const vecCache = new LocalCache(":memory:", vecConfig);
+      const vecDaemon = new SyncDaemon(vecCache, client, vecConfig);
+
+      const embeddingBuf = Buffer.alloc(768 * 4);
+      (client.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        makeApiMemory({ id: "vec-1", embedding: embeddingBuf }),
+        makeApiMemory({ id: "vec-2" }), // no embedding
+      ]);
+
+      const batchSpy = vi.spyOn(vecCache, "storeEmbeddingBatch");
+      await vecDaemon.pull();
+
+      expect(batchSpy).toHaveBeenCalledTimes(1);
+      const batchArg = batchSpy.mock.calls[0][0];
+      expect(batchArg).toHaveLength(1);
+      expect(batchArg[0].id).toBe("vec-1");
+
+      vecDaemon.stop();
+      vecCache.close();
+    });
+
+    test("calls storeEmbeddingBatch in batches of 64", async () => {
+      const vecConfig = { ...DEFAULT_CONFIG, vectorSearch: { enabled: true, provider: "sqlite-vec" } };
+      const vecCache = new LocalCache(":memory:", vecConfig);
+      const vecDaemon = new SyncDaemon(vecCache, client, vecConfig);
+
+      const embeddingBuf = Buffer.alloc(768 * 4);
+      const manyMemories = Array.from({ length: 100 }, (_, i) =>
+        makeApiMemory({ id: `m-${i}`, embedding: embeddingBuf }),
+      );
+      // Return all 100 as a single API page (< PULL_PAGE_SIZE=100 means second call returns [])
+      (client.list as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(manyMemories)
+        .mockResolvedValueOnce([]);
+
+      const batchSpy = vi.spyOn(vecCache, "storeEmbeddingBatch");
+      await vecDaemon.pull();
+
+      // 100 embeddings / 64 = 2 batches
+      expect(batchSpy).toHaveBeenCalledTimes(2);
+      expect(batchSpy.mock.calls[0][0]).toHaveLength(64);
+      expect(batchSpy.mock.calls[1][0]).toHaveLength(36);
+
+      vecDaemon.stop();
+      vecCache.close();
+    });
   });
 
   // === Push ===

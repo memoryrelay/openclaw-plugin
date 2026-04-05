@@ -439,4 +439,120 @@ describe("LocalCache", () => {
       expect(cache.dbPath).toBe(":memory:");
     });
   });
+
+  // --- storeEmbeddingBatch ---
+
+  describe("storeEmbeddingBatch", () => {
+    test("is a no-op when vectorAvailable is false (default config)", () => {
+      // vectorSearch.enabled = false in DEFAULT_CONFIG — should not throw
+      expect(() => {
+        cache.storeEmbeddingBatch([
+          { id: "m1", embedding: Buffer.alloc(768 * 4) },
+        ]);
+      }).not.toThrow();
+    });
+
+    test("silently skips when memories_vec table does not exist (vectorAvailable=true)", () => {
+      const vecConfig: LocalCacheConfig = {
+        ...DEFAULT_CONFIG,
+        vectorSearch: { enabled: true, provider: "sqlite-vec" },
+      };
+      const vecCache = new LocalCache(":memory:", vecConfig);
+
+      // memories_vec table is not created (no extension loaded) — should not throw
+      expect(() => {
+        vecCache.storeEmbeddingBatch([
+          { id: "m1", embedding: Buffer.alloc(768 * 4) },
+        ]);
+      }).not.toThrow();
+
+      vecCache.close();
+    });
+
+    test("accepts entries with null embedding without throwing", () => {
+      const vecConfig: LocalCacheConfig = {
+        ...DEFAULT_CONFIG,
+        vectorSearch: { enabled: true, provider: "sqlite-vec" },
+      };
+      const vecCache = new LocalCache(":memory:", vecConfig);
+
+      expect(() => {
+        vecCache.storeEmbeddingBatch([
+          { id: "m1", embedding: null },
+          { id: "m2", embedding: null },
+        ]);
+      }).not.toThrow();
+
+      vecCache.close();
+    });
+  });
+
+  // --- search with queryEmbedding ---
+
+  describe("search with queryEmbedding", () => {
+    test("falls back to FTS5 when vectorAvailable is false (default config)", () => {
+      cache.upsert(makeMemory({ id: "m1", content: "TypeScript vector search" }));
+
+      const embedding = new Float32Array(768);
+      const results = cache.search("TypeScript", { queryEmbedding: embedding });
+      // FTS5 path: should still find the match
+      expect(results.length).toBe(1);
+      expect(results[0].id).toBe("m1");
+    });
+
+    test("applies scope filter when vectorAvailable is true and no vec table (graceful fallback)", () => {
+      const vecConfig: LocalCacheConfig = {
+        ...DEFAULT_CONFIG,
+        vectorSearch: { enabled: true, provider: "sqlite-vec" },
+      };
+      const vecCache = new LocalCache(":memory:", vecConfig);
+      vecCache.upsert(makeMemory({ id: "lt", content: "long-term memory", scope: "long-term" }));
+      vecCache.upsert(makeMemory({ id: "s1", content: "session memory", scope: "session", session_id: "sess-1" }));
+
+      const embedding = new Float32Array(768);
+      // searchHybrid catches the vec0 error and returns FTS5 results (all scopes, up to overfetch limit).
+      // The scope filter in search() then narrows to the requested scope.
+      // Note: overfetch (limit * 3) ensures the slice still returns up to `limit` after filtering.
+      const results = vecCache.search("memory", {
+        queryEmbedding: embedding,
+        scope: "long-term",
+      });
+      expect(results.every((m) => m.scope === "long-term")).toBe(true);
+
+      vecCache.close();
+    });
+
+    test("passes queryEmbedding=null to search without error (takes FTS5 path)", () => {
+      cache.upsert(makeMemory({ id: "m1", content: "TypeScript test" }));
+      const results = cache.search("TypeScript", { queryEmbedding: null });
+      expect(results.length).toBe(1);
+    });
+
+    test("overfetch ensures limit is honoured after scope filter (vectorAvailable=true, no vec table)", () => {
+      const vecConfig: LocalCacheConfig = {
+        ...DEFAULT_CONFIG,
+        vectorSearch: { enabled: true, provider: "sqlite-vec" },
+      };
+      const vecCache = new LocalCache(":memory:", vecConfig);
+
+      // Insert 3 long-term + 3 session memories all matching "memory"
+      for (let i = 1; i <= 3; i++) {
+        vecCache.upsert(makeMemory({ id: `lt-${i}`, content: `long-term memory ${i}`, scope: "long-term" }));
+        vecCache.upsert(makeMemory({ id: `s-${i}`, content: `session memory ${i}`, scope: "session", session_id: "sess-1" }));
+      }
+
+      const embedding = new Float32Array(768);
+      // limit=3, but hybrid (here FTS5) returns up to 9 (limit*3). After scope filter we should
+      // still get 3 long-term results rather than fewer.
+      const results = vecCache.search("memory", {
+        queryEmbedding: embedding,
+        scope: "long-term",
+        limit: 3,
+      });
+      expect(results.length).toBe(3);
+      expect(results.every((m) => m.scope === "long-term")).toBe(true);
+
+      vecCache.close();
+    });
+  });
 });

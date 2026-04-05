@@ -1,6 +1,7 @@
 import type BetterSqlite3 from "better-sqlite3";
 import { statSync } from "node:fs";
 import { migrateIfNeeded } from "./schema.js";
+import { searchHybrid } from "./vector.js";
 import type {
   LocalCacheConfig,
   LocalMemory,
@@ -65,11 +66,13 @@ export class LocalCache {
   private db: BetterSqlite3.Database | null;
   private readonly _dbPath: string;
   private readonly config: LocalCacheConfig;
+  private readonly vectorAvailable: boolean;
 
   constructor(dbPath: string, config: LocalCacheConfig) {
     this._dbPath = dbPath;
     this.config = config;
     this.db = null;
+    this.vectorAvailable = config.vectorSearch.enabled;
 
     let Database: typeof BetterSqlite3 | undefined;
     // Suppress bindings warning to stderr by redirecting it temporarily
@@ -208,12 +211,30 @@ export class LocalCache {
 
   search(
     query: string,
-    opts?: { limit?: number; scope?: string; sessionId?: string; namespace?: string },
+    opts?: { limit?: number; scope?: string; sessionId?: string; namespace?: string; queryEmbedding?: Float32Array | null },
   ): LocalMemory[] {
     if (!this.db) return [];
-    if (!query.trim()) return [];
 
     const limit = opts?.limit ?? 20;
+
+    // Route to hybrid search when queryEmbedding provided and vector extension is available.
+    // Overfetch by 3× so that post-filtering by scope/sessionId/namespace still returns
+    // up to `limit` results even when some hybrid results are from a different scope.
+    if (opts?.queryEmbedding && this.vectorAvailable) {
+      const overfetch = limit * 3;
+      const all = searchHybrid(this.db, query, opts.queryEmbedding, overfetch, /* vectorAvailable= */ true);
+      return all
+        .filter(
+          (m) =>
+            (!opts.scope || m.scope === opts.scope) &&
+            (!opts.sessionId || m.session_id === opts.sessionId) &&
+            (!opts.namespace || m.namespace === opts.namespace),
+        )
+        .slice(0, limit);
+    }
+
+    if (!query.trim()) return [];
+
     // Escape FTS5 special chars and wrap terms in double quotes for safe matching
     const safeQuery = query
       .replace(/['"]/g, " ")
@@ -250,6 +271,27 @@ export class LocalCache {
 
     const rows = this.db.prepare(sql).all(...params) as FtsRow[];
     return rows.map(rowToMemory);
+  }
+
+  /**
+   * Batch-insert embeddings into the vec0 virtual table.
+   * Skips silently when vector search is disabled or the table is unavailable.
+   */
+  storeEmbeddingBatch(entries: Array<{ id: string; embedding: Buffer | null }>): void {
+    if (!this.db || !this.vectorAvailable) return;
+    try {
+      const stmt = this.db.prepare(
+        "INSERT OR REPLACE INTO memories_vec (memory_id, embedding) VALUES (?, ?)",
+      );
+      const runBatch = this.db.transaction((batch: Array<{ id: string; embedding: Buffer | null }>) => {
+        for (const m of batch) {
+          if (m.embedding) stmt.run(m.id, m.embedding);
+        }
+      });
+      runBatch(entries);
+    } catch {
+      // Vector table not yet created or extension unavailable — silently skip
+    }
   }
 
   searchByScope(
