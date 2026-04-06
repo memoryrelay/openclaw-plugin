@@ -64,12 +64,19 @@
   },
   "dependencies": {},
   "optionalDependencies": {
-    "sqlite-vec": "^0.1.0"
+    "sqlite-vec": "^0.1.0",
+    "better-sqlite3": "^12.8.0"
   },
   "peerDependenciesMeta": {
     "openclaw": {
       "optional": true
     }
   },
-  "overrides": {}
+  "overrides": {
+    "better-sqlite3": {
+      "scripts": {
+        "install": "echo \"skipping native build (postinstall handles this)\""
+      }
+    }
+  }
 }
