@@ -107,14 +107,27 @@ export class NomicEmbeddingService implements EmbeddingService {
     const seqLen = inputIds.length;
     const dim = NomicEmbeddingService.DIM;
 
+    // token_type_ids required by nomic-embed-text-v1.5 ONNX model (all zeros for single sentence)
+    const tokenTypeIds = new BigInt64Array(seqLen).fill(0n);
+
     const feeds = {
       input_ids: new this._tensorClass("int64", inputIds, [1, seqLen]),
       attention_mask: new this._tensorClass("int64", attentionMask, [1, seqLen]),
+      token_type_ids: new this._tensorClass("int64", tokenTypeIds, [1, seqLen]),
     };
 
     const results = await this.session.run(feeds);
     const key = results.last_hidden_state ? "last_hidden_state" : Object.keys(results)[0];
     const lastHidden: Float32Array = results[key].data;
+
+    // Validate output dimensions — catches wrong model loaded in cache dir
+    const actualDim = lastHidden.length / seqLen;
+    if (actualDim !== NomicEmbeddingService.DIM) {
+      throw new Error(
+        `NomicEmbeddingService: unexpected output dimension ${actualDim} (expected ${NomicEmbeddingService.DIM}). ` +
+        `The loaded model may not be nomic-embed-text-v1.5. Delete ${this.modelDir} and retry.`,
+      );
+    }
 
     // Mean pool over sequence dimension
     const pooled = new Float32Array(dim);

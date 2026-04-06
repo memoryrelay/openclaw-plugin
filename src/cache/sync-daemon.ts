@@ -72,6 +72,11 @@ export class SyncDaemon {
 
         if (memories.length === 0) {
           hasMore = false;
+          // Save state even when empty (marks sync as up to date)
+          this.cache.setSyncState({
+            cursor: String(offset),
+            lastPull: new Date().toISOString(),
+          });
           break;
         }
 
@@ -115,13 +120,14 @@ export class SyncDaemon {
 
         offset += memories.length;
         hasMore = memories.length >= PULL_PAGE_SIZE;
-      }
 
-      // Update sync state
-      this.cache.setSyncState({
-        cursor: String(offset),
-        lastPull: new Date().toISOString(),
-      });
+        // Save progress after each page so interrupted syncs can resume mid-way
+        // rather than restarting from page 0 on the next run.
+        this.cache.setSyncState({
+          cursor: String(offset),
+          lastPull: new Date().toISOString(),
+        });
+      }
 
       this.onSuccess();
       return { added, updated };

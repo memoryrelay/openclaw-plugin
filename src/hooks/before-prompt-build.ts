@@ -11,8 +11,18 @@ const MIN_RECALL_PROMPT_LENGTH = 20;
 /** Minimum time between recall calls per session key (ms) — prevents redundant API calls in rapid exchanges */
 const RECALL_COOLDOWN_MS = 30_000;
 
-/** Per session-key timestamp of last recall */
+/** Per session-key timestamp of last recall (evicted after 2× cooldown to prevent unbounded growth) */
 const lastRecallAt = new Map<string, number>();
+
+// Periodically evict stale entries to prevent unbounded Map growth in long-running processes
+const _recallEvictInterval = setInterval(() => {
+  const cutoff = Date.now() - RECALL_COOLDOWN_MS * 2;
+  for (const [key, ts] of lastRecallAt) {
+    if (ts < cutoff) lastRecallAt.delete(key);
+  }
+}, 10 * 60_000).unref();
+// Suppress "unref is not a function" in test environments
+void _recallEvictInterval;
 
 export function registerBeforePromptBuild(
   api: OpenClawPluginApi,

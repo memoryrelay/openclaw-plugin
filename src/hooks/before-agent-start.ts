@@ -19,6 +19,13 @@ function resolveProjectSlug(config: PluginConfig, defaultProject: string | undef
   }
 }
 
+/**
+ * Runtime flag set when the quota check auto-disables capture.
+ * Separate from config to avoid mutating the shared PluginConfig object.
+ * Exported so agent-end.ts can check it.
+ */
+export let captureDisabledByQuota = false;
+
 /** How often to check API quota — at most once every 5 minutes */
 const QUOTA_CHECK_INTERVAL_MS = 5 * 60_000;
 let lastQuotaCheckAt = 0;
@@ -33,15 +40,14 @@ async function checkQuotaIfNeeded(
   lastQuotaCheckAt = now;
 
   try {
-    const health = await client.health();
-    const quota = (health as any)?.quota;
+    const quota = await client.quota();
     if (!quota?.used || !quota?.limit) return;
 
     const pct = Math.round((quota.used / quota.limit) * 100);
     const warnAt = config.warnAtPercent ?? 80;
 
     if (pct >= 90 && config.autoCapture?.enabled) {
-      (config.autoCapture as any).enabled = false;
+      captureDisabledByQuota = true;
       api.logger.warn?.(
         `memory-memoryrelay: ⚠️  API quota at ${pct}% — auto-capture disabled to prevent quota exhaustion`,
       );
