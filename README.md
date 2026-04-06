@@ -212,6 +212,17 @@ These slash commands bypass the LLM and execute immediately.
 |---------|-------------|
 | `/memory-forget <id>` | Delete a specific memory by ID |
 
+## ⚠️ Migration Notes
+
+### v0.20.0 — autoCapture is now opt-in (breaking change)
+`autoCapture` is **disabled by default** as of v0.20.0. If you were relying on automatic memory capture, add to your config:
+```json
+{ "autoCapture": true }
+```
+Also updated defaults: `recallLimit` 5→3, `recallThreshold` 0.3→0.5.
+
+---
+
 ## Configuration Reference
 
 ```bash

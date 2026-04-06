@@ -798,6 +798,18 @@ export class MemoryRelayClient implements IMemoryRelayClient {
     return this.request<{ status: string }>("GET", "/v1/health");
   }
 
+  /**
+   * Fetch current API quota usage.
+   * Returns null if the endpoint is not available (older API versions).
+   */
+  async quota(): Promise<{ used: number; limit: number; resetAt?: string } | null> {
+    try {
+      return await this.request<{ used: number; limit: number; resetAt?: string }>("GET", "/v1/quota");
+    } catch {
+      return null;
+    }
+  }
+
   async stats(): Promise<Stats> {
     const response = await this.request<{ data: Stats }>(
       "GET",

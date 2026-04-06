@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-04-06
+
+### Added
+- **client.quota()**: New `MemoryRelayClient.quota()` method for fetching API quota usage. Returns `null` gracefully when endpoint is unavailable. (#121)
+
+### Fixed
+- **token_type_ids**: `NomicEmbeddingService` now correctly passes `token_type_ids` (all zeros) to the ONNX model — without it, inference threw a missing-input error (#119)
+- **Output dimension validation**: `NomicEmbeddingService` validates the ONNX model output dimensions and throws a clear error if the wrong model is in the cache directory (#125)
+- **Map memory leak**: `lastRecallAt` and `lastCaptureAt` module-level Maps now have periodic eviction (every 10 min) to prevent unbounded growth in long-running processes (#117)
+- **Quota auto-disable**: Uses a `captureDisabledByQuota` runtime flag instead of mutating the shared `PluginConfig` object — avoids cross-hook side effects (#118)
+- **Quota check**: `checkQuotaIfNeeded()` now calls `client.quota()` instead of `client.health()` — the health endpoint never had a quota field, making the feature dead code (#121)
+- **Resumable sync**: Sync daemon saves cursor state after each page rather than only after full completion — interrupted syncs resume from last successful page (#126)
+- **Postinstall diagnostics**: Better error messages in each `installBetterSqlite3()` step — logs actual error output instead of swallowing it silently (#127)
+- **ESM compatibility**: Removed `require("node:path")` and `require("node:os")` calls in `index.ts` — uses existing top-level imports instead (#120)
+
+### Documentation
+- **Migration notice**: README now includes a v0.20.0 migration section explaining the `autoCapture` breaking change (#124)
+
 ## [0.21.0] - 2026-04-06
 
 ### Added
@@ -433,6 +451,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.22.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.10...v0.20.0
 [0.19.10]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.9...v0.19.10

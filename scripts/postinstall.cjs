@@ -35,10 +35,15 @@ function installBetterSqlite3() {
   // Step 1: Install package files (--ignore-scripts skips the failing native build)
   if (!fs.existsSync(sqDir)) {
     process.stdout.write('⚙️  Installing better-sqlite3 (no build)...');
-    execSync('npm install better-sqlite3 --ignore-scripts --no-audit --no-fund', {
-      cwd: pkgDir, timeout: 120000, stdio: 'pipe', env: spawnEnv,
-    });
-    console.log(' done');
+    try {
+      execSync('npm install better-sqlite3 --ignore-scripts --no-audit --no-fund', {
+        cwd: pkgDir, timeout: 120000, stdio: 'pipe', env: spawnEnv,
+      });
+      console.log(' done');
+    } catch (installErr) {
+      console.log('');
+      console.warn('  npm install failed:', (installErr.stderr || installErr.message || '').toString().slice(0, 300));
+    }
   }
 
   // Step 2: Run prebuild-install to download prebuilt binary
@@ -51,7 +56,7 @@ function installBetterSqlite3() {
       });
       console.log(' done');
       return;
-    } catch {}
+    } catch (prebuildErr) { console.warn("  prebuild-install failed:", prebuildErr.message?.slice(0, 150)); }
   }
 
   // Step 3: Fallback — rebuild from source
@@ -72,7 +77,9 @@ try {
     console.log('✅ better-sqlite3 installed and loaded OK');
   } catch (err) {
     console.warn('⚠️  better-sqlite3 install failed — local cache disabled (API-only mode).');
-    console.warn('   To enable: cd', path.resolve(__dirname, '..'), '&& sudo npm install better-sqlite3');
+    console.warn('   Error:', err.message?.slice(0, 300));
+    console.warn('   Node:', process.version, '| Platform:', process.platform, process.arch);
+    console.warn('   To enable manually: cd', path.resolve(__dirname, '..'), '&& sudo npm install better-sqlite3');
   }
 }
 

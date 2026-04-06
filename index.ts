@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.21.0
+ * Version: 0.22.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -457,8 +457,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   const embeddingService: EmbeddingService | undefined = (() => {
     if (!pluginConfig.vectorSearch?.enabled) return undefined;
     if (pluginConfig.vectorSearch.provider === "nomic") {
-      const { join } = require("node:path") as typeof import("node:path");
-      const { homedir } = require("node:os") as typeof import("node:os");
       return new NomicEmbeddingService(join(homedir(), ".openclaw", "models"));
     }
     return new ApiEmbeddingService(client);

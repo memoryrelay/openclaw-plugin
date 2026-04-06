@@ -5,6 +5,7 @@ import { buildRequestContext } from "../context/request-context.js";
 import { runPipeline } from "../pipelines/runner.js";
 import { capturePipeline } from "../pipelines/capture/index.js";
 import { buildAutoSessionExternalId, DECISION_KEYWORDS } from "./auto-session-store.js";
+import { captureDisabledByQuota } from "./before-agent-start.js";
 
 /**
  * Extract potential decisions from conversation messages using keyword heuristics.
@@ -13,8 +14,17 @@ import { buildAutoSessionExternalId, DECISION_KEYWORDS } from "./auto-session-st
 /** Minimum time between auto-captures per session key (ms) — prevents redundant captures in rapid exchanges */
 const CAPTURE_COOLDOWN_MS = 60_000;
 
-/** Per session-key timestamp of last capture */
+/** Per session-key timestamp of last capture (evicted after 2× cooldown to prevent unbounded growth) */
 const lastCaptureAt = new Map<string, number>();
+
+// Periodically evict stale entries
+const _captureEvictInterval = setInterval(() => {
+  const cutoff = Date.now() - CAPTURE_COOLDOWN_MS * 2;
+  for (const [key, ts] of lastCaptureAt) {
+    if (ts < cutoff) lastCaptureAt.delete(key);
+  }
+}, 10 * 60_000).unref();
+void _captureEvictInterval;
 
 export function extractDecisions(
   messages: ConversationMessage[],
@@ -159,8 +169,8 @@ export function registerAgentEnd(
       }
     }
 
-    // --- Capture pipeline (only when autoCapture is enabled) ---
-    if (!config.autoCapture?.enabled) return;
+    // --- Capture pipeline (only when autoCapture is enabled and quota allows) ---
+    if (!config.autoCapture?.enabled || captureDisabledByQuota) return;
 
     // Per-session cooldown: skip capture if we captured recently for this session
     const captureSessionKey = event.ctx?.sessionKey || event.sessionId || "default";
