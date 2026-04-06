@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.20.0
+ * Version: 0.21.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -86,6 +86,7 @@ import {
 // --- Pipeline types (used for PluginConfig interface) ---
 import type { PluginConfig, EmbeddingService } from "./src/pipelines/types.js";
 import { ApiEmbeddingService } from "./src/cache/api-embedding-service.js";
+import { NomicEmbeddingService } from "./src/cache/nomic-embedding-service.js";
 
 // ============================================================================
 // Config type for raw plugin JSON (superset of PluginConfig)
@@ -453,8 +454,15 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // vectorSearch is enabled. Falls back gracefully to FTS5-only if the API
   // endpoint is unavailable. Replace with NomicEmbeddingProvider for local
   // inference once that is bundled.
-  const embeddingService: EmbeddingService | undefined =
-    pluginConfig.vectorSearch?.enabled ? new ApiEmbeddingService(client) : undefined;
+  const embeddingService: EmbeddingService | undefined = (() => {
+    if (!pluginConfig.vectorSearch?.enabled) return undefined;
+    if (pluginConfig.vectorSearch.provider === "nomic") {
+      const { join } = require("node:path") as typeof import("node:path");
+      const { homedir } = require("node:os") as typeof import("node:os");
+      return new NomicEmbeddingService(join(homedir(), ".openclaw", "models"));
+    }
+    return new ApiEmbeddingService(client);
+  })();
 
   // --- Tool enablement filter ---
   const enabledToolNames: Set<string> | null = (() => {
