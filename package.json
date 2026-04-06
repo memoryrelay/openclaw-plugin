@@ -1,6 +1,6 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.19.8",
+  "version": "0.19.9",
   "description": "OpenClaw memory plugin for MemoryRelay API - 42 tools, 17 commands, V2 async, sessions, decisions, patterns, projects & semantic search",
   "type": "module",
   "main": "index.ts",
@@ -64,12 +64,12 @@
   },
   "dependencies": {},
   "optionalDependencies": {
-    "sqlite-vec": "^0.1.0",
-    "better-sqlite3": "^12.8.0"
+    "sqlite-vec": "^0.1.0"
   },
   "peerDependenciesMeta": {
     "openclaw": {
       "optional": true
     }
-  }
+  },
+  "overrides": {}
 }

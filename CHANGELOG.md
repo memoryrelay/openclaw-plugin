@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.9] - 2026-04-06
+
+### Fixed
+- **Root cause fixed — npm lifecycle PATH issue**: `better-sqlite3` removed from all dependency fields. It is now installed by `postinstall.cjs` using `npm install --ignore-scripts` (avoids the failing native build lifecycle), then `prebuild-install` is run directly to download the prebuilt binary. This bypasses npm's lifecycle PATH issue entirely. (#112)
+- **Cleaner postinstall**: Single `installBetterSqlite3()` function handles: package install, prebuilt binary download, and source build fallback — all with explicit PATH
+
 ## [0.19.8] - 2026-04-05
 
 ### Fixed
@@ -405,6 +411,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.9]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.8...v0.19.9
 [0.19.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.7...v0.19.8
 [0.19.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.6...v0.19.7
 [0.19.6]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.5...v0.19.6
