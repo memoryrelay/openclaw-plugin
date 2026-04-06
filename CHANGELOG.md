@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.10] - 2026-04-06
+
+### Fixed
+- **Critical preinstall bug**: preinstall.cjs was removing the freshly extracted package dir during install (not just on upgrade). Now checks if the installed version matches the version being installed before removing — on a clean install (no prior version) or same-version reinstall, the dir is preserved. Only removes on actual upgrades (version differs). (#112)
+
 ## [0.19.9] - 2026-04-06
 
 ### Fixed
@@ -411,6 +416,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.19.10]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.9...v0.19.10
 [0.19.9]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.8...v0.19.9
 [0.19.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.7...v0.19.8
 [0.19.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.6...v0.19.7

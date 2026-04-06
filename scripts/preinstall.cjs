@@ -29,15 +29,30 @@ const targetDir = path.join(prefix, 'lib', 'node_modules', '@memoryrelay', 'plug
 if (!fs.existsSync(targetDir)) process.exit(0);   // fresh install — nothing to do
 
 try {
-  // Read current version so we can log it
+  // Read the current version of the existing install
   let oldVersion = '?';
+  let newVersion = '?';
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(targetDir, 'package.json'), 'utf8'));
     oldVersion = pkg.version || '?';
   } catch {}
+  
+  // Read the version being installed (from THIS package's package.json)
+  try {
+    const selfPkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    newVersion = selfPkg.version || '?';
+  } catch {}
+
+  // Only remove if the installed version differs from the version being installed.
+  // If they match, npm extracted this package to the same dir — removing it would
+  // delete the freshly extracted files and break the rest of the install.
+  if (oldVersion === newVersion) {
+    // Same version: this is a reinstall. npm already handled the dir.
+    process.exit(0);
+  }
 
   fs.rmSync(targetDir, { recursive: true, force: true });
-  console.log(`✅ Removed existing v${oldVersion} install to allow clean upgrade`);
+  console.log(`✅ Removed existing v${oldVersion} install to allow clean upgrade to v${newVersion}`);
 } catch (err) {
   // Non-fatal — if we can't remove, npm will fail with ENOTEMPTY as before
   console.warn('⚠️  Could not remove existing install dir:', err.message);
