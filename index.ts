@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.20.0
+ * Version: 0.21.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -449,12 +449,20 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // --- Embedding service (for hybrid vector search in recall pipeline) ---
-  // Use ApiEmbeddingService (server-side embeddings via POST /v1/embed) when
-  // vectorSearch is enabled. Falls back gracefully to FTS5-only if the API
-  // endpoint is unavailable. Replace with NomicEmbeddingProvider for local
-  // inference once that is bundled.
-  const embeddingService: EmbeddingService | undefined =
-    pluginConfig.vectorSearch?.enabled ? new ApiEmbeddingService(client) : undefined;
+  // Select provider based on localCache.vectorSearch.provider config:
+  //   "api"   (default) — server-side via POST /v1/embed, no local install required
+  //   "nomic"           — local ONNX inference, ~131 MB one-time model download
+  const embeddingService: EmbeddingService | undefined = (() => {
+    if (!pluginConfig.vectorSearch?.enabled) return undefined;
+    if (pluginConfig.vectorSearch.provider === "nomic") {
+      const { join } = require("node:path") as typeof import("node:path");
+      const { homedir } = require("node:os") as typeof import("node:os");
+      const modelDir = join(homedir(), ".openclaw", "models");
+      return new NomicEmbeddingService(modelDir);
+    }
+    // Default: API-backed (no local model required)
+    return new ApiEmbeddingService(client);
+  })();
 
   // --- Tool enablement filter ---
   const enabledToolNames: Set<string> | null = (() => {

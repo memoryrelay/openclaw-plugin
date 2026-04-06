@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-04-06
+
+### Added
+- **NomicEmbeddingService**: Local ONNX embedding provider using nomic-embed-text-v1.5 (768 dims, ~5ms/call after load). Activate with `localCache.vectorSearch.provider = "nomic"`. Requires optional peer deps: `onnxruntime-node` + `@xenova/transformers`. Model downloads once (~131 MB) to `~/.openclaw/models/`. Closes #111
+- **Provider selection**: `localCache.vectorSearch.provider` now supports `"api"` (default, server-side via POST /v1/embed) and `"nomic"` (local ONNX, fully offline)
+
 ## [0.20.0] - 2026-04-06
 
 ### Changed
@@ -427,6 +433,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.21.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.10...v0.20.0
 [0.19.10]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.9...v0.19.10
 [0.19.9]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.8...v0.19.9
