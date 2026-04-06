@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-04-06
+
+### Added
+- **Tests: ApiEmbeddingService** — 5 tests covering generateQuery output type, dimensions, value conversion, and error propagation (#123)
+- **Tests: NomicEmbeddingService** — 6 tests covering missing-dep error messages, directory creation, concurrent load dedup, and constants (#123)
+- **Tests: agent-end hooks** — 8 tests covering extractDecisions (keyword detection, dedup, cap, long sentence skip) and generateSessionSummary (#122)
+- **Tests: before-prompt-build** — 3 tests covering autoRecall=false and short prompt skip (#122)
+
 ## [0.22.0] - 2026-04-06
 
 ### Added
@@ -451,6 +459,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.23.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.10...v0.20.0
