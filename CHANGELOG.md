@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-04-06
+
+### Changed
+- **autoCapture default is now `off`** (was `conservative`). Users must explicitly opt in to auto-capture by setting `autoCapture: true` or `autoCapture: { tier: "conservative" }` in config. This prevents unintended API quota exhaustion. Closes #100
+
+### Fixed
+- **Recall cooldown**: Skip recall for prompts under 20 chars; enforce 30-second per-session cooldown between recall calls to prevent redundant API calls in rapid exchanges (#100)
+- **Capture cooldown**: Enforce 60-second per-session cooldown between auto-captures — prevents multiple captures per rapid exchange (#100)
+- **Conservative recall defaults**: `recallLimit` default reduced from 5→3, `recallThreshold` raised from 0.3→0.5 for more targeted recall (#100)
+- **Quota warning system**: Before each agent turn (max once per 5 min), checks API quota and warns at 80%+; auto-disables autoCapture at 90%+ to prevent exhaustion (#100)
+
 ## [0.19.10] - 2026-04-06
 
 ### Fixed
@@ -416,6 +427,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.7...v0.12.8
 [0.12.7]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.3...v0.12.7
 [0.12.3]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.12.0...v0.12.3
+[0.20.0]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.10...v0.20.0
 [0.19.10]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.9...v0.19.10
 [0.19.9]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.8...v0.19.9
 [0.19.8]: https://github.com/memoryrelay/openclaw-plugin/compare/v0.19.7...v0.19.8
