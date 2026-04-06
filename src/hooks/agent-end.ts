@@ -10,6 +10,12 @@ import { buildAutoSessionExternalId, DECISION_KEYWORDS } from "./auto-session-st
  * Extract potential decisions from conversation messages using keyword heuristics.
  * Returns an array of { title, rationale } for each detected decision.
  */
+/** Minimum time between auto-captures per session key (ms) — prevents redundant captures in rapid exchanges */
+const CAPTURE_COOLDOWN_MS = 60_000;
+
+/** Per session-key timestamp of last capture */
+const lastCaptureAt = new Map<string, number>();
+
 export function extractDecisions(
   messages: ConversationMessage[],
 ): Array<{ title: string; rationale: string }> {
@@ -155,6 +161,18 @@ export function registerAgentEnd(
 
     // --- Capture pipeline (only when autoCapture is enabled) ---
     if (!config.autoCapture?.enabled) return;
+
+    // Per-session cooldown: skip capture if we captured recently for this session
+    const captureSessionKey = event.ctx?.sessionKey || event.sessionId || "default";
+    const captureNow = Date.now();
+    const lastCapture = lastCaptureAt.get(captureSessionKey) ?? 0;
+    if (captureNow - lastCapture < CAPTURE_COOLDOWN_MS) {
+      api.logger.debug?.(
+        `memory-memoryrelay: skipping capture (cooldown active, ${Math.round((CAPTURE_COOLDOWN_MS - (captureNow - lastCapture)) / 1000)}s remaining)`,
+      );
+      return;
+    }
+    lastCaptureAt.set(captureSessionKey, captureNow);
 
     try {
       const requestCtx = buildRequestContext(event, config);

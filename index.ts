@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.19.10
+ * Version: 0.20.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -125,7 +125,7 @@ function normalizeAutoCaptureConfig(
   config: boolean | AutoCaptureConfig | undefined,
 ): AutoCaptureConfig {
   const defaultConfig: AutoCaptureConfig = {
-    enabled: true,
+    enabled: false,
     tier: "conservative" as AutoCaptureTier,
     confirmFirst: 5,
     categories: {
@@ -657,8 +657,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         agentId: agentId,
         autoRecall: pluginConfig.autoRecall ?? true,
         autoCapture: autoCaptureConfig,
-        recallLimit: pluginConfig.recallLimit ?? 5,
-        recallThreshold: pluginConfig.recallThreshold ?? 0.3,
+        recallLimit: pluginConfig.recallLimit ?? 3,
+        recallThreshold: pluginConfig.recallThreshold ?? 0.5,
         excludeChannels: pluginConfig.excludeChannels ?? [],
         defaultProject,
       };
@@ -943,8 +943,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           agentId,
           autoRecall: pluginConfig.autoRecall ?? true,
           autoCapture: autoCaptureConfig,
-          recallLimit: pluginConfig.recallLimit ?? 5,
-          recallThreshold: pluginConfig.recallThreshold ?? 0.3,
+          recallLimit: pluginConfig.recallLimit ?? 3,
+          recallThreshold: pluginConfig.recallThreshold ?? 0.5,
           excludeChannels: pluginConfig.excludeChannels ?? [],
           defaultProject,
         };
@@ -1196,8 +1196,8 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         lines.push(`Enabled Tools:       ${cfg?.enabledTools ?? "all"}`);
         lines.push(`Auto-Recall:         ${pluginConfig.autoRecall ?? true}`);
         lines.push(`Auto-Capture:        ${autoCaptureConfig.enabled} (tier: ${autoCaptureConfig.tier})`);
-        lines.push(`Recall Limit:        ${pluginConfig.recallLimit ?? 5}`);
-        lines.push(`Recall Threshold:    ${pluginConfig.recallThreshold ?? 0.3}`);
+        lines.push(`Recall Limit:        ${pluginConfig.recallLimit ?? 3}`);
+        lines.push(`Recall Threshold:    ${pluginConfig.recallThreshold ?? 0.5}`);
         lines.push(`Exclude Channels:    ${(pluginConfig.excludeChannels ?? []).join(", ") || "(none)"}`);
         lines.push(`Session Timeout:     ${cfg?.sessionTimeoutMinutes ?? 120} min`);
         lines.push(`Cleanup Interval:    ${cfg?.sessionCleanupIntervalMinutes ?? 30} min`);

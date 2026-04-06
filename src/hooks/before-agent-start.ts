@@ -19,6 +19,42 @@ function resolveProjectSlug(config: PluginConfig, defaultProject: string | undef
   }
 }
 
+/** How often to check API quota — at most once every 5 minutes */
+const QUOTA_CHECK_INTERVAL_MS = 5 * 60_000;
+let lastQuotaCheckAt = 0;
+
+async function checkQuotaIfNeeded(
+  api: OpenClawPluginApi,
+  config: PluginConfig,
+  client: MemoryRelayClient,
+): Promise<void> {
+  const now = Date.now();
+  if (now - lastQuotaCheckAt < QUOTA_CHECK_INTERVAL_MS) return;
+  lastQuotaCheckAt = now;
+
+  try {
+    const health = await client.health();
+    const quota = (health as any)?.quota;
+    if (!quota?.used || !quota?.limit) return;
+
+    const pct = Math.round((quota.used / quota.limit) * 100);
+    const warnAt = config.warnAtPercent ?? 80;
+
+    if (pct >= 90 && config.autoCapture?.enabled) {
+      (config.autoCapture as any).enabled = false;
+      api.logger.warn?.(
+        `memory-memoryrelay: ⚠️  API quota at ${pct}% — auto-capture disabled to prevent quota exhaustion`,
+      );
+    } else if (pct >= warnAt) {
+      api.logger.warn?.(
+        `memory-memoryrelay: ⚠️  API quota at ${pct}% — consider reducing autoCapture or recallLimit`,
+      );
+    }
+  } catch {
+    // Non-blocking
+  }
+}
+
 export function registerBeforeAgentStart(
   api: OpenClawPluginApi,
   config: PluginConfig,
@@ -42,6 +78,9 @@ export function registerBeforeAgentStart(
         return;
       }
     }
+
+    // --- Quota check (non-blocking, max once per 5 min) ---
+    void checkQuotaIfNeeded(api, config, client);
 
     // --- Auto session lifecycle: session_start + project_context ---
     const projectSlug = resolveProjectSlug(config, defaultProject);
