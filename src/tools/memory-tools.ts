@@ -85,11 +85,46 @@ export function registerMemoryTools(
           try {
             const { content, metadata: rawMetadata, session_id: explicitSessionId, scope, ...opts } = args;
 
+            // --------------------------------------------------------------------------
+            // COGNITIVE FIREWALL: Saliency & Anti-Echo Filter
+            // --------------------------------------------------------------------------
+            const minLength = config.saliency?.minContentLength ?? 10;
+            const noisePatterns = config.saliency?.noisePatterns ?? [
+              "\\[\\[.*?\\]\\]",
+              "great (question|observation|point)",
+              "i'd be happy to",
+              "here is the result",
+              "i have (completed|updated|fixed|implemented)",
+              "i will (now|first|next)",
+              "let me (check|verify|double-check)",
+              "saliency gate:.*",
+              "understood\\.",
+              "correct\\.",
+            ];
+
+            const isNoise = noisePatterns.some(pattern => new RegExp(pattern, "i").test(content));
+
+            if (isNoise) {
+              return {
+                content: [{ type: "text", text: "Saliency Gate: Content flagged as low-value/noise. Store operation aborted to prevent memory pollution." }],
+                details: { blocked: true, reason: "low_saliency" },
+              };
+            }
+
+            if (content.length < minLength) {
+              return {
+                content: [{ type: "text", text: `Saliency Gate: Content too short (${content.length} < ${minLength} chars). Operation aborted.` }],
+                details: { blocked: true, reason: "too_short" },
+              };
+            }
+            // --------------------------------------------------------------------------
+
             // Auto-tag with sender identity from tool context
             const metadata = rawMetadata || {};
             if (ctx.requesterSenderId && !metadata.sender_id) {
               metadata.sender_id = ctx.requesterSenderId;
             }
+
 
             // Apply defaultProject fallback before session resolution
             if (!opts.project && defaultProject) opts.project = defaultProject;
