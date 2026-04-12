@@ -467,38 +467,39 @@ describe("autoCapture: false still closes sessions", () => {
 });
 
 // ============================================================================
-// Decision extraction heuristics
+// Decision extraction (saliency-based, issue #132)
 // ============================================================================
 
 describe("extractDecisions", () => {
-  test("detects 'we decided' keyword", () => {
+  test("detects high-confidence decision with explicit marker + rationale", () => {
     const messages: ConversationMessage[] = [
-      { role: "assistant", content: "We decided to use PostgreSQL for the database layer because of its JSON support." },
+      { role: "assistant", content: "We've decided to use PostgreSQL for the database layer because of its JSON support." },
     ];
     const decisions = extractDecisions(messages);
     expect(decisions.length).toBe(1);
-    expect(decisions[0].title).toContain("decided");
+    expect(decisions[0].confidence).toBe("high");
+    expect(decisions[0].score).toBeGreaterThanOrEqual(70);
   });
 
-  test("detects 'going with' keyword", () => {
+  test("detects decision with 'going with' + rationale", () => {
     const messages: ConversationMessage[] = [
-      { role: "assistant", content: "After reviewing the options, we're going with Redis for the cache layer." },
+      { role: "assistant", content: "After reviewing the options, we're going with Redis instead of Memcached because of its data structure support." },
     ];
     const decisions = extractDecisions(messages);
     expect(decisions.length).toBe(1);
-    expect(decisions[0].rationale).toContain("going with");
+    expect(decisions[0].score).toBeGreaterThanOrEqual(40);
   });
 
-  test("detects 'chosen' keyword", () => {
+  test("detects decision with 'finally chosen' + rationale", () => {
     const messages: ConversationMessage[] = [
-      { role: "assistant", content: "We have chosen Vitest as our test framework for its speed and TypeScript support." },
+      { role: "assistant", content: "We have finally chosen Vitest over Jest because of its speed and native TypeScript support." },
     ];
     const decisions = extractDecisions(messages);
     expect(decisions.length).toBe(1);
-    expect(decisions[0].title).toContain("chosen");
+    expect(decisions[0].score).toBeGreaterThanOrEqual(70);
   });
 
-  test("records decisions via client on agent_end", async () => {
+  test("records decisions via client on agent_end with confidence metadata", async () => {
     const { api, handlers } = mockApi();
     const client = mockClient();
 
@@ -510,25 +511,29 @@ describe("extractDecisions", () => {
       ctx: { sessionKey: "agent:abc:main" },
       messages: [
         { role: "user", content: "What database should we use?" },
-        { role: "assistant", content: "We decided to use PostgreSQL for the database because of its reliability and JSON support." },
+        { role: "assistant", content: "We've decided to use PostgreSQL instead of MySQL because of its reliability and JSON support." },
       ],
     });
 
     expect(client.recordDecision).toHaveBeenCalledTimes(1);
     expect(client.recordDecision).toHaveBeenCalledWith(
-      expect.stringContaining("decided"),
+      expect.any(String),
       expect.any(String),
       undefined,
       "test-project",
-      ["auto-detected"],
+      expect.arrayContaining(["auto-detected"]),
       undefined,
-      expect.objectContaining({ session_id: "auto-session-1" }),
+      expect.objectContaining({
+        session_id: "auto-session-1",
+        confidence: expect.any(String),
+        saliency_score: expect.any(String),
+      }),
     );
   });
 
   test("ignores user messages for decision extraction", () => {
     const messages: ConversationMessage[] = [
-      { role: "user", content: "We decided to use MySQL." },
+      { role: "user", content: "We've decided to use MySQL because it's simple." },
     ];
     const decisions = extractDecisions(messages);
     expect(decisions.length).toBe(0);
@@ -537,10 +542,34 @@ describe("extractDecisions", () => {
   test("caps at 5 decisions", () => {
     const messages: ConversationMessage[] = Array.from({ length: 10 }, (_, i) => ({
       role: "assistant" as const,
-      content: `We decided to use option ${i} for component ${i}. Going with approach ${i} instead of alternative.`,
+      content: `Decision: We've decided to use option ${i} instead of alternative ${i} because it's better.`,
     }));
     const decisions = extractDecisions(messages);
     expect(decisions.length).toBeLessThanOrEqual(5);
+  });
+
+  test("rejects false positives: casual 'architecture' mention", () => {
+    const messages: ConversationMessage[] = [
+      { role: "assistant", content: "Great question — this is a real architecture problem that we need to think carefully about." },
+    ];
+    const decisions = extractDecisions(messages);
+    expect(decisions.length).toBe(0);
+  });
+
+  test("rejects false positives: problem statement", () => {
+    const messages: ConversationMessage[] = [
+      { role: "assistant", content: "We have a problem with the cache layer. This is broken in production." },
+    ];
+    const decisions = extractDecisions(messages);
+    expect(decisions.length).toBe(0);
+  });
+
+  test("rejects false positives: question about alternatives", () => {
+    const messages: ConversationMessage[] = [
+      { role: "assistant", content: "Should we use Redis or Memcached? What if we went with a different approach?" },
+    ];
+    const decisions = extractDecisions(messages);
+    expect(decisions.length).toBe(0);
   });
 });
 
