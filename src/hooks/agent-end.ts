@@ -4,12 +4,17 @@ import type { PluginConfig, MemoryRelayClient, ConversationMessage, SessionResol
 import { buildRequestContext } from "../context/request-context.js";
 import { runPipeline } from "../pipelines/runner.js";
 import { capturePipeline } from "../pipelines/capture/index.js";
-import { buildAutoSessionExternalId, DECISION_KEYWORDS } from "./auto-session-store.js";
+import { buildAutoSessionExternalId } from "./auto-session-store.js";
 import { captureDisabledByQuota } from "./before-agent-start.js";
+import { computeSaliencyScore, extractDecisionSentence } from "../saliency/scorer.js";
+import type { ScorerOptions } from "../saliency/types.js";
 
 /**
- * Extract potential decisions from conversation messages using keyword heuristics.
- * Returns an array of { title, rationale } for each detected decision.
+ * Extract potential decisions from conversation messages using multi-signal
+ * saliency scoring. Each assistant message is scored; only messages that
+ * meet the configured threshold produce a decision record.
+ *
+ * Returns an array of { title, rationale, confidence, score }.
  */
 /** Minimum time between auto-captures per session key (ms) — prevents redundant captures in rapid exchanges */
 const CAPTURE_COOLDOWN_MS = 60_000;
@@ -28,38 +33,36 @@ void _captureEvictInterval;
 
 export function extractDecisions(
   messages: ConversationMessage[],
-): Array<{ title: string; rationale: string }> {
-  const decisions: Array<{ title: string; rationale: string }> = [];
+  scorerOptions?: ScorerOptions,
+): Array<{ title: string; rationale: string; confidence: "high" | "medium"; score: number }> {
+  const decisions: Array<{ title: string; rationale: string; confidence: "high" | "medium"; score: number }> = [];
   const seen = new Set<string>();
 
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
-    const content = msg.content;
-    const lower = content.toLowerCase();
 
-    for (const keyword of DECISION_KEYWORDS) {
-      if (!lower.includes(keyword)) continue;
+    const result = computeSaliencyScore(msg.content, messages, scorerOptions);
 
-      // Find the sentence containing the keyword
-      const sentences = content.split(/[.!?\n]+/).filter((s) => s.trim().length > 10);
-      for (const sentence of sentences) {
-        if (!sentence.toLowerCase().includes(keyword)) continue;
-        const trimmed = sentence.trim();
-        // Avoid duplicates and very long passages
-        if (trimmed.length > 500) continue;
-        const key = trimmed.slice(0, 80).toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
+    if (result.action === "ignore") continue;
 
-        decisions.push({
-          title: trimmed.slice(0, 200),
-          rationale: `Auto-detected from conversation (keyword: "${keyword}"): ${trimmed}`,
-        });
-        break; // One decision per keyword per message
-      }
-      if (decisions.length >= 5) break; // Cap at 5 decisions per session
-    }
-    if (decisions.length >= 5) break;
+    const title = extractDecisionSentence(msg.content, result.signals);
+    const key = title.slice(0, 80).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const signalNames = result.signals
+      .filter((s) => s.points > 0)
+      .map((s) => s.signal)
+      .join(", ");
+
+    decisions.push({
+      title,
+      rationale: `Auto-detected (score: ${result.score}, confidence: ${result.confidence}, signals: ${signalNames}): ${title}`,
+      confidence: result.confidence as "high" | "medium",
+      score: result.score,
+    });
+
+    if (decisions.length >= 5) break; // Cap at 5 decisions per session
   }
   return decisions;
 }
@@ -140,19 +143,26 @@ export function registerAgentEnd(
 
       if (sessionId) {
         try {
-          // Extract and record decisions
+          // Extract and record decisions using saliency scoring
           const decisions = extractDecisions(messages);
 
           for (const decision of decisions) {
             try {
+              const tags = ["auto-detected", `confidence:${decision.confidence}`];
+              if (decision.confidence === "medium") tags.push("candidate");
               await client.recordDecision(
                 decision.title,
                 decision.rationale,
                 undefined,
                 projectSlug,
-                ["auto-detected"],
+                tags,
                 undefined,
-                { source: "auto-session-lifecycle", session_id: sessionId },
+                {
+                  source: "auto-session-lifecycle",
+                  session_id: sessionId,
+                  confidence: decision.confidence,
+                  saliency_score: String(decision.score),
+                },
               );
             } catch (err) {
               api.logger.warn?.(`memory-memoryrelay: auto decision_record failed: ${String(err)}`);
