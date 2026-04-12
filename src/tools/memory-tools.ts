@@ -90,11 +90,16 @@ export function registerMemoryTools(
             // --------------------------------------------------------------------------
             const minLength = config.saliency?.minContentLength ?? 10;
             const noisePatterns = config.saliency?.noisePatterns ?? [
-              "\\[\\[reply_to_current\\]\\]",
-              "great question",
-              "i'd be happy to help",
+              "\\[\\[.*?\\]\\]",
+              "great (question|observation|point)",
+              "i'd be happy to",
               "here is the result",
-              "I have completed the",
+              "i have (completed|updated|fixed|implemented)",
+              "i will (now|first|next)",
+              "let me (check|verify|double-check)",
+              "saliency gate:.*",
+              "understood\\.",
+              "correct\\.",
             ];
 
             const isNoise = noisePatterns.some(pattern => new RegExp(pattern, "i").test(content));
