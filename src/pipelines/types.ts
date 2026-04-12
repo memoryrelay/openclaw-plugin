@@ -68,6 +68,10 @@ export interface PluginConfig {
     importanceBoost?: boolean;
     tierBoost?: boolean;
   };
+  saliency?: {
+    minContentLength?: number;
+    noisePatterns?: string[];
+  };
   vectorSearch?: {
     enabled?: boolean;
     provider?: string;
