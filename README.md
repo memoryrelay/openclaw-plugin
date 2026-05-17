@@ -88,6 +88,16 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 - Pattern adoption ensures consistent code style across sessions
 - Session tracking provides continuity when context windows reset
 
+**Public X/Twitter Signals**:
+- Install [TweetClaw](https://github.com/Xquik-dev/tweetclaw) beside MemoryRelay when an OpenClaw agent needs to search tweets, search tweet replies, export followers, run user lookup, monitor tweets, inspect media, or draft approval-gated posts and replies
+- Store reviewed findings with `memory_store`, `decision_record`, or `project_add_relationship` so MemoryRelay keeps the durable signal, not the whole timeline
+- Include query text, tweet URLs, authors, capture date, summary, confidence, and follow-up action in the memory or decision
+- Do not store X/Twitter credentials, direct message bodies, private account material, raw webhook payloads, or unreviewed post text in long-term memory
+
+```bash
+openclaw plugins install @xquik/tweetclaw
+```
+
 ## Features -- 42 Tools by Category
 
 ### Memory (9 tools) -- group: `memory`
