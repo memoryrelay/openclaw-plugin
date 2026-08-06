@@ -29,22 +29,33 @@ jobs:
       - name: Run tests
         run: npm test
 
-  lint:
+  build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      
+
       - name: Install dependencies
         run: npm ci
-      
-      - name: Check formatting
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify the compiled entry point loads
+        # OpenClaw aborts its startup migration when the plugin has no runnable
+        # JS entry point (issue #138). Import the built output the way OpenClaw
+        # does so a broken or missing dist/ fails here, not in someone's gateway.
         run: |
-          # Basic check - ensure no syntax errors
-          node -c index.ts 2>/dev/null || echo "TypeScript file OK"
+          MAIN=$(node -p "require('./package.json').main")
+          test -s "$MAIN" || { echo "::error::$MAIN was not built"; exit 1; }
+          node --input-type=module -e "
+            const m = await import('./$MAIN');
+            if (typeof m.default !== 'function') throw new Error('no plugin export');
+            console.log('✓ $MAIN loads');
+          "

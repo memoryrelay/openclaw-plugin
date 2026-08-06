@@ -30,7 +30,18 @@ jobs:
       
       - name: Run tests
         run: npm test
-      
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify compiled entry point exists
+        # Publishing TypeScript source without dist/ breaks OpenClaw startup
+        # migrations for every installed gateway (issue #138).
+        run: |
+          MAIN=$(node -p "require('./package.json').main")
+          test -s "$MAIN" || { echo "::error::$MAIN was not built"; exit 1; }
+          echo "✓ $MAIN built"
+
       - name: Verify version
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")

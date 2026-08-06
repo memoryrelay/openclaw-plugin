@@ -5,7 +5,7 @@
  * including connection status, tool breakdown, and recent activity.
  */
 
-import type { LogEntry, DebugLogger } from "./debug-logger";
+import type { LogEntry, DebugLogger } from "./debug-logger.js";
 
 export interface ToolStatus {
   enabled: number;
