@@ -1,0 +1,21 @@
+{
+  "//": "Type checking + editor config. The shipped build is produced by scripts/build.mjs (transpile-only); see npm run build.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "useDefineForClassFields": true,
+
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+
+    "noEmit": true
+  },
+  "include": ["index.ts", "index.test.ts", "src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

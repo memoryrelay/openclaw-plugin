@@ -21,8 +21,32 @@ import { fileURLToPath } from "node:url";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const _pkg = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf8")) as { version: string };
-const PLUGIN_VERSION = _pkg.version;
+
+/**
+ * Read the package version by walking up from this module.
+ *
+ * This file runs from the package root as `index.ts` (tests, ts-node) and from
+ * `dist/index.js` once compiled, so a fixed relative path to package.json would
+ * break one of the two — and a throw here kills the whole plugin at import.
+ */
+function readPluginVersion(startDir: string): string {
+  let dir = startDir;
+  for (;;) {
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+        version?: string;
+      };
+      if (pkg.version) return pkg.version;
+    } catch {
+      // Not this directory — keep walking.
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return "0.0.0";
+    dir = parent;
+  }
+}
+
+const PLUGIN_VERSION = readPluginVersion(__dirname);
 
 // --- Core services ---
 import { DebugLogger } from "./src/debug-logger.js";

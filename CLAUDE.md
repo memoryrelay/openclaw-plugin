@@ -13,10 +13,20 @@
 
 ```bash
 npm install          # Install dependencies
+npm run build        # Transpile index.ts + src/ to dist/ (ESM)
+npm run typecheck    # tsc --noEmit (not CI-enforced yet — ~75 known SDK type errors)
 npm test             # Run tests (vitest run)
 npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report (v8)
 ```
+
+## Build & Packaging
+
+- The package **must** ship compiled JS. OpenClaw >= 2026.7.1 refuses to install a plugin whose entry point is a `.ts` file and aborts the whole gateway startup migration — see #138.
+- `main` and `openclaw.extensions` point at `./dist/index.js`; `dist/` is in `files` and gitignored.
+- `scripts/build.mjs` is transpile-only (`ts.transpileModule`) and mirrors the source tree: `index.ts` → `dist/index.js`, `src/x.ts` → `dist/src/x.js`. It does **not** type check, so `npm run build` stays green while the SDK type errors are worked through.
+- Relative imports must carry an explicit `.js` extension — Node's ESM resolver rejects extensionless specifiers in the compiled output even though vitest tolerates them in source.
+- Anything resolved from `import.meta.url` must work both from the package root (source) and from `dist/` (compiled).
 
 ## Architecture (v0.17 Pipeline Pattern — v0.16.3 stable, v0.17.0 in development)
 

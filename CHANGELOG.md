@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Ships compiled JavaScript** — the package published `"main": "index.ts"` with no build output, so OpenClaw >= 2026.7.1 aborted its startup migration (`package install requires compiled runtime output for TypeScript entry index.ts`) and the gateway crash-looped for anyone with the plugin installed. `main` and `openclaw.extensions` now point at `./dist/index.js`, and `dist/` is included in the published tarball. (#138)
+- **Plugin version lookup from `dist/`** — `index.ts` read `package.json` from its own directory, which throws once the entry point is `dist/index.js`. It now walks up to find the manifest and falls back to `0.0.0` instead of taking the plugin down at import time. (#138)
+- **Missing ESM file extension** — `src/status-reporter.ts` imported `./debug-logger` without the `.js` extension, which Node's ESM resolver rejects in compiled output. (#138)
+
+### Added
+- **`npm run build`** — `scripts/build.mjs` transpiles `index.ts` and `src/` to ESM in `dist/`, mirroring the source layout, with source maps. Wired to `prepublishOnly` so a publish can never again ship source-only. (#138)
+- **`tsconfig.json` and `npm run typecheck`** — `tsc --noEmit` for editors and local checks. Not yet enforced in CI: it currently reports ~75 pre-existing errors, mostly mismatches against the OpenClaw plugin SDK types. (#138)
+- **Build verification in CI** — the `build` job imports the compiled entry point, and the release workflows assert `dist/index.js` is present in the npm tarball before publishing. (#138)
+
+### Changed
+- The CI `lint` job (which ran `node -c index.ts`, a no-op that always passed) is replaced by the `build` job.
+- `ci-cd.yml`'s publish job now runs `npm ci` before publishing — without it `prepublishOnly` would fail on the missing `typescript` devDependency.
+
 ## [0.23.0] - 2026-04-06
 
 ### Added

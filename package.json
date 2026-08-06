@@ -3,8 +3,11 @@
   "version": "0.24.0",
   "description": "OpenClaw memory plugin for MemoryRelay API - 42 tools, 17 commands, V2 async, sessions, decisions, patterns, projects & semantic search",
   "type": "module",
-  "main": "index.ts",
+  "main": "./dist/index.js",
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/postinstall.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -43,11 +46,12 @@
   },
   "openclaw": {
     "extensions": [
-      "index.ts"
+      "./dist/index.js"
     ],
     "hooks": []
   },
   "files": [
+    "dist/",
     "index.ts",
     "openclaw.plugin.json",
     "README.md",

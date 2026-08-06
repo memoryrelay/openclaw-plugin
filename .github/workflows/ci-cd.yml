@@ -44,9 +44,28 @@ jobs:
           fi
         done
         echo "✓ All required files present"
-    
-    - name: Dry run npm pack
-      run: npm pack --dry-run
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build
+      run: npm run build
+
+    - name: Verify the tarball ships the compiled entry point
+      # v0.23.0/v0.24.0 published TypeScript source only, and every OpenClaw
+      # >= 2026.7.1 that installed them refused to boot (issue #138).
+      run: |
+        MAIN=$(node -p "require('./package.json').main.replace(/^\.\//, '')")
+        npm pack --dry-run --ignore-scripts --json > pack.json
+        node -e "
+          const main = process.argv[1];
+          const files = require('./pack.json')[0].files.map((f) => f.path);
+          if (!files.includes(main)) {
+            console.error('::error::' + main + ' is missing from the npm tarball');
+            process.exit(1);
+          }
+          console.log('✓ tarball ships ' + main);
+        " "$MAIN"
 
   publish:
     needs: validate
@@ -62,10 +81,17 @@ jobs:
         node-version: '22.x'
         registry-url: 'https://registry.npmjs.org'
     
+    - name: Install dependencies
+      # prepublishOnly builds dist/ and needs the devDependencies present.
+      run: npm ci
+
+    - name: Build
+      run: npm run build
+
     - name: Extract version from tag
       id: version
       run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-    
+
     - name: Verify version matches package.json
       run: |
         PKG_VERSION=$(node -p "require('./package.json').version")
