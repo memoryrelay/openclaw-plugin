@@ -1,0 +1,34 @@
+name: Dependency graph submission
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/dependency-graph.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-graph-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # Dependency Submission API; no registry credentials.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Submit resolved npm lockfile dependencies
+        uses: advanced-security/component-detection-dependency-submission-action@4737f4899f8a2d167aa795f96fffba5cf82dd51e # v0.1.5
+        with:
+          detectorsCategories: Npm
+          detectorArgs: NpmLockfile3=EnableIfDefaultOff
+          correlator: npm-lockfile-v3
