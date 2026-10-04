@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-04
+
 ### Changed
 - **Rebuilt on the current MemoryRelay API (breaking).** The API was refactored around ICM and memory: sessions, decisions, patterns, projects, `POST /v1/embed` and `GET /v1/quota` no longer exist, and `POST /v2/context` moved to `/v2/context/build`. This release removes everything that depended on them: the `session`, `decision`, `pattern` and `project` tool groups (23 tools), the session lifecycle hook and resolver, the auto-decision extraction at agent end, the project-context block at agent start, the quota warnings, the `api` query-embedding provider, the `/memory-sessions`, `/memory-decisions`, `/memory-patterns` and `/memory-projects` commands, three skills, and the `defaultProject`, `autoSessions`, `session*`, `warnAtPercent` and `criticalAtPercent` settings. Every remaining call is one the API serves (memoryrelay/api `tests/test_client_contract.py` is the reference).
 - **Payloads match the API.** `memory_recall` sends `min_score` (the plugin's `recallThreshold` was silently ignored before); `scope`, `session_id` and `namespace` travel in memory metadata and are filtered with `metadata_filter`, so session-scoped recall works server-side; `memory_list` pages at the API's maximum of 50 instead of 422-ing above it; `entity_create` offers the API's types (`person`, `organization`, `location`, `event`, `concept`, `technology`, `product`). The OpenClaw session key is the session id: no server round trip creates one.
