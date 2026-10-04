@@ -1,16 +1,13 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import type { PluginConfig } from "../pipelines/types.js";
 import type { MemoryRelayClient } from "../client/memoryrelay-client.js";
-import type { SessionResolver } from "../context/session-resolver.js";
 
 export function registerMemoryTools(
   api: OpenClawPluginApi,
   config: PluginConfig,
   client: MemoryRelayClient,
-  sessionResolver: SessionResolver,
   isToolEnabled: (name: string) => boolean,
 ): void {
-  const defaultProject = config.defaultProject;
 
   // --------------------------------------------------------------------------
   // 1. memory_store
@@ -20,8 +17,7 @@ export function registerMemoryTools(
 
         name: "memory_store",
         description:
-          "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations." +
-          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : "") +
+          "Store a new memory in MemoryRelay. Use this to save important information, facts, preferences, or context that should be remembered for future conversations. Memories are evidence: they never become workspace instructions unless a person writes them in." +
           " Set deduplicate=true to avoid storing near-duplicate memories.",
         parameters: {
           type: "object",
@@ -43,10 +39,6 @@ export function registerMemoryTools(
               type: "number",
               description: "Similarity threshold for deduplication (0-1). Default 0.95.",
             },
-            project: {
-              type: "string",
-              description: "Project slug to associate with this memory.",
-            },
             importance: {
               type: "number",
               description: "Importance score (0-1). Higher values are retained longer.",
@@ -58,7 +50,7 @@ export function registerMemoryTools(
             },
             session_id: {
               type: "string",
-              description: "Optional MemoryRelay session UUID to associate this memory with. If omitted and project is set, plugin auto-creates session via external_id.",
+              description: "Optional session key to file this memory under (kept in metadata). Defaults to the current OpenClaw session.",
             },
             scope: {
               type: "string",
@@ -75,7 +67,6 @@ export function registerMemoryTools(
             metadata?: Record<string, string>;
             deduplicate?: boolean;
             dedup_threshold?: number;
-            project?: string;
             importance?: number;
             tier?: string;
             session_id?: string;
@@ -126,31 +117,8 @@ export function registerMemoryTools(
             }
 
 
-            // Apply defaultProject fallback before session resolution
-            if (!opts.project && defaultProject) opts.project = defaultProject;
-
-            // Get session_id from SessionResolver if project context available
-            // Priority: explicit session_id > context session > no session
-            let sessionId: string | undefined = explicitSessionId;
-
-            if (!sessionId && (opts.project || ctx.workspaceDir)) {
-              try {
-                const entry = await sessionResolver.resolve({
-                  sessionKey: opts.project || `workspace-${(ctx.workspaceDir || "").split(/[/\\]/).pop()}`,
-                  agentId: null,
-                  channel: null,
-                  trigger: null,
-                  prompt: "",
-                  isSubagent: false,
-                  parentSessionKey: null,
-                  namespace: opts.project || "default",
-                  timestamp: Date.now(),
-                });
-                sessionId = entry.sessionId;
-              } catch {
-                // Session resolution failed — continue without session
-              }
-            }
+            // The session is the OpenClaw session key; the API keeps no sessions.
+            const sessionId: string | undefined = explicitSessionId ?? ctx.sessionKey ?? undefined;
 
             // Build request options with session_id as top-level parameter
             const storeOpts = {
@@ -189,8 +157,7 @@ export function registerMemoryTools(
 
         name: "memory_recall",
         description:
-          "Search memories using natural language. Returns the most relevant memories based on semantic similarity to the query." +
-          (defaultProject ? ` Results scoped to project '${defaultProject}' by default; pass project explicitly to override or omit to search all.` : ""),
+          "Search memories using natural language. Returns the most relevant memories based on semantic similarity to the query.",
         parameters: {
           type: "object",
           properties: {
@@ -207,10 +174,6 @@ export function registerMemoryTools(
             threshold: {
               type: "number",
               description: "Minimum similarity threshold (0-1). Default 0.3.",
-            },
-            project: {
-              type: "string",
-              description: "Filter by project slug.",
             },
             tier: {
               type: "string",
@@ -239,7 +202,6 @@ export function registerMemoryTools(
             query: string;
             limit?: number;
             threshold?: number;
-            project?: string;
             tier?: string;
             min_importance?: number;
             compress?: boolean;
@@ -251,16 +213,13 @@ export function registerMemoryTools(
               query,
               limit = 5,
               threshold,
-              project,
               tier,
               min_importance,
               compress,
               scope,
             } = args;
             const searchThreshold = threshold ?? config?.recallThreshold ?? 0.3;
-            const searchProject = project ?? defaultProject;
             const results = await client.search(query, limit, searchThreshold, {
-              project: searchProject,
               tier,
               min_importance,
               compress,
@@ -349,7 +308,7 @@ export function registerMemoryTools(
           }
 
           if (query) {
-            const results = await client.search(query, 5, 0.5, { project: defaultProject });
+            const results = await client.search(query, 5, 0.5);
 
             if (results.length === 0) {
               return {
@@ -407,27 +366,20 @@ export function registerMemoryTools(
           properties: {
             limit: {
               type: "number",
-              description: "Number of memories to return (1-100). Default 20.",
+              description: "Number of memories to return (1-50). Default 20.",
               minimum: 1,
-              maximum: 100,
+              maximum: 50,
             },
             offset: {
               type: "number",
               description: "Offset for pagination. Default 0.",
               minimum: 0,
             },
-            scope: {
-              type: "string",
-              description: "List scope: 'session', 'long-term', or 'all'. Default: 'all'.",
-              enum: ["session", "long-term", "all"],
-            },
           },
         },
-        execute: async (_id, args: { limit?: number; offset?: number; scope?: string }) => {
+        execute: async (_id, args: { limit?: number; offset?: number }) => {
           try {
-            const memories = await client.list(args.limit ?? 20, args.offset ?? 0, {
-              ...(args.scope && { scope: args.scope }),
-            });
+            const memories = await client.list(args.limit ?? 20, args.offset ?? 0);
             if (memories.length === 0) {
               return {
                 content: [{ type: "text", text: "No memories found." }],
@@ -612,8 +564,7 @@ export function registerMemoryTools(
 
         name: "memory_context",
         description:
-          "Build a context window from relevant memories, optimized for injecting into agent prompts with token budget awareness." +
-          (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
+          "Build a context window from relevant memories, optimized for injecting into agent prompts with token budget awareness. For pinned workspace instructions use icm_context_for instead; this is recall over evidence.",
         parameters: {
           type: "object",
           properties: {
@@ -633,25 +584,19 @@ export function registerMemoryTools(
               type: "number",
               description: "Maximum token budget for the context.",
             },
-            project: {
-              type: "string",
-              description: "Project slug to scope the context.",
-            },
           },
           required: ["query"],
         },
         execute: async (
           _id,
-          args: { query: string; limit?: number; threshold?: number; max_tokens?: number; project?: string },
+          args: { query: string; limit?: number; threshold?: number; max_tokens?: number },
         ) => {
           try {
-            const project = args.project ?? defaultProject;
             const result = await client.buildContext(
               args.query,
               args.limit,
               args.threshold,
               args.max_tokens,
-              project,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

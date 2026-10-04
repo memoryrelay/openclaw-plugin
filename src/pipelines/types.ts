@@ -38,9 +38,7 @@ export interface PluginConfig {
   apiKey?: string;
   agentId?: string;
   apiUrl?: string;
-  defaultProject?: string;
   autoRecall?: boolean;
-  autoSessions?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
   excludeChannels?: string[];
@@ -77,23 +75,31 @@ export interface PluginConfig {
     provider?: string;
   };
   syncIntervalMinutes?: number;
-  sessionTimeoutMinutes?: number;
-  sessionCleanupIntervalMinutes?: number;
-  maxSessionAgeHours?: number;
-  idleTimeoutMinutes?: number;
-  maxSessions?: number;
-  warnAtPercent?: number;
-  criticalAtPercent?: number;
+  icm?: IcmConfig;
   debug?: boolean;
   verbose?: boolean;
   maxLogEntries?: number;
   logFile?: string;
 }
 
+/**
+ * ICM: pinned context workspaces (/v2/icm). `repo` and `step` name the binding
+ * a person made in MemoryRelay for this agent; when unset the server resolves
+ * from the key alone. `autoContext` injects the bound route's context before
+ * each agent turn (default true).
+ */
+export interface IcmConfig {
+  enabled?: boolean;
+  autoContext?: boolean;
+  repo?: string;
+  step?: string;
+  tokenBudget?: number;
+  runtime?: string;
+}
+
 export interface StoreOptions {
   deduplicate?: boolean;
   dedup_threshold?: number;
-  project?: string;
   importance?: number;
   tier?: string;
   scope?: string;
@@ -105,7 +111,6 @@ export interface SearchOptions {
   include_archived?: boolean;
   compress?: boolean;
   max_context_tokens?: number;
-  project?: string;
   tier?: string;
   min_importance?: number;
   scope?: string;
@@ -116,34 +121,11 @@ export interface SearchOptions {
 export interface MemoryRelayClient {
   search(query: string, limit?: number, threshold?: number, opts?: SearchOptions): Promise<Array<{ memory: Memory; score: number }>>;
   store(content: string, metadata?: Record<string, string>, options?: StoreOptions): Promise<Memory>;
-  list(limit?: number, offset?: number, opts?: { scope?: string }): Promise<Memory[]>;
-  getOrCreateSession(
-    externalId: string,
-    agentId?: string,
-    title?: string,
-    project?: string,
-    metadata?: Record<string, string>,
-  ): Promise<{ id: string }>;
-  startSession(title?: string, project?: string, metadata?: Record<string, string>): Promise<{ id: string }>;
-  endSession(sessionId: string, summary?: string): Promise<void>;
-  getProjectContext(project: string): Promise<any>;
-  recordDecision(
-    title: string,
-    rationale: string,
-    alternatives?: string,
-    project?: string,
-    tags?: string[],
-    status?: string,
-    metadata?: Record<string, string>,
-  ): Promise<any>;
+  list(limit?: number, offset?: number, opts?: { include_embeddings?: boolean }): Promise<Memory[]>;
 }
 
 export interface EmbeddingService {
   generateQuery(text: string): Promise<Float32Array>;
-}
-
-export interface SessionResolverLike {
-  resolve(requestCtx: RequestContext): Promise<{ sessionId: string; externalId: string }>;
 }
 
 export interface LocalCacheLike {
@@ -171,7 +153,6 @@ export interface PipelineContext {
   readonly requestCtx: RequestContext;
   readonly config: PluginConfig;
   readonly client: MemoryRelayClient;
-  readonly sessionResolver?: SessionResolverLike;
   readonly localCache?: LocalCacheLike;
   readonly syncDaemon?: SyncDaemonLike;
   readonly embeddingService?: EmbeddingService;

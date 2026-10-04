@@ -1,6 +1,5 @@
 // src/hooks/activity.ts
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import type { SessionResolver } from "../context/session-resolver.js";
 
 export interface DebugLoggerLike {
   log(entry: {
@@ -16,7 +15,6 @@ export interface DebugLoggerLike {
 
 export function registerActivityHooks(
   api: OpenClawPluginApi,
-  sessionResolver: SessionResolver,
   debugLogger?: DebugLoggerLike,
 ): void {
   // Tool observation: no-op, registered for future extensibility
@@ -24,7 +22,7 @@ export function registerActivityHooks(
     // Reserved for future: tool blocking, param injection, audit
   });
 
-  // Tool observation: update session activity + log metrics
+  // Tool observation: log metrics
   api.on("after_tool_call", (event, _ctx) => {
     // Log to debug logger if enabled
     if (debugLogger) {
@@ -42,7 +40,7 @@ export function registerActivityHooks(
 
   // Message processing hooks: activity tracking
   api.on("message_received", (_event, _ctx) => {
-    // Activity tracking handled by session resolver
+    // No-op: registered for future extensibility
   });
 
   api.on("message_sending", (_event, _ctx) => {

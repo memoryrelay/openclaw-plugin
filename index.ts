@@ -60,7 +60,6 @@ import {
   DEFAULT_API_URL,
   VALID_HEALTH_STATUSES,
 } from "./src/client/memoryrelay-client.js";
-import { SessionResolver } from "./src/context/session-resolver.js";
 import { LocalCache } from "./src/cache/local-cache.js";
 import { SyncDaemon } from "./src/cache/sync-daemon.js";
 import { PluginMemoryManager } from "./src/cache/memory-manager.js";
@@ -70,7 +69,6 @@ import type { LocalCacheConfig } from "./src/cache/types.js";
 import { registerBeforeAgentStart } from "./src/hooks/before-agent-start.js";
 import { registerBeforePromptBuild } from "./src/hooks/before-prompt-build.js";
 import { registerAgentEnd } from "./src/hooks/agent-end.js";
-import { registerSessionLifecycle } from "./src/hooks/session-lifecycle.js";
 import { registerSubagentHooks } from "./src/hooks/subagent.js";
 import { registerCompactionHooks } from "./src/hooks/compaction.js";
 import { registerActivityHooks } from "./src/hooks/activity.js";
@@ -78,14 +76,11 @@ import { registerPrivacyHooks } from "./src/hooks/privacy.js";
 
 // --- Tools ---
 import { registerMemoryTools } from "./src/tools/memory-tools.js";
-import { registerSessionTools } from "./src/tools/session-tools.js";
 import { registerEntityTools } from "./src/tools/entity-tools.js";
-import { registerDecisionTools } from "./src/tools/decision-tools.js";
-import { registerPatternTools } from "./src/tools/pattern-tools.js";
-import { registerProjectTools } from "./src/tools/project-tools.js";
 import { registerAgentTools } from "./src/tools/agent-tools.js";
 import { registerV2Tools } from "./src/tools/v2-tools.js";
 import { registerHealthTools } from "./src/tools/health-tools.js";
+import { registerIcmTools, ICM_TOOL_NAMES } from "./src/tools/icm-tools.js";
 
 // --- Heartbeat / Onboarding / CLI ---
 import {
@@ -108,8 +103,7 @@ import {
 } from "./src/onboarding/first-run.js";
 
 // --- Pipeline types (used for PluginConfig interface) ---
-import type { PluginConfig, EmbeddingService } from "./src/pipelines/types.js";
-import { ApiEmbeddingService } from "./src/cache/api-embedding-service.js";
+import type { PluginConfig, EmbeddingService, IcmConfig } from "./src/pipelines/types.js";
 import { NomicEmbeddingService } from "./src/cache/nomic-embedding-service.js";
 
 // ============================================================================
@@ -125,20 +119,13 @@ interface MemoryRelayConfig {
   recallLimit?: number;
   recallThreshold?: number;
   excludeChannels?: string[];
-  defaultProject?: string;
   enabledTools?: string;
+  icm?: IcmConfig;
   dailyStats?: DailyStatsConfig;
   debug?: boolean;
   verbose?: boolean;
   logFile?: string;
   maxLogEntries?: number;
-  sessionTimeoutMinutes?: number;
-  sessionCleanupIntervalMinutes?: number;
-  maxSessionAgeHours?: number;
-  idleTimeoutMinutes?: number;
-  maxSessions?: number;
-  warnAtPercent?: number;
-  criticalAtPercent?: number;
   localCache?: Partial<LocalCacheConfig>;
 }
 
@@ -234,16 +221,9 @@ const TOOL_GROUPS: Record<string, string[]> = {
   ],
   entity: ["entity_create", "entity_link", "entity_list", "entity_graph"],
   agent: ["agent_list", "agent_create", "agent_get"],
-  session: ["session_start", "session_end", "session_recall", "session_list"],
-  decision: ["decision_record", "decision_list", "decision_supersede", "decision_check"],
-  pattern: ["pattern_create", "pattern_search", "pattern_adopt", "pattern_suggest"],
-  project: [
-    "project_register", "project_list", "project_info",
-    "project_add_relationship", "project_dependencies", "project_dependents",
-    "project_related", "project_impact", "project_shared_patterns", "project_context",
-  ],
   health: ["memory_health"],
   v2: ["memory_store_async", "memory_status", "context_build"],
+  icm: [...ICM_TOOL_NAMES],
 };
 
 // ============================================================================
@@ -337,7 +317,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   const apiUrl = cfg?.apiUrl || process.env.MEMORYRELAY_API_URL || DEFAULT_API_URL;
-  const defaultProject = cfg?.defaultProject || process.env.MEMORYRELAY_DEFAULT_PROJECT;
 
   // --- Debug Logger & Status Reporter ---
   const debugEnabled = cfg?.debug || false;
@@ -369,9 +348,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
     apiKey,
     agentId,
     apiUrl,
-    defaultProject,
     autoRecall: cfg?.autoRecall ?? true,
-    autoSessions: cfg?.autoSessions ?? true,
     recallLimit: cfg?.recallLimit ?? 3,
     recallThreshold: cfg?.recallThreshold ?? 0.65,
     excludeChannels: cfg?.excludeChannels ?? [],
@@ -380,21 +357,19 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       enabled: cfg?.localCache?.vectorSearch?.enabled ?? false,
       provider: cfg?.localCache?.vectorSearch?.provider ?? "none",
     },
-    sessionTimeoutMinutes: cfg?.sessionTimeoutMinutes,
-    sessionCleanupIntervalMinutes: cfg?.sessionCleanupIntervalMinutes,
-    maxSessionAgeHours: cfg?.maxSessionAgeHours,
-    idleTimeoutMinutes: cfg?.idleTimeoutMinutes,
-    maxSessions: cfg?.maxSessions,
-    warnAtPercent: cfg?.warnAtPercent,
-    criticalAtPercent: cfg?.criticalAtPercent,
+    icm: {
+      enabled: cfg?.icm?.enabled ?? true,
+      autoContext: cfg?.icm?.autoContext ?? true,
+      repo: cfg?.icm?.repo || process.env.MEMORYRELAY_ICM_REPO || undefined,
+      step: cfg?.icm?.step || process.env.MEMORYRELAY_ICM_STEP || undefined,
+      tokenBudget: cfg?.icm?.tokenBudget,
+      runtime: cfg?.icm?.runtime,
+    },
     debug: cfg?.debug,
     verbose: cfg?.verbose,
     maxLogEntries: cfg?.maxLogEntries,
     logFile: cfg?.logFile,
   };
-
-  // --- Session Resolver ---
-  const sessionResolver = new SessionResolver(client, pluginConfig);
 
   // --- Verify connection on startup ---
   try {
@@ -474,16 +449,17 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   }
 
   // --- Embedding service (for hybrid vector search in recall pipeline) ---
-  // Use ApiEmbeddingService (server-side embeddings via POST /v1/embed) when
-  // vectorSearch is enabled. Falls back gracefully to FTS5-only if the API
-  // endpoint is unavailable. Replace with NomicEmbeddingProvider for local
-  // inference once that is bundled.
+  // Query embeddings are computed locally (nomic-embed-text via ONNX); the API
+  // has no embedding endpoint. Without it recall uses FTS5 only.
   const embeddingService: EmbeddingService | undefined = (() => {
     if (!pluginConfig.vectorSearch?.enabled) return undefined;
     if (pluginConfig.vectorSearch.provider === "nomic") {
       return new NomicEmbeddingService(join(homedir(), ".openclaw", "models"));
     }
-    return new ApiEmbeddingService(client);
+    api.logger.warn?.(
+      `memory-memoryrelay: vectorSearch provider "${pluginConfig.vectorSearch.provider}" is not available (the API has no embedding endpoint); set localCache.vectorSearch.provider to "nomic" or recall stays FTS5-only`,
+    );
+    return undefined;
   })();
 
   // --- Tool enablement filter ---
@@ -512,28 +488,26 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // Register Hooks (8 modules)
   // ========================================================================
 
-  registerBeforeAgentStart(api, pluginConfig, client, isToolEnabled, defaultProject, agentId);
-  registerBeforePromptBuild(api, pluginConfig, client, sessionResolver, localCache, syncDaemon, embeddingService);
-  registerAgentEnd(api, pluginConfig, client, sessionResolver, localCache, syncDaemon);
-  registerSessionLifecycle(api, pluginConfig, client, agentId, defaultProject, sessionResolver);
+  registerBeforeAgentStart(api, pluginConfig, client, isToolEnabled, agentId);
+  registerBeforePromptBuild(api, pluginConfig, client, localCache, syncDaemon, embeddingService);
+  registerAgentEnd(api, pluginConfig, client, localCache, syncDaemon);
   registerSubagentHooks(api, pluginConfig, client, agentId, autoCaptureConfig, isBlocklisted);
   registerCompactionHooks(api, client, agentId, blocklist, extractRescueContent);
-  registerActivityHooks(api, sessionResolver, debugLogger);
+  registerActivityHooks(api, debugLogger);
   registerPrivacyHooks(api, blocklist, isBlocklisted, redactSensitive);
 
   // ========================================================================
-  // Register Tools (9 modules, 42 tools total)
+  // Register Tools (6 modules, 42 tools total)
   // ========================================================================
 
-  registerMemoryTools(api, pluginConfig, client, sessionResolver, isToolEnabled);
-  registerSessionTools(api, pluginConfig, client, sessionResolver, isToolEnabled);
+  registerMemoryTools(api, pluginConfig, client, isToolEnabled);
   registerEntityTools(api, pluginConfig, client, isToolEnabled);
-  registerDecisionTools(api, pluginConfig, client, isToolEnabled);
-  registerPatternTools(api, pluginConfig, client, isToolEnabled);
-  registerProjectTools(api, pluginConfig, client, isToolEnabled);
   registerAgentTools(api, pluginConfig, client, isToolEnabled);
   registerV2Tools(api, pluginConfig, client, isToolEnabled);
   registerHealthTools(api, pluginConfig, client, isToolEnabled);
+  if (pluginConfig.icm?.enabled !== false) {
+    registerIcmTools(api, pluginConfig, client, isToolEnabled);
+  }
 
   // ========================================================================
   // Startup log
@@ -690,7 +664,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         recallLimit: pluginConfig.recallLimit ?? 3,
         recallThreshold: pluginConfig.recallThreshold ?? 0.5,
         excludeChannels: pluginConfig.excludeChannels ?? [],
-        defaultProject,
       };
 
       if (statusReporter) {
@@ -919,9 +892,9 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
             result = { success: true, count: list.length, message: "List retrieved" };
             break;
           }
-          case "project_list": {
-            const projects = await client.listProjects(5);
-            result = { success: true, count: projects.length, message: "Projects listed" };
+          case "icm_capabilities": {
+            const caps = await client.icmCapabilities();
+            result = { success: true, supported: caps.supported, message: caps.supported ? "ICM available" : "This server has no ICM" };
             break;
           }
           case "memory_health": {
@@ -944,7 +917,7 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   });
 
   // ========================================================================
-  // CLI Commands (17 total)
+  // CLI Commands (13 total)
   // ========================================================================
 
   api.registerCommand?.({
@@ -976,7 +949,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           recallLimit: pluginConfig.recallLimit ?? 3,
           recallThreshold: pluginConfig.recallThreshold ?? 0.5,
           excludeChannels: pluginConfig.excludeChannels ?? [],
-          defaultProject,
         };
 
         if (statusReporter) {
@@ -1134,12 +1106,11 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       try {
         const { positional, flags } = parseCommandArgs(ctx.args);
         const query = positional[0];
-        if (!query) return { text: "Usage: /memory-search <query> [--limit 10] [--project slug] [--threshold 0.3]" };
+        if (!query) return { text: "Usage: /memory-search <query> [--limit 10] [--threshold 0.3]" };
         const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
         const threshold = flags["threshold"] ? parseFloat(String(flags["threshold"])) : 0.3;
-        const project = flags["project"] ? String(flags["project"]) : undefined;
 
-        const results = await client.search(query, limit, threshold, { project });
+        const results = await client.search(query, limit, threshold);
         const items: unknown[] = Array.isArray(results) ? results : (results as { data?: unknown[] }).data ?? [];
         if (items.length === 0) return { text: `No memories found for: "${query}"` };
 
@@ -1222,123 +1193,16 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
         const lines: string[] = ["MemoryRelay Configuration", "\u2501".repeat(50)];
         lines.push(`API URL:             ${apiUrl}`);
         lines.push(`Agent ID:            ${agentId}`);
-        lines.push(`Default Project:     ${defaultProject || "(none)"}`);
         lines.push(`Enabled Tools:       ${cfg?.enabledTools ?? "all"}`);
         lines.push(`Auto-Recall:         ${pluginConfig.autoRecall ?? true}`);
         lines.push(`Auto-Capture:        ${autoCaptureConfig.enabled} (tier: ${autoCaptureConfig.tier})`);
         lines.push(`Recall Limit:        ${pluginConfig.recallLimit ?? 3}`);
         lines.push(`Recall Threshold:    ${pluginConfig.recallThreshold ?? 0.5}`);
         lines.push(`Exclude Channels:    ${(pluginConfig.excludeChannels ?? []).join(", ") || "(none)"}`);
-        lines.push(`Session Timeout:     ${cfg?.sessionTimeoutMinutes ?? 120} min`);
-        lines.push(`Cleanup Interval:    ${cfg?.sessionCleanupIntervalMinutes ?? 30} min`);
+        lines.push(`ICM:                 ${pluginConfig.icm?.enabled === false ? "off" : "on"} (auto context: ${pluginConfig.icm?.autoContext !== false}, repo: ${pluginConfig.icm?.repo ?? "(from key)"}, step: ${pluginConfig.icm?.step ?? "(from key)"})`);
         lines.push(`Debug:               ${cfg?.debug ?? false}`);
         lines.push(`Verbose:             ${cfg?.verbose ?? false}`);
         lines.push(`Max Log Entries:     ${cfg?.maxLogEntries ?? 100}`);
-        return { text: lines.join("\n") };
-      } catch (err) {
-        return { text: `Error: ${String(err)}`, isError: true };
-      }
-    },
-  });
-
-  api.registerCommand?.({
-    name: "memory-sessions",
-    description: "List MemoryRelay sessions",
-    requireAuth: true,
-    acceptsArgs: true,
-    handler: async (ctx) => {
-      try {
-        const { flags } = parseCommandArgs(ctx.args);
-        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
-        const project = flags["project"] ? String(flags["project"]) : undefined;
-        let status: string | undefined = flags["status"] ? String(flags["status"]) : undefined;
-        if (flags["active"]) status = "active";
-
-        const raw = await client.listSessions(limit, project, status);
-        const sessions: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
-        if (sessions.length === 0) return { text: "No sessions found." };
-
-        const lines: string[] = ["MemoryRelay Sessions", "\u2501".repeat(60)];
-        for (const session of sessions) {
-          const s = session as Record<string, unknown>;
-          const sid = String(s["id"] ?? "");
-          const sessionStatus = String(s["status"] ?? "unknown").toUpperCase();
-          const startedAt = s["started_at"] ? new Date(String(s["started_at"])).toLocaleString() : "unknown";
-          let duration = "ongoing";
-          if (s["started_at"] && s["ended_at"]) {
-            const diffMs = new Date(String(s["ended_at"])).getTime() - new Date(String(s["started_at"])).getTime();
-            duration = `${Math.round(diffMs / 60000)}m`;
-          }
-          const summary = String(s["summary"] ?? "").slice(0, 80);
-          lines.push(`[${sessionStatus}] ${sid}`);
-          lines.push(`  Started: ${startedAt} | Duration: ${duration}`);
-          if (summary) lines.push(`  ${summary}`);
-        }
-        return { text: lines.join("\n") };
-      } catch (err) {
-        return { text: `Error: ${String(err)}`, isError: true };
-      }
-    },
-  });
-
-  api.registerCommand?.({
-    name: "memory-decisions",
-    description: "List architectural decisions stored in MemoryRelay",
-    requireAuth: true,
-    acceptsArgs: true,
-    handler: async (ctx) => {
-      try {
-        const { flags } = parseCommandArgs(ctx.args);
-        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
-        const project = flags["project"] ? String(flags["project"]) : undefined;
-        const status = flags["status"] ? String(flags["status"]) : undefined;
-        const tags = flags["tags"] ? String(flags["tags"]) : undefined;
-
-        const raw = await client.listDecisions(limit, project, status, tags);
-        const decisions: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
-        if (decisions.length === 0) return { text: "No decisions found." };
-
-        const lines: string[] = ["MemoryRelay Decisions", "\u2501".repeat(60)];
-        for (const decision of decisions) {
-          const d = decision as Record<string, unknown>;
-          const decisionStatus = String(d["status"] ?? "unknown").toUpperCase();
-          const title = String(d["title"] ?? "(untitled)");
-          const date = d["created_at"] ? new Date(String(d["created_at"])).toLocaleDateString() : "unknown";
-          const rationale = String(d["rationale"] ?? "").slice(0, 100);
-          lines.push(`[${decisionStatus}] ${title} (${date})`);
-          if (rationale) lines.push(`  ${rationale}`);
-        }
-        return { text: lines.join("\n") };
-      } catch (err) {
-        return { text: `Error: ${String(err)}`, isError: true };
-      }
-    },
-  });
-
-  api.registerCommand?.({
-    name: "memory-patterns",
-    description: "List or search memory patterns",
-    requireAuth: true,
-    acceptsArgs: true,
-    handler: async (ctx) => {
-      try {
-        const { positional, flags } = parseCommandArgs(ctx.args);
-        const query = positional[0] ?? "";
-        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 10;
-        const category = flags["category"] ? String(flags["category"]) : undefined;
-        const project = flags["project"] ? String(flags["project"]) : undefined;
-
-        const raw = await client.searchPatterns(query, category, project, limit);
-        const patterns: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
-        if (patterns.length === 0) return { text: query ? `No patterns found for: "${query}"` : "No patterns found." };
-
-        const lines: string[] = ["MemoryRelay Patterns", "\u2501".repeat(60)];
-        for (const pattern of patterns) {
-          const p = pattern as Record<string, unknown>;
-          lines.push(`${String(p["name"] ?? "(unnamed)")} [${String(p["category"] ?? "general")}]`);
-          const desc = String(p["description"] ?? "").slice(0, 100);
-          if (desc) lines.push(`  ${desc}`);
-        }
         return { text: lines.join("\n") };
       } catch (err) {
         return { text: `Error: ${String(err)}`, isError: true };
@@ -1366,34 +1230,6 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
           const type = String(e["type"] ?? "unknown");
           const relationships = Array.isArray(e["relationships"]) ? e["relationships"].length : (typeof e["relationship_count"] === "number" ? e["relationship_count"] : 0);
           lines.push(`${name} [${type}] (${relationships} relationships)`);
-        }
-        return { text: lines.join("\n") };
-      } catch (err) {
-        return { text: `Error: ${String(err)}`, isError: true };
-      }
-    },
-  });
-
-  api.registerCommand?.({
-    name: "memory-projects",
-    description: "List projects in MemoryRelay",
-    requireAuth: true,
-    acceptsArgs: true,
-    handler: async (ctx) => {
-      try {
-        const { flags } = parseCommandArgs(ctx.args);
-        const limit = flags["limit"] ? parseInt(String(flags["limit"]), 10) : 20;
-        const raw = await client.listProjects(limit);
-        const projects: unknown[] = Array.isArray(raw) ? raw : (raw as { data?: unknown[] }).data ?? [];
-        if (projects.length === 0) return { text: "No projects found." };
-
-        const lines: string[] = ["MemoryRelay Projects", "\u2501".repeat(60)];
-        for (const project of projects) {
-          const p = project as Record<string, unknown>;
-          const slug = String(p["slug"] ?? "(no-slug)");
-          const description = String(p["description"] ?? "").slice(0, 80);
-          const memoryCount = typeof p["memory_count"] === "number" ? p["memory_count"] : 0;
-          lines.push(`${slug} -- ${description || "(no description)"} (${memoryCount} memories)`);
         }
         return { text: lines.join("\n") };
       } catch (err) {
@@ -1533,32 +1369,4 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
       },
     });
   }
-
-  // ========================================================================
-  // Stale Session Cleanup Service
-  // ========================================================================
-
-  const sessionCleanupIntervalMs =
-    ((cfg?.sessionCleanupIntervalMinutes as number) || 30) * 60 * 1000;
-
-  let sessionCleanupInterval: ReturnType<typeof setInterval> | null = null;
-
-  api.registerService({
-    id: "memoryrelay-session-cleanup",
-    start: async (_ctx) => {
-      sessionCleanupInterval = setInterval(async () => {
-        try {
-          await sessionResolver.cleanupStale();
-        } catch (err) {
-          api.logger.warn?.(`memory-memoryrelay: session cleanup failed: ${String(err)}`);
-        }
-      }, sessionCleanupIntervalMs);
-    },
-    stop: async (_ctx) => {
-      if (sessionCleanupInterval) {
-        clearInterval(sessionCleanupInterval);
-        sessionCleanupInterval = null;
-      }
-    },
-  });
 }

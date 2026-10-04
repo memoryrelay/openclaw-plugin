@@ -36,6 +36,76 @@ export interface Stats {
   last_updated?: string;
 }
 
+/**
+ * An ICM (/v2/icm) request the server refused. `code` is the server's machine
+ * reason (not_found, no_binding, insufficient_role, scope_missing,
+ * required_context_over_budget, ...); 404 on /capabilities means the server
+ * has no ICM at all.
+ */
+export class IcmApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    detail: string,
+  ) {
+    super(`ICM request failed: ${status} ${code} - ${detail}`);
+    this.name = "IcmApiError";
+  }
+}
+
+/** What a context build is for (server: /v2/icm context build `target`). */
+export type IcmBuildTarget =
+  | { kind: "entry" }
+  | { kind: "route"; id: string }
+  | { kind: "stage"; id: string; run_id?: string }
+  | { kind: "record"; id: string }
+  | { kind: "notes"; task: string; layers?: Array<"A" | "B" | "C"> }
+  | { kind: "nodes"; ids?: string[]; paths?: string[]; link_depth?: 0 | 1 }
+  | { kind: "impact"; object: string }
+  | { kind: "repository"; alias: string; route?: string; stage?: string };
+
+export interface IcmBuildRequest {
+  target?: IcmBuildTarget;
+  stage?: string;
+  project_id?: string;
+  runtime?: string;
+  token_budget?: number;
+  release_id?: string;
+  channel?: string;
+}
+
+export interface IcmRunStage {
+  id: string;
+  status: string;
+  recorded_state: string;
+  attempt: number;
+  outputs: string[];
+  outputs_digest?: string;
+  human_check?: string | null;
+  last_note?: string | null;
+  artifacts?: Array<{ path: string; revision: number; sha256: string }>;
+  [key: string]: unknown;
+}
+
+export interface IcmRun {
+  run_id: string;
+  release_id: string;
+  name: string;
+  state: string;
+  revision: number;
+  stages: IcmRunStage[];
+  [key: string]: unknown;
+}
+
+/** A workspace path as URL segments; refuses empty, `.` and `..` segments. */
+function encodeArtifactPath(path: string): string {
+  const parts = path.split("/");
+  if (parts.some((p) => p === "" || p === "." || p === "..")) {
+    throw new Error("path must be a relative path without empty, . or .. segments");
+  }
+  return parts.map(encodeURIComponent).join("/");
+}
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -116,9 +186,13 @@ export class MemoryRelayClient implements IMemoryRelayClient {
   private extractToolName(path: string): string {
     // /v1/memories -> memory
     // /v1/memories/batch -> memory_batch
-    // /v1/sessions/123/end -> session_end
+    // /v1/entities/links -> entity
     const parts = path.split("/").filter(Boolean);
     if (parts.length < 2) return "unknown";
+    // /v2/icm/workspaces/... -> icm_workspace; /v2/icm/root -> icm_root
+    if (parts[0] === "v2" && parts[1] === "icm") {
+      return parts.length > 2 ? `icm_${parts[2].replace(/s$/, "").split("?")[0]}` : "icm";
+    }
 
     let toolName = parts[1].replace(/s$/, ""); // Remove trailing 's'
 
@@ -153,7 +227,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-memory-memoryrelay/0.18.5",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.25.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -269,30 +343,28 @@ export class MemoryRelayClient implements IMemoryRelayClient {
     options?: {
       deduplicate?: boolean;
       dedup_threshold?: number;
-      project?: string;
       importance?: number;
       tier?: string;
       scope?: string;
+      session_id?: string;
+      namespace?: string;
     },
   ): Promise<Memory> {
-    // Extract session_id from metadata if present and move to top-level
-    const { session_id, ...cleanMetadata } = metadata || {};
+    // The API keeps metadata verbatim and drops fields it does not know, so the
+    // plugin's own scoping (scope, session_id, namespace) lives in metadata where
+    // it survives a round trip and can be filtered on.
+    const { scope, session_id, namespace, ...apiOptions } = options || {};
+    const merged: Record<string, string> = { ...(metadata || {}) };
+    if (scope) merged.scope = scope;
+    if (session_id) merged.session_id = session_id;
+    if (namespace) merged.namespace = namespace;
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       content,
       agent_id: this.agentId,
-      ...options,
+      ...apiOptions,
     };
-
-    // Only include metadata if there's something left after extracting session_id
-    if (Object.keys(cleanMetadata).length > 0) {
-      payload.metadata = cleanMetadata;
-    }
-
-    // Add session_id as top-level parameter if provided
-    if (session_id) {
-      payload.session_id = session_id;
-    }
+    if (Object.keys(merged).length > 0) payload.metadata = merged;
 
     return this.request<Memory>("POST", "/v1/memories", payload);
   }
@@ -306,7 +378,6 @@ export class MemoryRelayClient implements IMemoryRelayClient {
       include_archived?: boolean;
       compress?: boolean;
       max_context_tokens?: number;
-      project?: string;
       tier?: string;
       min_importance?: number;
       scope?: string;
@@ -314,59 +385,37 @@ export class MemoryRelayClient implements IMemoryRelayClient {
       namespace?: string;
     },
   ): Promise<SearchResult[]> {
-    const params = new URLSearchParams({
-      q: query,
-      limit: String(limit),
-      threshold: String(threshold),
-    });
-    if (opts?.scope) params.set("scope", opts.scope);
-    if (opts?.session_id) params.set("session_id", opts.session_id);
-    if (opts?.namespace) params.set("namespace", opts.namespace);
-
-    // Build POST body from remaining options (existing search contract)
     const { scope, session_id, namespace, ...searchOptions } = opts || {};
+    const metadataFilter: Record<string, string> = {};
+    if (scope && scope !== "all") metadataFilter.scope = scope;
+    if (session_id) metadataFilter.session_id = session_id;
+    if (namespace) metadataFilter.namespace = namespace;
 
-    const response = await this.request<{ data: SearchResult[] }>(
-      "POST",
-      `/v1/memories/search?${params.toString()}`,
-      {
-        query,
-        limit,
-        threshold,
-        agent_id: this.agentId,
-        ...searchOptions,
-      },
-    );
+    const body: Record<string, unknown> = {
+      query,
+      limit: Math.min(Math.max(limit, 1), 100),
+      // The API's name for the similarity floor is min_score.
+      min_score: threshold,
+      agent_id: this.agentId,
+      ...searchOptions,
+    };
+    if (Object.keys(metadataFilter).length > 0) body.metadata_filter = metadataFilter;
+
+    const response = await this.request<{ data: SearchResult[] }>("POST", "/v1/memories/search", body);
     return response.data || [];
   }
 
-  async list(limit: number = 20, offset: number = 0, opts?: { scope?: string; include_embeddings?: boolean }): Promise<Memory[]> {
-    const cappedLimit = Math.min(limit, 100);
+  async list(limit: number = 20, offset: number = 0, opts?: { include_embeddings?: boolean }): Promise<Memory[]> {
+    // GET /v1/memories answers 422 above 50.
+    const cappedLimit = Math.min(Math.max(limit, 1), 50);
     let path = `/v1/memories?limit=${cappedLimit}&offset=${offset}&agent_id=${encodeURIComponent(this.agentId)}`;
-    if (opts?.scope) path += `&scope=${encodeURIComponent(opts.scope)}`;
     if (opts?.include_embeddings) path += `&include_embeddings=true`;
-    const response = await this.request<{ data: Memory[] }>(
-      "GET",
-      path,
-    );
+    const response = await this.request<{ data: Memory[] }>("GET", path);
     return response.data || [];
   }
 
   async get(id: string): Promise<Memory> {
     return this.request<Memory>("GET", `/v1/memories/${id}`);
-  }
-
-  /**
-   * Generate an embedding vector for the given text via the API.
-   * Used by ApiEmbeddingService for server-side query embedding.
-   * Requires POST /v1/embed endpoint (memoryrelay/api #375).
-   */
-  async embed(text: string, prefix: "search_query" | "search_document" = "search_query"): Promise<number[]> {
-    const response = await this.request<{ embedding: number[] }>("POST", "/v1/embed", {
-      text,
-      prefix,
-    });
-    return response.embedding;
   }
 
   async update(id: string, content: string, metadata?: Record<string, string>): Promise<Memory> {
@@ -394,7 +443,6 @@ export class MemoryRelayClient implements IMemoryRelayClient {
     limit?: number,
     threshold?: number,
     maxTokens?: number,
-    project?: string,
   ): Promise<any> {
     return this.request("POST", "/v1/memories/context", {
       query,
@@ -402,7 +450,6 @@ export class MemoryRelayClient implements IMemoryRelayClient {
       threshold,
       max_tokens: maxTokens,
       agent_id: this.agentId,
-      project,
     });
   }
 
@@ -420,7 +467,6 @@ export class MemoryRelayClient implements IMemoryRelayClient {
   async storeAsync(
     content: string,
     metadata?: Record<string, string>,
-    project?: string,
     importance?: number,
     tier?: string,
     webhook_url?: string,
@@ -433,7 +479,6 @@ export class MemoryRelayClient implements IMemoryRelayClient {
       agent_id: this.agentId,
     };
     if (metadata) body.metadata = metadata;
-    if (project) body.project = project;
     if (importance != null) body.importance = importance;
     if (tier) body.tier = tier;
     if (webhook_url) body.webhook_url = webhook_url;
@@ -469,7 +514,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
     if (options?.aiEnhanced != null) body.ai_enhanced = options.aiEnhanced;
     if (options?.searchMode) body.search_mode = options.searchMode;
     if (options?.excludeMemoryIds) body.exclude_memory_ids = options.excludeMemoryIds;
-    return this.request("POST", "/v2/context", body);
+    return this.request("POST", "/v2/context/build", body);
   }
 
   // --------------------------------------------------------------------------
@@ -533,281 +578,11 @@ export class MemoryRelayClient implements IMemoryRelayClient {
   }
 
   // --------------------------------------------------------------------------
-  // Session operations
-  // --------------------------------------------------------------------------
-
-  async startSession(
-    title?: string,
-    project?: string,
-    metadata?: Record<string, string>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/sessions", {
-      title,
-      project,
-      metadata,
-      agent_id: this.agentId,
-    });
-  }
-
-  async getOrCreateSession(
-    external_id: string,
-    agent_id?: string,
-    title?: string,
-    project?: string,
-    metadata?: Record<string, string>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/sessions/get-or-create", {
-      external_id,
-      agent_id: agent_id || this.agentId,
-      title,
-      project,
-      metadata,
-    });
-  }
-
-  async endSession(id: string, summary?: string): Promise<any> {
-    return this.request("PUT", `/v1/sessions/${id}/end`, { summary });
-  }
-
-  async getSession(id: string): Promise<any> {
-    return this.request("GET", `/v1/sessions/${id}`);
-  }
-
-  async listSessions(
-    limit: number = 20,
-    project?: string,
-    status?: string,
-  ): Promise<any> {
-    let path = `/v1/sessions?limit=${limit}`;
-    if (project) path += `&project=${encodeURIComponent(project)}`;
-    if (status) path += `&status=${encodeURIComponent(status)}`;
-    return this.request("GET", path);
-  }
-
-  // --------------------------------------------------------------------------
-  // Decision operations
-  // --------------------------------------------------------------------------
-
-  async recordDecision(
-    title: string,
-    rationale: string,
-    alternatives?: string,
-    project?: string,
-    tags?: string[],
-    status?: string,
-    metadata?: Record<string, string>,
-  ): Promise<any> {
-    return this.request("POST", "/v1/decisions", {
-      title,
-      rationale,
-      alternatives,
-      project_slug: project,
-      tags,
-      status,
-      metadata,
-      agent_id: this.agentId,
-    });
-  }
-
-  async listDecisions(
-    limit: number = 20,
-    project?: string,
-    status?: string,
-    tags?: string,
-  ): Promise<any> {
-    let path = `/v1/decisions?limit=${limit}`;
-    if (project) path += `&project=${encodeURIComponent(project)}`;
-    if (status) path += `&status=${encodeURIComponent(status)}`;
-    if (tags) path += `&tags=${encodeURIComponent(tags)}`;
-    return this.request("GET", path);
-  }
-
-  async supersedeDecision(
-    id: string,
-    title: string,
-    rationale: string,
-    alternatives?: string,
-    tags?: string[],
-  ): Promise<any> {
-    return this.request("POST", `/v1/decisions/${id}/supersede`, {
-      title,
-      rationale,
-      alternatives,
-      tags,
-    });
-  }
-
-  async checkDecisions(
-    query: string,
-    project?: string,
-    limit?: number,
-    threshold?: number,
-    includeSuperseded?: boolean,
-  ): Promise<any> {
-    const params = new URLSearchParams();
-    params.set("query", query);
-    if (project) params.set("project", project);
-    if (limit !== undefined) params.set("limit", String(limit));
-    if (threshold !== undefined) params.set("threshold", String(threshold));
-    if (includeSuperseded) params.set("include_superseded", "true");
-    return this.request("GET", `/v1/decisions/check?${params.toString()}`);
-  }
-
-  // --------------------------------------------------------------------------
-  // Pattern operations
-  // --------------------------------------------------------------------------
-
-  async createPattern(
-    title: string,
-    description: string,
-    category?: string,
-    exampleCode?: string,
-    scope?: string,
-    tags?: string[],
-    sourceProject?: string,
-  ): Promise<any> {
-    return this.request("POST", "/v1/patterns", {
-      title,
-      description,
-      category,
-      example_code: exampleCode,
-      scope,
-      tags,
-      source_project: sourceProject,
-    });
-  }
-
-  async searchPatterns(
-    query: string,
-    category?: string,
-    project?: string,
-    limit?: number,
-    threshold?: number,
-  ): Promise<any> {
-    const params = new URLSearchParams();
-    params.set("query", query);
-    if (category) params.set("category", category);
-    if (project) params.set("project", project);
-    if (limit !== undefined) params.set("limit", String(limit));
-    if (threshold !== undefined) params.set("threshold", String(threshold));
-    return this.request("GET", `/v1/patterns/search?${params.toString()}`);
-  }
-
-  async adoptPattern(id: string, project: string): Promise<any> {
-    return this.request("POST", `/v1/patterns/${id}/adopt`, { project });
-  }
-
-  async suggestPatterns(project: string, limit?: number): Promise<any> {
-    let path = `/v1/patterns/suggest?project=${encodeURIComponent(project)}`;
-    if (limit) path += `&limit=${limit}`;
-    return this.request("GET", path);
-  }
-
-  // --------------------------------------------------------------------------
-  // Project operations
-  // --------------------------------------------------------------------------
-
-  async registerProject(
-    slug: string,
-    name: string,
-    description?: string,
-    stack?: Record<string, unknown>,
-    repoUrl?: string,
-  ): Promise<any> {
-    return this.request("POST", "/v1/projects", {
-      slug,
-      name,
-      description,
-      stack,
-      repo_url: repoUrl,
-    });
-  }
-
-  async listProjects(limit: number = 20): Promise<any> {
-    return this.request("GET", `/v1/projects?limit=${limit}`);
-  }
-
-  async getProject(slug: string): Promise<any> {
-    return this.request("GET", `/v1/projects/${encodeURIComponent(slug)}`);
-  }
-
-  async addProjectRelationship(
-    from: string,
-    to: string,
-    type: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<any> {
-    return this.request("POST", `/v1/projects/${encodeURIComponent(from)}/relationships`, {
-      target_project: to,
-      relationship_type: type,
-      metadata,
-    });
-  }
-
-  async getProjectDependencies(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/dependencies`,
-    );
-  }
-
-  async getProjectDependents(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/dependents`,
-    );
-  }
-
-  async getProjectRelated(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/related`,
-    );
-  }
-
-  async projectImpact(project: string, changeDescription: string): Promise<any> {
-    return this.request(
-      "POST",
-      `/v1/projects/impact-analysis`,
-      { project, change_description: changeDescription },
-    );
-  }
-
-  async getSharedPatterns(projectA: string, projectB: string): Promise<any> {
-    const params = new URLSearchParams();
-    params.set("a", projectA);
-    params.set("b", projectB);
-    return this.request(
-      "GET",
-      `/v1/projects/shared-patterns?${params.toString()}`,
-    );
-  }
-
-  async getProjectContext(project: string): Promise<any> {
-    return this.request(
-      "GET",
-      `/v1/projects/${encodeURIComponent(project)}/context`,
-    );
-  }
-
-  // --------------------------------------------------------------------------
   // Health & stats
   // --------------------------------------------------------------------------
 
   async health(): Promise<{ status: string }> {
     return this.request<{ status: string }>("GET", "/v1/health");
-  }
-
-  /**
-   * Fetch current API quota usage.
-   * Returns null if the endpoint is not available (older API versions).
-   */
-  async quota(): Promise<{ used: number; limit: number; resetAt?: string } | null> {
-    try {
-      return await this.request<{ used: number; limit: number; resetAt?: string }>("GET", "/v1/quota");
-    } catch {
-      return null;
-    }
   }
 
   async stats(): Promise<Stats> {
@@ -827,7 +602,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
   async export(): Promise<Memory[]> {
     const allMemories: Memory[] = [];
     let offset = 0;
-    const limit = 100;
+    const limit = 50;
 
     while (true) {
       const batch = await this.list(limit, offset);
@@ -838,5 +613,201 @@ export class MemoryRelayClient implements IMemoryRelayClient {
     }
 
     return allMemories;
+  }
+
+  // --------------------------------------------------------------------------
+  // ICM: pinned context workspaces (/v2/icm). Same names as @memoryrelay/mcp-server.
+  // --------------------------------------------------------------------------
+
+  private async icmRequest<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<T> {
+    const fullPath = `/v2/icm${path}`;
+    const toolName = this.extractToolName(fullPath);
+    const startTime = Date.now();
+    const log = (status: "success" | "error", extra: Record<string, unknown>) => {
+      this.debugLogger?.log({
+        timestamp: new Date().toISOString(),
+        tool: toolName,
+        method,
+        path: fullPath,
+        duration: Date.now() - startTime,
+        status,
+        requestBody: body,
+        ...extra,
+      });
+    };
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(
+        `${this.apiUrl}${fullPath}`,
+        {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.25.0",
+            ...headers,
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        },
+        REQUEST_TIMEOUT_MS,
+      );
+    } catch (err) {
+      log("error", { error: String(err) });
+      this.statusReporter?.recordFailure(toolName, String(err));
+      throw err;
+    }
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as { code?: string; detail?: string };
+      const error = new IcmApiError(response.status, problem.code ?? "http_error", problem.detail ?? response.statusText);
+      log("error", { responseStatus: response.status, error: error.message });
+      this.statusReporter?.recordFailure(toolName, error.message);
+      throw error;
+    }
+    const result = (await response.json()) as T;
+    log("success", { responseStatus: response.status, responseBody: result });
+    this.statusReporter?.recordSuccess(toolName);
+    return result;
+  }
+
+  /** What the server supports for ICM; `{supported: false}` when it has none (404). */
+  async icmCapabilities(): Promise<{ supported: boolean; [key: string]: unknown }> {
+    try {
+      const caps = await this.icmRequest<Record<string, unknown>>("GET", "/capabilities");
+      return { supported: true, ...caps };
+    } catch (error) {
+      if (error instanceof IcmApiError && error.status === 404) return { supported: false };
+      throw error;
+    }
+  }
+
+  async icmListWorkspaces(): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", "/workspaces");
+  }
+
+  async icmGetWorkspace(workspaceId: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}`);
+  }
+
+  async icmGetRelease(workspaceId: string, releaseId: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/releases/${encodeURIComponent(releaseId)}`);
+  }
+
+  async icmBuildContext(workspaceId: string, request: IcmBuildRequest): Promise<Record<string, unknown>> {
+    return this.icmRequest("POST", `/workspaces/${encodeURIComponent(workspaceId)}/context/builds`, request);
+  }
+
+  /** Which workspace route a repo/step is bound to; `{match: null}` when none (no fallback). */
+  async icmResolve(request: { repo?: string; step?: string }): Promise<Record<string, unknown>> {
+    return this.icmRequest("POST", "/resolve", request);
+  }
+
+  /** The root: one row per repository the key's workspaces include, with the route bound to `step`. */
+  async icmRoot(step?: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", step ? `/root?step=${encodeURIComponent(step)}` : "/root");
+  }
+
+  /** Resolve a binding and build its route in one call (404 no_binding when unbound). */
+  async icmContextFor(request: { repo?: string; step?: string; budget?: number; runtime?: string }): Promise<Record<string, unknown>> {
+    return this.icmRequest("POST", "/context/builds:resolve", request);
+  }
+
+  async icmGetRun(workspaceId: string, runId: string): Promise<IcmRun> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/runs/${encodeURIComponent(runId)}`);
+  }
+
+  async icmGetReceipt(workspaceId: string, receiptId: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/receipts/${encodeURIComponent(receiptId)}`);
+  }
+
+  async icmGetChannel(workspaceId: string, channel: string): Promise<{ channel: string; release_id: string; revision: number }> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/channels/${encodeURIComponent(channel)}`);
+  }
+
+  async icmListRoutes(workspaceId: string, releaseId?: string): Promise<{ release_id: string; entry: string; compiled: boolean; routes: Array<{ id: string; [key: string]: unknown }> }> {
+    const query = releaseId ? `?release_id=${encodeURIComponent(releaseId)}` : "";
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/routes${query}`);
+  }
+
+  async icmSourceScan(workspaceId: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/source/scan`);
+  }
+
+  async icmScore(workspaceId: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/score`);
+  }
+
+  async icmMaintenance(workspaceId: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/maintenance`);
+  }
+
+  async icmCreateRun(
+    workspaceId: string,
+    body: { name: string; release_id?: string; channel?: string; pipeline?: string },
+    idempotencyKey: string,
+  ): Promise<IcmRun> {
+    return this.icmRequest("POST", `/workspaces/${encodeURIComponent(workspaceId)}/runs`, body, { "Idempotency-Key": idempotencyKey });
+  }
+
+  async icmTransition(
+    workspaceId: string,
+    runId: string,
+    stage: string,
+    body: { action: "start" | "submit"; expected_attempt: number },
+  ): Promise<IcmRun> {
+    return this.icmRequest(
+      "POST",
+      `/workspaces/${encodeURIComponent(workspaceId)}/runs/${encodeURIComponent(runId)}/stages/${encodeURIComponent(stage)}/transitions`,
+      body,
+    );
+  }
+
+  async icmPutArtifact(workspaceId: string, runId: string, path: string, content: string, expectedRevision?: number): Promise<Record<string, unknown>> {
+    return this.icmRequest(
+      "PUT",
+      `/workspaces/${encodeURIComponent(workspaceId)}/runs/${encodeURIComponent(runId)}/artifacts/${encodeArtifactPath(path)}`,
+      { content },
+      expectedRevision ? { "If-Match": `"${expectedRevision}"` } : { "If-None-Match": "*" },
+    );
+  }
+
+  async icmGetArtifact(workspaceId: string, runId: string, path: string): Promise<{ path: string; revision: number; sha256: string; content: string }> {
+    return this.icmRequest(
+      "GET",
+      `/workspaces/${encodeURIComponent(workspaceId)}/runs/${encodeURIComponent(runId)}/artifacts/${encodeArtifactPath(path)}`,
+    );
+  }
+
+  async icmGetDraft(workspaceId: string): Promise<Record<string, unknown>> {
+    return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/draft`);
+  }
+
+  async icmImportDraft(workspaceId: string, body: Record<string, unknown>, expectedRevision?: number): Promise<Record<string, unknown>> {
+    return this.icmRequest(
+      "POST",
+      `/workspaces/${encodeURIComponent(workspaceId)}/draft/imports`,
+      body,
+      expectedRevision !== undefined ? { "If-Match": `"${expectedRevision}"` } : undefined,
+    );
+  }
+
+  async icmProposeDraft(workspaceId: string, body: { expected_digest: string; title?: string; body?: string }): Promise<Record<string, unknown>> {
+    return this.icmRequest("POST", `/workspaces/${encodeURIComponent(workspaceId)}/draft/pull-request`, body);
+  }
+
+  async icmAddObservation(
+    workspaceId: string,
+    receiptId: string,
+    body: { event_id: string; kind: string; method: string; payload: Record<string, unknown>; observed_at: string },
+  ): Promise<Record<string, unknown>> {
+    return this.icmRequest(
+      "POST",
+      `/workspaces/${encodeURIComponent(workspaceId)}/receipts/${encodeURIComponent(receiptId)}/observations`,
+      body,
+    );
   }
 }

@@ -4,11 +4,10 @@ import type { MemoryRelayClient } from "../client/memoryrelay-client.js";
 
 export function registerV2Tools(
   api: OpenClawPluginApi,
-  config: PluginConfig,
+  _config: PluginConfig,
   client: MemoryRelayClient,
   isToolEnabled: (name: string) => boolean,
 ): void {
-  const defaultProject = config.defaultProject;
 
   // --------------------------------------------------------------------------
   // 40. memory_store_async
@@ -17,8 +16,7 @@ export function registerV2Tools(
     api.registerTool((_ctx) => ({
       name: "memory_store_async",
       description:
-        "Store a memory asynchronously using V2 API. Returns immediately (<50ms) with a job ID. Background workers generate the embedding. Use memory_status to poll for completion. Prefer this over memory_store for high-throughput or latency-sensitive applications." +
-        (defaultProject ? ` Project defaults to '${defaultProject}' if not specified.` : ""),
+        "Store a memory asynchronously using V2 API. Returns immediately (<50ms) with a job ID. Background workers generate the embedding. Use memory_status to poll for completion. Prefer this over memory_store for high-throughput or latency-sensitive applications.",
       parameters: {
         type: "object",
         properties: {
@@ -30,11 +28,6 @@ export function registerV2Tools(
             type: "object",
             description: "Optional key-value metadata to attach to the memory.",
             additionalProperties: { type: "string" },
-          },
-          project: {
-            type: "string",
-            description: "Project slug to associate with this memory (max 100 characters).",
-            maxLength: 100,
           },
           importance: {
             type: "number",
@@ -59,7 +52,6 @@ export function registerV2Tools(
         args: {
           content: string;
           metadata?: Record<string, string>;
-          project?: string;
           importance?: number;
           tier?: string;
           webhook_url?: string;
@@ -67,9 +59,7 @@ export function registerV2Tools(
       ) => {
         try {
           const { content, metadata, importance, tier, webhook_url } = args;
-          let project = args.project;
-          if (!project && defaultProject) project = defaultProject;
-          const result = await client.storeAsync(content, metadata, project, importance, tier, webhook_url);
+          const result = await client.storeAsync(content, metadata, importance, tier, webhook_url);
           return {
             content: [
               {

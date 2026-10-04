@@ -9,16 +9,8 @@ export const captureStore: CaptureStage = {
     const maxCapture = tier === "conservative" ? 1 : tier === "aggressive" ? 5 : 3;
     const toStore = input.messages.slice(0, maxCapture);
 
-    // Resolve session UUID for session-scoped storage
-    let sessionId: string | undefined;
-    if (ctx.sessionResolver) {
-      try {
-        const entry = await ctx.sessionResolver.resolve(ctx.requestCtx);
-        sessionId = entry.sessionId;
-      } catch {
-        // Continue without session_id if resolution fails
-      }
-    }
+    // The OpenClaw session key is the session id (the API keeps no sessions).
+    const sessionId: string | undefined = ctx.requestCtx.sessionKey || undefined;
 
     let buffered = false;
 
