@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-10-04
+
+### Fixed
+- **The plugin loads on OpenClaw 2026.9.** OpenClaw now refuses a plugin whose register function returns a promise (`plugin register must be synchronous`), and the plugin's default export was `async`, so 0.25.0 and earlier failed to load at all on 2026.9.1. Register is synchronous now; the startup health check and the first-run onboarding check run in the background and only log, as they did before when they failed. `tests/plugin-register.test.ts` asserts register returns nothing and has registered its tools by the time it does.
+
 ## [0.25.0] - 2026-10-04
 
 ### Changed

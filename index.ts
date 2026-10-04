@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.25.0
+ * Version: 0.25.1
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -288,7 +288,7 @@ function parseCommandArgs(input: string | undefined): { positional: string[]; fl
 // Plugin Export
 // ============================================================================
 
-export default async function plugin(api: OpenClawPluginApi): Promise<void> {
+export default function plugin(api: OpenClawPluginApi): void {
   const cfg = api.pluginConfig as MemoryRelayConfig | undefined;
 
   // --- Resolve config from plugin JSON + env vars ---
@@ -372,12 +372,13 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   };
 
   // --- Verify connection on startup ---
-  try {
-    await client.health();
-    api.logger.info(`memory-memoryrelay: connected to ${apiUrl}`);
-  } catch (err) {
-    api.logger.error(`memory-memoryrelay: health check failed: ${String(err)}`);
-  }
+  // Not awaited: OpenClaw 2026.9 rejects a register function that returns a
+  // promise ("plugin register must be synchronous"), so startup network calls
+  // run in the background and only log.
+  client.health().then(
+    () => api.logger.info(`memory-memoryrelay: connected to ${apiUrl}`),
+    (err) => api.logger.error(`memory-memoryrelay: health check failed: ${String(err)}`),
+  );
 
   // --- Local Cache + SyncDaemon (v0.17.0+) ---
   // Replaces the stub file hack from v0.16.x. LocalCache creates a real SQLite
@@ -521,32 +522,35 @@ export default async function plugin(api: OpenClawPluginApi): Promise<void> {
   // First-Run Onboarding
   // ========================================================================
 
-  try {
-    const onboardingCheck = await checkFirstRun(async () => {
-      const memories = await client.list(1);
-      return memories.length;
-    });
+  // Background, like the health check above: register must return synchronously.
+  void (async () => {
+    try {
+      const onboardingCheck = await checkFirstRun(async () => {
+        const memories = await client.list(1);
+        return memories.length;
+      });
 
-    if (onboardingCheck.shouldOnboard) {
-      await runSimpleOnboarding(
-        async (content, metadata) => {
-          const memory = await client.store(content, metadata || {});
-          return { id: memory.id };
-        },
-        "Welcome to MemoryRelay! This is your first memory. Use memory_store to add more.",
-        autoCaptureConfig.enabled,
-      );
+      if (onboardingCheck.shouldOnboard) {
+        await runSimpleOnboarding(
+          async (content, metadata) => {
+            const memory = await client.store(content, metadata || {});
+            return { id: memory.id };
+          },
+          "Welcome to MemoryRelay! This is your first memory. Use memory_store to add more.",
+          autoCaptureConfig.enabled,
+        );
 
-      const successMsg = generateSuccessMessage(
-        "Welcome to MemoryRelay! This is your first memory.",
-        autoCaptureConfig.enabled,
-      );
+        const successMsg = generateSuccessMessage(
+          "Welcome to MemoryRelay! This is your first memory.",
+          autoCaptureConfig.enabled,
+        );
 
-      api.logger.info?.(`\n${successMsg}`);
+        api.logger.info?.(`\n${successMsg}`);
+      }
+    } catch (err) {
+      api.logger.warn?.(`memory-memoryrelay: onboarding check failed: ${String(err)}`);
     }
-  } catch (err) {
-    api.logger.warn?.(`memory-memoryrelay: onboarding check failed: ${String(err)}`);
-  }
+  })();
 
   // ========================================================================
   // Gateway Methods (memory.probe, memory.status, memoryrelay.*)
