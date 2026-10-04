@@ -18,21 +18,9 @@ export const recallSearch: RecallStage = {
     const limit = ctx.config.recallLimit ?? 5;
     const threshold = ctx.config.recallThreshold ?? 0.3;
 
-    // Resolve session key to MemoryRelay session UUID
-    let sessionId: string | undefined;
-    if (ctx.sessionResolver) {
-      try {
-        const entry = await ctx.sessionResolver.resolve({
-          ...ctx.requestCtx,
-          sessionKey: resolvedSessionKey,
-        });
-        sessionId = entry.sessionId;
-      } catch {
-        sessionId = resolvedSessionKey;
-      }
-    } else {
-      sessionId = resolvedSessionKey;
-    }
+    // The OpenClaw session key is the session id: the API keeps no sessions,
+    // so memories carry it in metadata and are filtered on it.
+    const sessionId: string | undefined = resolvedSessionKey || undefined;
 
     // Local-first search: try local cache before API
     if (ctx.localCache) {

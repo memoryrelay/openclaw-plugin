@@ -1,6 +1,6 @@
 ---
 name: entity-and-context
-description: "Use when building relationship maps between people, organizations, projects, or concepts that appear across multiple memories, or when recalling information that benefits from entity connections rather than flat search."
+description: "Use when building relationship maps between people, organizations, products, technologies or concepts that appear across multiple memories, or when recalling information that benefits from entity connections rather than flat search."
 ---
 
 # Entity and Context
@@ -22,11 +22,12 @@ Entities turn flat memory storage into a connected knowledge graph. Create entit
 | Type | Examples |
 |------|----------|
 | `person` | Team members, stakeholders, external contacts |
-| `place` | Data centers, offices, deployment regions |
 | `organization` | Companies, departments, vendors |
-| `project` | Codebases, initiatives, products |
+| `location` | Data centers, offices, deployment regions |
+| `event` | Incidents, releases, meetings |
 | `concept` | Architecture patterns, business domains, protocols |
-| `other` | Anything that doesn't fit the above |
+| `technology` | Languages, frameworks, services |
+| `product` | Codebases, initiatives, products |
 
 ## When to Create Entities
 

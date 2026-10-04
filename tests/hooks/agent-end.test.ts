@@ -1,98 +1,59 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { extractDecisions, generateSessionSummary } from "../../src/hooks/agent-end.js";
-import type { ConversationMessage } from "../../src/pipelines/types.js";
+import { describe, test, expect, vi } from "vitest";
+import { registerAgentEnd } from "../../src/hooks/agent-end.js";
+import type { PluginConfig } from "../../src/pipelines/types.js";
 
-// ─── extractDecisions ────────────────────────────────────────────────────────
-describe("extractDecisions", () => {
-  test("returns empty array when no messages", () => {
-    expect(extractDecisions([])).toEqual([]);
+function fakeApi() {
+  const handlers: Record<string, (event: any) => Promise<unknown>> = {};
+  return {
+    api: {
+      on: (name: string, fn: (event: any) => Promise<unknown>) => { handlers[name] = fn; },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    } as any,
+    handlers,
+  };
+}
+
+function client() {
+  return {
+    search: vi.fn(async () => []),
+    list: vi.fn(async () => []),
+    store: vi.fn(async (content: string) => ({
+      id: "m1", content, agent_id: "a1", user_id: "u1", metadata: {}, entities: [],
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    })),
+  };
+}
+
+describe("registerAgentEnd", () => {
+  test("runs the capture pipeline when autoCapture is on; no sessions, no decisions", async () => {
+    const { api, handlers } = fakeApi();
+    const c = client();
+    const config: PluginConfig = { agentId: "a1", autoCapture: { enabled: true, tier: "aggressive" } } as PluginConfig;
+    registerAgentEnd(api, config, c as any);
+
+    await handlers["agent_end"]({
+      success: true,
+      prompt: "Please remember my editor preferences",
+      ctx: { sessionKey: "agent:a1:s-" + Math.random() },
+      messages: [
+        { role: "user", content: "Remember that I always prefer dark mode for my IDE, it matters to me." },
+        { role: "assistant", content: "Noted: dark mode it is." },
+      ],
+    });
+
+    expect(c.store).toHaveBeenCalled();
+    const [content, metadata] = (c.store as any).mock.calls[0];
+    expect(content).toContain("dark mode");
+    expect(metadata).toMatchObject({ source: "auto-capture" });
+    // Nothing else is called: the API keeps no sessions or decisions.
+    expect(Object.keys(c)).toEqual(["search", "list", "store"]);
   });
 
-  test("returns empty array for user-only messages", () => {
-    const msgs: ConversationMessage[] = [
-      { role: "user", content: "we decided to use PostgreSQL" },
-    ];
-    expect(extractDecisions(msgs)).toEqual([]);
-  });
-
-  test("detects decision keyword in assistant message", () => {
-    const msgs: ConversationMessage[] = [
-      { role: "user", content: "What database should we use? We need something with good scalability." },
-      { role: "assistant", content: "**Decision: PostgreSQL for the database**\n\nAfter comparing PostgreSQL vs MySQL vs MongoDB:\n\nPros:\n- Better scalability than MySQL\n- ACID compliance\n- Strong ecosystem\n\nCons:\n- Slightly more complex than MySQL\n\nWe decided to go with PostgreSQL because it offers the best balance of features for our needs." },
-    ];
-    const decisions = extractDecisions(msgs);
-    expect(decisions.length).toBeGreaterThan(0);
-    expect(decisions[0].title).toContain("PostgreSQL");
-  });
-
-  test("deduplicates identical sentences", () => {
-    const msgs: ConversationMessage[] = [
-      { role: "user", content: "What should we use?" },
-      { role: "assistant", content: "Decision: Use Redis for caching. After evaluation, we chose Redis for its performance benefits." },
-    ];
-    const decisions = extractDecisions(msgs);
-    // Should detect at least one decision (may detect both if different enough)
-    expect(decisions.length).toBeGreaterThanOrEqual(1);
-    expect(decisions.length).toBeLessThanOrEqual(2);
-  });
-
-  test("caps at 5 decisions", () => {
-    const content = [
-      "We decided to use Redis for caching.",
-      "We chose PostgreSQL for persistence.",
-      "We agreed on TypeScript for the backend.",
-      "The approach will be microservices architecture.",
-      "We decided on Docker for containerization.",
-      "We chose to use Next.js for the frontend.",
-    ].join(" ");
-    const msgs: ConversationMessage[] = [{ role: "assistant", content }];
-    const decisions = extractDecisions(msgs);
-    expect(decisions.length).toBeLessThanOrEqual(5);
-  });
-
-  test("skips sentences longer than 500 chars", () => {
-    const longSentence = "We decided " + "x".repeat(510);
-    const msgs: ConversationMessage[] = [{ role: "assistant", content: longSentence }];
-    const decisions = extractDecisions(msgs);
-    // The long sentence should be skipped
-    expect(decisions).toEqual([]);
-  });
-});
-
-// ─── generateSessionSummary ──────────────────────────────────────────────────
-describe("generateSessionSummary", () => {
-  test("returns default when no messages", () => {
-    expect(generateSessionSummary([])).toBe("Session completed.");
-  });
-
-  test("returns default when no significant assistant messages", () => {
-    const msgs: ConversationMessage[] = [
-      { role: "assistant", content: "Ok" },
-      { role: "user", content: "This is long enough but is user message" },
-    ];
-    expect(generateSessionSummary(msgs)).toBe("Session completed.");
-  });
-
-  test("uses last 3 assistant messages", () => {
-    const msgs: ConversationMessage[] = [
-      { role: "assistant", content: "First significant response with enough content here." },
-      { role: "assistant", content: "Second significant response with enough content here." },
-      { role: "assistant", content: "Third significant response with enough content here." },
-      { role: "assistant", content: "Fourth significant response with enough content here." },
-    ];
-    const summary = generateSessionSummary(msgs);
-    expect(summary).toContain("Second");
-    expect(summary).toContain("Third");
-    expect(summary).toContain("Fourth");
-    expect(summary).not.toContain("First");
-  });
-
-  test("truncates to 800 chars total", () => {
-    const msgs: ConversationMessage[] = [
-      { role: "assistant", content: "x".repeat(500) },
-      { role: "assistant", content: "y".repeat(500) },
-    ];
-    const summary = generateSessionSummary(msgs);
-    expect(summary.length).toBeLessThanOrEqual(800);
+  test("does nothing when autoCapture is off", async () => {
+    const { api, handlers } = fakeApi();
+    const c = client();
+    registerAgentEnd(api, { agentId: "a1", autoCapture: { enabled: false, tier: "off" } } as PluginConfig, c as any);
+    await handlers["agent_end"]({ success: true, prompt: "Please remember this", ctx: { sessionKey: "k" }, messages: [{ role: "user", content: "I always prefer tabs over spaces" }] });
+    expect(c.store).not.toHaveBeenCalled();
   });
 });

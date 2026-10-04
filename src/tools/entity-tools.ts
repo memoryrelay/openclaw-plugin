@@ -17,7 +17,7 @@ export function registerEntityTools(
 
         name: "entity_create",
         description:
-          "Create a named entity (person, place, organization, project, concept) for the knowledge graph. Entities help organize and connect memories.",
+          "Create a named entity (person, organization, location, event, concept, technology, product) for the knowledge graph. Entities help organize and connect memories.",
         parameters: {
           type: "object",
           properties: {
@@ -28,7 +28,7 @@ export function registerEntityTools(
             type: {
               type: "string",
               description: "Entity type classification.",
-              enum: ["person", "place", "organization", "project", "concept", "other"],
+              enum: ["person", "organization", "location", "event", "concept", "technology", "product"],
             },
             metadata: {
               type: "object",

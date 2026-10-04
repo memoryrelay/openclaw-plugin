@@ -1,8 +1,8 @@
 import { describe, test, expect, vi } from "vitest";
 import { recallSearch } from "../../../src/pipelines/recall/search.js";
-import type { PipelineContext, RecallInput, SessionResolverLike } from "../../../src/pipelines/types.js";
+import type { PipelineContext, RecallInput } from "../../../src/pipelines/types.js";
 
-function baseCtx(overrides?: { sessionResolver?: SessionResolverLike; localCache?: any }): PipelineContext {
+function baseCtx(overrides?: { localCache?: any }): PipelineContext {
   return {
     requestCtx: {
       sessionKey: "agent:main:abc", agentId: "a1", channel: null, trigger: null,
@@ -12,7 +12,7 @@ function baseCtx(overrides?: { sessionResolver?: SessionResolverLike; localCache
     config: { autoRecall: true, recallLimit: 5, recallThreshold: 0.3 } as any,
     client: {
       search: vi.fn(async () => []),
-      store: vi.fn(), list: vi.fn(), getOrCreateSession: vi.fn(), endSession: vi.fn(),
+      store: vi.fn(), list: vi.fn(),
     },
     ...overrides,
   };
@@ -28,7 +28,7 @@ function input(overrides?: Partial<RecallInput>): RecallInput {
 }
 
 describe("recallSearch", () => {
-  test("uses raw session key when no sessionResolver is provided", async () => {
+  test("session search carries the OpenClaw session key as session_id", async () => {
     const ctx = baseCtx();
     await recallSearch.execute(input(), ctx);
 
@@ -37,52 +37,20 @@ describe("recallSearch", () => {
     );
     expect(sessionCall).toBeDefined();
     expect(sessionCall[3].session_id).toBe("agent:main:abc");
-  });
-
-  test("resolves session UUID via sessionResolver", async () => {
-    const resolver: SessionResolverLike = {
-      resolve: vi.fn(async () => ({ sessionId: "uuid-1234", externalId: "agent:main:abc" })),
-    };
-    const ctx = baseCtx({ sessionResolver: resolver });
-    await recallSearch.execute(input(), ctx);
-
-    expect(resolver.resolve).toHaveBeenCalledTimes(1);
-    const sessionCall = (ctx.client.search as any).mock.calls.find(
-      (c: any[]) => c[3]?.scope === "session",
+    const longTermCall = (ctx.client.search as any).mock.calls.find(
+      (c: any[]) => c[3]?.scope === "long-term",
     );
-    expect(sessionCall[3].session_id).toBe("uuid-1234");
+    expect(longTermCall[3]).not.toHaveProperty("session_id");
   });
 
-  test("falls back to raw session key when sessionResolver throws", async () => {
-    const resolver: SessionResolverLike = {
-      resolve: vi.fn(async () => { throw new Error("network error"); }),
-    };
-    const ctx = baseCtx({ sessionResolver: resolver });
-    await recallSearch.execute(input(), ctx);
-
-    const sessionCall = (ctx.client.search as any).mock.calls.find(
-      (c: any[]) => c[3]?.scope === "session",
-    );
-    expect(sessionCall[3].session_id).toBe("agent:main:abc");
-  });
-
-  test("resolves with overridden resolvedSessionKey for subagent routing", async () => {
-    const resolver: SessionResolverLike = {
-      resolve: vi.fn(async (reqCtx) => ({
-        sessionId: `uuid-for-${reqCtx.sessionKey}`,
-        externalId: reqCtx.sessionKey,
-      })),
-    };
-    const ctx = baseCtx({ sessionResolver: resolver });
+  test("uses the overridden resolvedSessionKey for subagent routing", async () => {
+    const ctx = baseCtx();
     await recallSearch.execute(input({ resolvedSessionKey: "agent:main:parent-key" }), ctx);
 
-    expect(resolver.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionKey: "agent:main:parent-key" }),
-    );
     const sessionCall = (ctx.client.search as any).mock.calls.find(
       (c: any[]) => c[3]?.scope === "session",
     );
-    expect(sessionCall[3].session_id).toBe("uuid-for-agent:main:parent-key");
+    expect(sessionCall[3].session_id).toBe("agent:main:parent-key");
   });
 
   test("passes queryEmbedding from RecallInput to localCache.search()", async () => {

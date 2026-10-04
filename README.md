@@ -1,29 +1,29 @@
 # MemoryRelay AI
 
-**Engineering Knowledge Platform for OpenClaw**
+**Pinned context and persistent memory for OpenClaw agents**
 
-Persistent memory, architectural decisions, reusable patterns, and project orchestration for AI agents.
+ICM workspaces (versioned, stage-scoped instructions a person binds to a repository and step, built on the server within a token budget and pinned before each turn) plus long-term memory, entities and agents on `api.memoryrelay.net`.
 
 [![npm version](https://img.shields.io/npm/v/@memoryrelay/plugin-memoryrelay-ai.svg)](https://www.npmjs.com/package/@memoryrelay/plugin-memoryrelay-ai)
 [![OpenClaw Compatible](https://img.shields.io/badge/OpenClaw-2026.3.28+-blue.svg)](https://openclaw.ai)
 
 ## Why MemoryRelay?
 
-MemoryRelay is designed for engineering teams managing complex, long-running projects. It is not general-purpose Q&A memory.
+MemoryRelay separates two things other memory plugins blur together:
+
+- **Pinned context (ICM)** is the instruction set: a workspace a person maintains, versioned and verified, with routes bound to a repository and a workflow step. The plugin asks the server for the bound route's context before each turn and prepends it. A build that cannot fit its required context is blocked, never truncated, and memory search is never substituted for it.
+- **Memory** is evidence: facts, preferences and findings recalled by semantic search and captured from conversations under privacy tiers. It never becomes an instruction unless a person writes it into a workspace.
 
 | Feature | MemoryRelay | Mem0 | OpenClaw-Projects |
 |---------|------------|------|-------------------|
+| Pinned, versioned context per repository and step | Yes (22 ICM tools, receipts) | No | No |
 | Semantic search | Yes (pgvector) | Yes | No |
-| Sessions | Yes (auto-sync with OpenClaw sessions) | No | No |
-| Architectural Decision Records | Yes (record, check, supersede) | No | No |
-| Reusable patterns | Yes (create, adopt, suggest) | No | No |
-| Project orchestration | Yes (10 tools, dependency graphs) | No | Basic |
 | Entities / knowledge graph | Yes (create, link, graph) | Yes | No |
 | Multi-agent collaboration | Yes (agent scoping, subagent tracking) | Limited | No |
 | Auto-capture with privacy tiers | Yes (off/conservative/smart/aggressive) | Basic | No |
 | V2 Async Storage | Yes | No | No |
-| Direct commands | 17 | ~5 | 0 |
-| Lifecycle hooks | 14 | 0 | 0 |
+| Human-gated runs and drafts | Yes (an agent submits; a person approves, publishes or merges) | No | No |
+| Direct commands | 13 | ~5 | 0 |
 | Tools | 42 | ~10 | 0 |
 
 ## Quick Start
@@ -68,36 +68,61 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 
 ## Use Cases
 
-**Tech Lead** managing 3+ projects:
-- Record architectural decisions with `decision_record` so future agents (and teammates) check before re-deciding
-- Create reusable patterns (`pattern_create`) and adopt them across projects
-- Use `project_impact` to understand blast radius before cross-cutting changes
+**Tech Lead** keeping agents on the team's conventions:
+- Bind each repository and workflow step to a workspace route in MemoryRelay; every agent turn starts from the same pinned, versioned instructions, within a token budget
+- Read the receipts: what each build supplied and what the agent actually read
+- Let agents propose fixes to stale facts as pull requests (`icm_maintenance`, `icm_draft_propose`) that a person merges
 
 **DevOps Engineer**:
-- Store infrastructure decisions as ADRs: "Why we chose Fargate over ECS on EC2"
-- Capture runbooks and operational procedures as patterns
-- Track dependencies between services with `project_add_relationship`
+- Store infrastructure facts and incident findings as memories; recall them by meaning next time
+- Run human-gated pipelines: the agent writes a stage's outputs, a person approves at the review page before the next stage starts
+- Track services, vendors and technologies as entities linked to the memories that mention them
 
-**Solo Developer**:
-- Build a personal knowledge base of memories, entities, and decisions
-- Use `memory_recall` for semantic search across everything you have stored
-- Link entities to memories for a navigable knowledge graph
-
-**Coding Agent**:
-- Auto-capture learns from conversations without explicit tool calls
-- Pattern adoption ensures consistent code style across sessions
-- Session tracking provides continuity when context windows reset
+**Solo developer**:
+- Preferences and decisions captured automatically under privacy tiers, recalled on every turn
+- One workspace per project, pulled to a folder with `icm_pull` when working offline
 
 ## Features -- 42 Tools by Category
+
+Tool groups are selected with `enabledTools` (default: all). The `icm` group has the same 22 names, arguments and behaviour as `@memoryrelay/mcp-server` and the remote endpoint at `api.memoryrelay.net/mcp`.
+
+### ICM (22 tools) -- group: `icm`
+
+Pinned context workspaces (`/v2/icm`). Start with `icm_context_for`; a `no_binding` answer means a person has not bound this repository and step yet, and memory search is not a substitute. Nothing here approves, publishes or merges: a person does that at the `review_url` each tool returns.
+
+| Tool | Description |
+|------|-------------|
+| `icm_capabilities` | What the server supports for ICM, and who this key is |
+| `icm_workspace_list` | The workspaces this key can read, with its role in each |
+| `icm_root` | One row per repository the workspaces include, with the route bound to a step |
+| `icm_release_get` | An immutable release: manifest, pinned files, walk report |
+| `icm_route_list` | The routes compiled from a workspace's entry file |
+| `icm_context_build` | Build context for a target (entry, route, stage, record, notes, nodes, impact, repository) within a budget; records a receipt |
+| `icm_resolve` | Which workspace and route a repository and step are bound to |
+| `icm_context_for` | Resolve the binding and build its route in one call |
+| `icm_receipt_get` | What a build supplied (hashes, origins, hops) and what was observed |
+| `icm_source_scan` | What a Git workspace's repository holds (names only) |
+| `icm_score` | The workspace scorecard: before against after, facts past review, drift |
+| `icm_maintenance` | Facts to re-verify, including those of included repositories |
+| `icm_pull` | The command that writes a workspace to a local folder |
+| `icm_run_start` | Start a human-gated run pinned to one release |
+| `icm_stage_context` | Begin a stage and get its context package |
+| `icm_stage_write` | Write one stage output (revision-checked) |
+| `icm_stage_submit` | Hand a stage to a person for review |
+| `icm_run_status` | Per-stage state of a run |
+| `icm_report_reads` | Report which supplied files were read, against a receipt |
+| `icm_draft_get` | The workspace draft: changed files, digest, pull request |
+| `icm_draft_write` | Write files into the draft (never published) |
+| `icm_draft_propose` | Open or update the pull request a person merges, or point at the review page |
 
 ### Memory (9 tools) -- group: `memory`
 
 | Tool | Description |
 |------|-------------|
-| `memory_store` | Store a memory with optional project scoping, deduplication, importance, and tier |
-| `memory_recall` | Semantic search across memories with project/tier/importance filters |
+| `memory_store` | Store a memory with optional deduplication, importance, tier and scope |
+| `memory_recall` | Semantic search across memories with tier, importance and scope filters |
 | `memory_forget` | Delete a memory by ID or search query |
-| `memory_list` | List recent memories with pagination |
+| `memory_list` | List recent memories with pagination (up to 50 per page) |
 | `memory_get` | Retrieve a specific memory by ID |
 | `memory_update` | Update content of an existing memory |
 | `memory_batch_store` | Store multiple memories in one call |
@@ -108,7 +133,7 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 
 | Tool | Description |
 |------|-------------|
-| `entity_create` | Create a knowledge graph node (person, place, org, project, concept) |
+| `entity_create` | Create a knowledge graph node (person, organization, location, event, concept, technology, product) |
 | `entity_link` | Link an entity to a memory with a relationship label |
 | `entity_list` | List entities with pagination |
 | `entity_graph` | Explore an entity's neighborhood in the knowledge graph |
@@ -120,48 +145,6 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 | `agent_list` | List available agents |
 | `agent_create` | Create a new agent (memory namespace) |
 | `agent_get` | Get agent details by ID |
-
-### Session (4 tools) -- group: `session`
-
-| Tool | Description |
-|------|-------------|
-| `session_start` | Start a work session with title and project |
-| `session_end` | End a session with a summary |
-| `session_recall` | Get session details and timeline |
-| `session_list` | List sessions filtered by project or status |
-
-### Decision (4 tools) -- group: `decision`
-
-| Tool | Description |
-|------|-------------|
-| `decision_record` | Record an architectural decision with rationale and alternatives |
-| `decision_list` | List decisions filtered by project, status, or tags |
-| `decision_supersede` | Replace a decision with a new one (old is marked superseded) |
-| `decision_check` | Semantic search for existing decisions before making new ones |
-
-### Pattern (4 tools) -- group: `pattern`
-
-| Tool | Description |
-|------|-------------|
-| `pattern_create` | Create a reusable convention with example code |
-| `pattern_search` | Semantic search for established patterns |
-| `pattern_adopt` | Adopt an existing pattern for a project |
-| `pattern_suggest` | Get pattern suggestions based on project stack |
-
-### Project (10 tools) -- group: `project`
-
-| Tool | Description |
-|------|-------------|
-| `project_register` | Register a project with slug, name, stack, and repo URL |
-| `project_list` | List all registered projects |
-| `project_info` | Get project details |
-| `project_add_relationship` | Add relationship between projects (depends_on, extends, etc.) |
-| `project_dependencies` | List projects that a project depends on |
-| `project_dependents` | List projects that depend on a project |
-| `project_related` | List all related projects (any direction) |
-| `project_impact` | Analyze blast radius of a proposed change |
-| `project_shared_patterns` | Find patterns shared between two projects |
-| `project_context` | Load full project context (memories, decisions, patterns, sessions) |
 
 ### V2 Async (3 tools) -- group: `v2`
 
@@ -187,11 +170,7 @@ These slash commands bypass the LLM and execute immediately.
 |---------|-------------|
 | `/memory-search <query>` | Semantic search across stored memories |
 | `/memory-context` | Build ranked context bundle from memories |
-| `/memory-sessions` | List sessions (optional: `active`, `closed`, or project slug) |
-| `/memory-decisions` | List architectural decisions (optional: project slug) |
-| `/memory-patterns` | List or search patterns (optional: search query) |
 | `/memory-entities` | List entities (optional: entity type filter) |
-| `/memory-projects` | List registered projects |
 | `/memory-agents` | List registered agents |
 
 ### Diagnostic Commands
@@ -214,6 +193,9 @@ These slash commands bypass the LLM and execute immediately.
 
 ## ⚠️ Migration Notes
 
+### v0.25.0 — sessions, decisions, patterns and projects are gone; ICM is in (breaking change)
+The MemoryRelay API removed sessions, decisions, patterns, projects, `/v1/embed` and `/v1/quota`; this release removes the 23 tools, the skills and the `defaultProject`, `autoSessions` and `session*` settings that depended on them, and adds the `icm` group (22 tools) with automatic pinned context. Scoping (`scope`, `session_id`) now travels in memory metadata and is filtered server-side. `memory_list` pages at 50. Entity types are `person`, `organization`, `location`, `event`, `concept`, `technology`, `product`. The local cache's query-embedding provider is `nomic` or `none`; the `api` provider is gone with the endpoint.
+
 ### v0.20.0 — autoCapture is now opt-in (breaking change)
 `autoCapture` is **disabled by default** as of v0.20.0. If you were relying on automatic memory capture, add to your config:
 ```json
@@ -229,7 +211,7 @@ Also updated defaults: `recallLimit` 5→3, `recallThreshold` 0.3→0.5.
 openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
   "apiKey": "mem_prod_...",
   "agentId": "iris",
-  "defaultProject": "my-api",
+  "icm": { "repo": "memoryrelay/api", "step": "implement" },
   "autoRecall": true,
   "autoCapture": { "enabled": true, "tier": "smart", "confirmFirst": 5 }
 }'
@@ -240,15 +222,13 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
 | `apiKey` | string | -- | MemoryRelay API key |
 | `agentId` | string | -- | Unique agent identifier |
 | `apiUrl` | string | `https://api.memoryrelay.net` | API endpoint |
-| `defaultProject` | string | -- | Default project slug for sessions, decisions, and memories |
+| `icm` | object | `{ enabled: true, autoContext: true }` | Pinned context: `repo`, `step`, `tokenBudget`, `runtime`, `autoContext`, `enabled` (see below) |
 | `enabledTools` | string | `all` | Comma-separated tool groups to enable |
 | `autoRecall` | boolean | `true` | Inject relevant memories into context each turn |
 | `autoCapture` | boolean \| object | `true` | Auto-capture config (see tiers below) |
 | `recallLimit` | number | `5` | Max memories injected per turn (1-20) |
 | `recallThreshold` | number | `0.3` | Minimum similarity score for recall (0-1) |
 | `excludeChannels` | string[] | `[]` | Channel IDs to skip auto-recall |
-| `sessionTimeoutMinutes` | number | `120` | Idle time before session auto-close (10-1440) |
-| `sessionCleanupIntervalMinutes` | number | `30` | Stale session check interval (5-360) |
 | `localCache` | object | see below | Local SQLite cache configuration (v0.17.0+) |
 | `debug` | boolean | `false` | Enable debug logging of API calls |
 | `verbose` | boolean | `false` | Include request/response bodies in logs |
@@ -260,8 +240,10 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config '{
 |----------|---------|
 | `MEMORYRELAY_API_KEY` | `apiKey` |
 | `MEMORYRELAY_AGENT_ID` | `agentId` |
+| `MEMORYRELAY_ICM_REPO` | `icm.repo` |
+| `MEMORYRELAY_ICM_STEP` | `icm.step` |
+| `MEMORYRELAY_APP_URL` | Where review links point (default `https://app.memoryrelay.ai`) |
 | `MEMORYRELAY_API_URL` | `apiUrl` |
-| `MEMORYRELAY_DEFAULT_PROJECT` | `defaultProject` |
 
 ### Local Cache Configuration (v0.17.0+)
 
@@ -354,22 +336,20 @@ All data in transit is encrypted via HTTPS. The plugin communicates with `api.me
 ### Multi-Agent Support
 
 - Each agent has its own memory namespace via `agentId`
-- Projects, decisions, and patterns are shared across agents
+- ICM workspaces are shared: what a key can read is what a person granted it
 - Subagent spawning and completion are tracked via lifecycle hooks (`subagent_spawned`, `subagent_ended`)
 - Sender identity is auto-injected into memory metadata for traceability
 
 ### Lifecycle Hooks
 
-The plugin registers 14 lifecycle hooks:
+The plugin registers 12 lifecycle hooks:
 
 | Hook | Purpose |
 |------|---------|
-| `before_agent_start` | Auto-recall and workflow injection |
+| `before_agent_start` | Pinned ICM context (the bound route, built on the server) and workflow injection |
 | `agent_end` | Auto-capture from completed conversations |
-| `session_start` | Auto-create MemoryRelay session from OpenClaw session |
-| `session_end` | Auto-end MemoryRelay session |
 | `before_tool_call` | Reserved for future tool blocking/audit |
-| `after_tool_call` | Session activity tracking and metrics |
+| `after_tool_call` | Metrics |
 | `before_compaction` | Save key context before compaction |
 | `before_reset` | Save key context before session reset |
 | `message_received` | Activity timestamp updates |
@@ -381,12 +361,10 @@ The plugin registers 14 lifecycle hooks:
 
 ### Skills
 
-The plugin ships with 5 skills providing guided workflows on top of the raw tools:
+The plugin ships with 3 skills providing guided workflows on top of the raw tools:
 
-- `memory-workflow` — Session lifecycle, storing/retrieving memories
-- `decision-tracking` — ADR management, checking before deciding
-- `pattern-management` — Reusable conventions, search before create
-- `project-orchestration` — Multi-project context loading and impact analysis
+- `icm-context` — Pinned context first: resolve the binding, read the package, report reads, propose changes through drafts
+- `memory-workflow` — Storing and retrieving memories as evidence
 - `entity-and-context` — Knowledge graph, linking entities to memories
 
 ## Updating
