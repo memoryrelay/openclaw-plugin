@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-10-05
+
+### Fixed
+- **Tools register on OpenClaw 2026.9.** OpenClaw now rejects `registerTool` from a plugin whose manifest does not list the tool under `contracts.tools` ("plugin must declare contracts.tools before registering agent tools"), so on 2026.9 0.25.1 loaded with none of its 42 tools. `openclaw.plugin.json` declares them now, and `tests/manifest-contracts.test.ts` fails if the declared list and the tools the plugin registers ever differ.
+
 ## [0.25.1] - 2026-10-04
 
 ### Fixed
