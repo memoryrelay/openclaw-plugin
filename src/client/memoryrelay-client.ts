@@ -46,7 +46,7 @@ export class IcmApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
-    detail: string,
+    public readonly detail: string,
   ) {
     super(`ICM request failed: ${status} ${code} - ${detail}`);
     this.name = "IcmApiError";
@@ -227,7 +227,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.25.3",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.25.4",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -649,7 +649,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.25.3",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.25.4",
             ...headers,
           },
           body: body ? JSON.stringify(body) : undefined,
