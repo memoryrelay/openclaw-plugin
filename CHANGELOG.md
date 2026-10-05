@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-05
+
+### Added
+- **MemoryRelay joins OpenClaw's own memory instead of replacing it (OpenClaw 2026.9+).** The plugin registers a memory corpus supplement: memory-core's `memory_search(query, corpus="all")` now searches the local memory files and MemoryRelay together, merged by score, and `memory_get(path="memoryrelay:<id>", corpus="all")` reads one MemoryRelay memory with `from`/`lines` paging. Each hit carries `corpus: "memoryrelay"` and a `MemoryRelay` provenance label. A memory prompt supplement adds the how-to to the memory section of the system prompt. Sandboxed sessions get neither. `memorySupplement: false` turns it off; on older OpenClaw, which has no such registrar, it is a no-op. Code in `src/memory/corpus-supplement.ts`; tests in `tests/memory/corpus-supplement.test.ts`.
+
+### Changed (breaking)
+- **The plugin no longer claims the memory slot.** The manifest drops `kind: "memory"`. It never registered a memory capability, so holding the slot only pushed memory-core's aside (its `MEMORY.md` search, its dreaming) without putting anything in its place; and a single-kind memory plugin that does *not* hold the slot is disabled outright, so there was no way to run both. memory-core keeps the slot now. **If an earlier version put this plugin there, run `openclaw config set plugins.slots.memory memory-core`** before restarting the gateway.
+- **`memory_get` is memory-core's.** OpenClaw keeps the first registration of a tool name, so this plugin's `memory_get` was shadowed by memory-core's anyway. It is no longer registered or declared (41 tools); a MemoryRelay memory is read through memory-core's `memory_get` with `corpus="all"`.
+
 ## [0.25.4] - 2026-10-05
 
 ### Fixed

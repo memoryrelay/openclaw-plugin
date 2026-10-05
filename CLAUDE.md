@@ -37,6 +37,7 @@ npm run test:coverage # Coverage report (v8)
 - `src/client/memoryrelay-client.ts` — API client: memory, entities, agents, V2 async, and the `/v2/icm` methods (`icm*`, `IcmApiError`)
 - `src/tools/icm-tools.ts` — The 22 ICM tools: catalogue (`ICM_TOOLS`), dispatch (`callIcmTool`), registration with the `icm_unsupported` guard
 - `src/tools/` — memory, entity, agent, v2, health tool modules
+- `src/memory/corpus-supplement.ts` — MemoryRelay as a corpus of OpenClaw's own memory: `registerMemoryCorpusSupplement` (search + `memoryrelay:<id>` reads behind memory-core's `memory_search`/`memory_get` with `corpus="all"`) and `registerMemoryPromptSupplement`
 - `src/hooks/before-agent-start.ts` — Pinned context: `icm_context_for` for the configured repo/step, prepended with its receipt; then the workflow block
 - `src/hooks/before-prompt-build.ts` — Delegates to the recall pipeline (memory as evidence)
 - `src/hooks/agent-end.ts` — Delegates to the capture pipeline
@@ -50,9 +51,9 @@ npm run test:coverage # Coverage report (v8)
 - `src/status-reporter.ts`, `src/debug-logger.ts`, `src/heartbeat/daily-stats.ts`, `src/onboarding/first-run.ts`, `src/cli/stats-command.ts`
 - `skills/` — 3 SKILL.md files: `icm-context`, `memory-workflow`, `entity-and-context`
 
-## Tool Groups (42 total)
+## Tool Groups (41 total)
 
-icm (22), memory (9), entity (4), agent (3), v2 async (3), health (1)
+icm (22), memory (8), entity (4), agent (3), v2 async (3), health (1)
 
 ## Testing
 
@@ -72,6 +73,7 @@ icm (22), memory (9), entity (4), agent (3), v2 async (3), health (1)
 
 ## Gotchas
 
+- The manifest has no `kind`: a single-kind `memory` plugin is disabled whenever another plugin holds the memory slot, and this one never registered a memory capability, so claiming the slot only pushed memory-core aside. memory-core keeps the slot; this plugin supplements it. `memory_get` is memory-core's (OpenClaw keeps the first registration of a tool name).
 - Plugin ID is `plugin-memoryrelay-ai` (not `memory-memoryrelay`) — wrong ID causes "No install record" errors
 - `memory_batch_store` may return 500 on large batches — use individual `memory_store` as workaround
 - `logFile` config option is deprecated and ignored since v0.8.4 (security compliance)

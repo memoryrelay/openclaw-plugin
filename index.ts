@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.25.4
+ * Version: 0.26.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -81,6 +81,7 @@ import { registerAgentTools } from "./src/tools/agent-tools.js";
 import { registerV2Tools } from "./src/tools/v2-tools.js";
 import { registerHealthTools } from "./src/tools/health-tools.js";
 import { registerIcmTools, ICM_TOOL_NAMES } from "./src/tools/icm-tools.js";
+import { createMemoryRelayCorpusSupplement, memoryRelayPromptLines } from "./src/memory/corpus-supplement.js";
 
 // --- Heartbeat / Onboarding / CLI ---
 import {
@@ -127,6 +128,7 @@ interface MemoryRelayConfig {
   logFile?: string;
   maxLogEntries?: number;
   localCache?: Partial<LocalCacheConfig>;
+  memorySupplement?: boolean;
 }
 
 // ============================================================================
@@ -216,7 +218,7 @@ function extractRescueContent(messages: unknown[], blocklist: string[]): string[
 const TOOL_GROUPS: Record<string, string[]> = {
   memory: [
     "memory_store", "memory_recall", "memory_forget", "memory_list",
-    "memory_get", "memory_update", "memory_batch_store", "memory_context",
+    "memory_update", "memory_batch_store", "memory_context",
     "memory_promote",
   ],
   entity: ["entity_create", "entity_link", "entity_list", "entity_graph"],
@@ -498,7 +500,7 @@ export default function plugin(api: OpenClawPluginApi): void {
   registerPrivacyHooks(api, blocklist, isBlocklisted, redactSensitive);
 
   // ========================================================================
-  // Register Tools (6 modules, 42 tools total)
+  // Register Tools (6 modules, 41 tools total)
   // ========================================================================
 
   registerMemoryTools(api, pluginConfig, client, isToolEnabled);
@@ -508,6 +510,28 @@ export default function plugin(api: OpenClawPluginApi): void {
   registerHealthTools(api, pluginConfig, client, isToolEnabled);
   if (pluginConfig.icm?.enabled !== false) {
     registerIcmTools(api, pluginConfig, client, isToolEnabled);
+  }
+
+  // ========================================================================
+  // OpenClaw memory supplement (OpenClaw 2026.9+)
+  // ========================================================================
+  // memory-core keeps the memory slot, its MEMORY.md and dreaming; MemoryRelay
+  // joins it as one more corpus behind memory_search(corpus="all") and
+  // memory_get(path="memoryrelay:<id>", corpus="all"), plus a line in the
+  // memory section of the prompt saying so. Older OpenClaw has neither
+  // registrar, and then this is a no-op.
+  if (cfg?.memorySupplement !== false) {
+    const sdk = api as unknown as {
+      registerMemoryCorpusSupplement?: (supplement: unknown) => void;
+      registerMemoryPromptSupplement?: (builder: (params: { availableTools: Set<string>; sandboxed?: boolean }) => string[]) => void;
+    };
+    sdk.registerMemoryCorpusSupplement?.(
+      createMemoryRelayCorpusSupplement(client, {
+        threshold: pluginConfig.recallThreshold ?? 0.65,
+        log: api.logger,
+      }),
+    );
+    sdk.registerMemoryPromptSupplement?.(memoryRelayPromptLines);
   }
 
   // ========================================================================
