@@ -2,7 +2,7 @@
 
 ## Current Version
 
-- **Stable**: v0.27.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
+- **Stable**: v0.28.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
 
 ## Important Notes
 
@@ -38,7 +38,7 @@ npm run test:coverage # Coverage report (v8)
 - `src/tools/icm-tools.ts` — The 22 ICM tools: catalogue (`ICM_TOOLS`), dispatch (`callIcmTool`), registration with the `icm_unsupported` guard
 - `src/tools/` — memory, entity, agent, v2, health tool modules
 - `src/memory/corpus-supplement.ts` — MemoryRelay as a corpus of OpenClaw's own memory: `registerMemoryCorpusSupplement` (search + `memoryrelay:<id>` reads behind memory-core's `memory_search`/`memory_get` with `corpus="all"`), `combineCorpusSupplements`, and `registerMemoryPromptSupplement`
-- `src/memory/icm-corpus.ts` — ICM workspace files as a corpus (`icm:<workspace>/<file>`): live release fetched as a zip (`src/memory/zip.ts`), cached on disk by release id, searched locally (BM25 over heading sections)
+- `src/memory/icm-corpus.ts` — ICM workspace files as a corpus (`icm:<workspace>/<file>`): search on the server (`GET /v2/icm/search`); reads from the live release fetched as a zip (`src/memory/zip.ts`) and cached on disk by release id, which is also the local BM25 fallback when the server has no search route (404) or a call fails
 - `src/hooks/before-agent-start.ts` — Pinned context: `icm_context_for` for the configured repo/step, prepended with its receipt; then the workflow block
 - `src/hooks/before-prompt-build.ts` — Delegates to the recall pipeline (memory as evidence)
 - `src/hooks/agent-end.ts` — Delegates to the capture pipeline
