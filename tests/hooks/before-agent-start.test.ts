@@ -42,7 +42,7 @@ describe("registerBeforeAgentStart", () => {
     const handlers: Record<string, (e: any) => Promise<any>> = {};
     const api = { on: (n: string, fn: any) => { handlers[n] = fn; }, logger: { debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() } } as any;
     registerBeforeAgentStart(api, config, client, enabled, "iris");
-    return handlers["before_agent_start"]({ prompt: "Fix the failing test in the api", ctx: { sessionKey: "k" } });
+    return handlers["before_prompt_build"]({ prompt: "Fix the failing test in the api", ctx: { sessionKey: "k" } });
   }
 
   test("pinned context comes first, then the workflow; memory is evidence", async () => {

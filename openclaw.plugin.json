@@ -2,8 +2,8 @@
   "id": "plugin-memoryrelay-ai",
   "kind": "memory",
   "name": "MemoryRelay AI",
-  "description": "MemoryRelay v0.25.2 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
-  "version": "0.25.2",
+  "description": "MemoryRelay v0.25.3 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
+  "version": "0.25.3",
   "contracts": {
     "tools": [
       "agent_create",
