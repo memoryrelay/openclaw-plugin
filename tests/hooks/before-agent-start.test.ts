@@ -15,7 +15,7 @@ const ready = {
 describe("buildIcmContextBlock", () => {
   test("a ready build becomes a pinned block with the files and the receipt", async () => {
     const client = { icmContextFor: vi.fn(async () => ready) } as any;
-    const out = await buildIcmContextBlock(client, { repo: "memoryrelay/api", step: "fix", tokenBudget: 6000 }, log);
+    const out = (await buildIcmContextBlock(client, { repo: "memoryrelay/api", step: "fix", tokenBudget: 6000 }, log)) as { block: string; receiptId: string | null };
     expect(client.icmContextFor).toHaveBeenCalledWith({ repo: "memoryrelay/api", step: "fix", budget: 6000, runtime: undefined });
     expect(out?.receiptId).toBe("rc-1");
     expect(out?.block).toContain('<memoryrelay-icm receipt="rc-1" workspace="ws-1" route="fix"');
@@ -28,6 +28,21 @@ describe("buildIcmContextBlock", () => {
     const client = { icmContextFor: vi.fn(async () => { throw new IcmApiError(404, "no_binding", "none"); }) } as any;
     expect(await buildIcmContextBlock(client, {}, log)).toBeNull();
     expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  test("a decision-step route is the step to choose, not a failure", async () => {
+    log.warn.mockClear();
+    const detail = "Route 'triage' is a procedure step (read it whole, then take the row below that fits); it names no files to load";
+    const client = { icmContextFor: vi.fn(async () => { throw new IcmApiError(422, "route_not_buildable", detail); }) } as any;
+    expect(await buildIcmContextBlock(client, { repo: "memoryrelay/api" }, log)).toEqual({ decision: detail });
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  test("any other route_not_buildable is a configuration error and still warns", async () => {
+    log.warn.mockClear();
+    const client = { icmContextFor: vi.fn(async () => { throw new IcmApiError(422, "route_not_buildable", "Route 'fix' names unknown 'payments'"); }) } as any;
+    expect(await buildIcmContextBlock(client, { repo: "memoryrelay/api", step: "fix" }, log)).toBeNull();
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("names unknown"));
   });
 
   test("a blocked build pins nothing: never a truncated package", async () => {
@@ -61,6 +76,19 @@ describe("registerBeforeAgentStart", () => {
     const result = await run({ icm: { enabled: true, autoContext: true } } as PluginConfig, client);
     expect(result.prependContext).toContain("icm_context_for(repo, step)");
     expect(result.prependContext).toContain("do not substitute memory search");
+  });
+
+  test("a decision-step route tells the agent what the workspace says and to choose the step", async () => {
+    const detail = "Route 'triage' is a procedure step (read it whole, then take the row below that fits); it names no files to load";
+    const client = { icmContextFor: vi.fn(async () => { throw new IcmApiError(422, "route_not_buildable", detail); }) } as any;
+    const result = await run({ icm: { enabled: true, autoContext: true, repo: "memoryrelay/api" } } as PluginConfig, client);
+    const text: string = result.prependContext;
+    expect(text).not.toContain("<memoryrelay-icm");
+    expect(text).toContain("is a decision step, not files");
+    expect(text).toContain(detail);
+    expect(text).toContain("icm_route_list");
+    expect(text).toContain('icm_context_for(repo="memoryrelay/api", step="<that step>")');
+    expect(text).toContain("do not substitute memory search");
   });
 
   test("with ICM off there is no ICM call and only memory guidance", async () => {

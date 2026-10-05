@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.4] - 2026-10-05
+
+### Fixed
+- **A binding to a decision step tells the agent to choose the step.** A route such as `triage` ("read it whole, then take the row below that fits") names no files, so the server answers `422 route_not_buildable`. The hook treated that as a failed build: it logged a warning on every turn and told the agent to call `icm_context_for`, which failed the same way, without the workspace's own instruction. It is the route working as designed now: the workflow block quotes what the workspace says, points at `icm_route_list` for the steps, and asks the agent to call `icm_context_for` with the step that fits, at debug level. Other `route_not_buildable` answers (an unknown alias, a delegation loop) are configuration errors and still warn. `IcmApiError` keeps the server's `detail`.
+
 ## [0.25.3] - 2026-10-05
 
 ### Fixed
