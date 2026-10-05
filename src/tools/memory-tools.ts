@@ -405,42 +405,10 @@ export function registerMemoryTools(
     );
   }
 
-  // --------------------------------------------------------------------------
-  // 5. memory_get
-  // --------------------------------------------------------------------------
-  if (isToolEnabled("memory_get")) {
-    api.registerTool((ctx) => ({
-
-        name: "memory_get",
-        description: "Retrieve a specific memory by its ID.",
-        parameters: {
-          type: "object",
-          properties: {
-            id: {
-              type: "string",
-              description: "The memory ID (UUID) to retrieve.",
-            },
-          },
-          required: ["id"],
-        },
-        execute: async (_id, args: { id: string }) => {
-          try {
-            const memory = await client.get(args.id);
-            return {
-              content: [{ type: "text", text: JSON.stringify(memory, null, 2) }],
-              details: { memory },
-            };
-          } catch (err) {
-            return {
-              content: [{ type: "text", text: `Failed to get memory: ${String(err)}` }],
-              details: { error: String(err) },
-            };
-          }
-        },
-      }),
-      { name: "memory_get" },
-    );
-  }
+  // memory_get is memory-core's: OpenClaw 2026.9 keeps the first registration
+  // of a tool name, so ours was shadowed. A MemoryRelay memory is read through
+  // memory-core's memory_get(path="memoryrelay:<id>", corpus="all"), served
+  // by the corpus supplement (src/memory/corpus-supplement.ts).
 
   // --------------------------------------------------------------------------
   // 6. memory_update

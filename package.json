@@ -1,6 +1,6 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.25.4",
+  "version": "0.26.0",
   "description": "OpenClaw memory plugin for MemoryRelay - pinned ICM context (22 tools) plus persistent memory, entities, agents and V2 async storage",
   "type": "module",
   "main": "./dist/index.js",

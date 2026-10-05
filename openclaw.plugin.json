@@ -1,9 +1,8 @@
 {
   "id": "plugin-memoryrelay-ai",
-  "kind": "memory",
   "name": "MemoryRelay AI",
-  "description": "MemoryRelay v0.25.4 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
-  "version": "0.25.4",
+  "description": "MemoryRelay v0.26.0 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
+  "version": "0.26.0",
   "contracts": {
     "tools": [
       "agent_create",
@@ -39,7 +38,6 @@
       "memory_batch_store",
       "memory_context",
       "memory_forget",
-      "memory_get",
       "memory_health",
       "memory_list",
       "memory_promote",
@@ -148,6 +146,10 @@
       "placeholder": "8000",
       "advanced": true,
       "help": "Estimated-token budget for the pinned context (default: the route's own)"
+    },
+    "memorySupplement": {
+      "label": "Add to OpenClaw memory",
+      "help": "Make MemoryRelay a corpus of memory-core's memory_search and memory_get, alongside the local memory files"
     }
   },
   "configSchema": {
@@ -424,6 +426,11 @@
             "description": "Consuming runtime named in the receipt"
           }
         }
+      },
+      "memorySupplement": {
+        "type": "boolean",
+        "default": true,
+        "description": "Add MemoryRelay to OpenClaw's own memory: memory_search(corpus=\"all\") and memory_get(path=\"memoryrelay:<id>\", corpus=\"all\") reach it (OpenClaw 2026.9+)"
       }
     },
     "required": []

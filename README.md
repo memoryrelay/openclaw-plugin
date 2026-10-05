@@ -24,7 +24,7 @@ MemoryRelay separates two things other memory plugins blur together:
 | V2 Async Storage | Yes | No | No |
 | Human-gated runs and drafts | Yes (an agent submits; a person approves, publishes or merges) | No | No |
 | Direct commands | 13 | ~5 | 0 |
-| Tools | 42 | ~10 | 0 |
+| Tools | 41 | ~10 | 0 |
 
 ## Quick Start
 
@@ -45,6 +45,14 @@ cd ~/.openclaw/extensions/plugin-memoryrelay-ai && npm install --omit=dev
 Or install globally: `npm install -g better-sqlite3`
 
 > **Note:** If you skip this step, the plugin still works — it falls back to API-only mode (no local cache).
+
+**1c. Keep OpenClaw's own memory in the memory slot (0.26.0+)**
+
+MemoryRelay adds to OpenClaw's memory instead of replacing it, so `memory-core` keeps the slot. If an earlier version put this plugin there, put it back:
+
+```bash
+openclaw config set plugins.slots.memory memory-core
+```
 
 **2. Set your API key**
 
@@ -82,7 +90,19 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 - Preferences and decisions captured automatically under privacy tiers, recalled on every turn
 - One workspace per project, pulled to a folder with `icm_pull` when working offline
 
-## Features -- 42 Tools by Category
+## OpenClaw Memory Integration (OpenClaw 2026.9+)
+
+MemoryRelay joins OpenClaw's own memory as a **corpus supplement**: `memory-core` keeps its `MEMORY.md`, its memory files and its dreaming, and MemoryRelay's long-term memories are searched and read through the same tools.
+
+| Call | Searches / reads |
+|------|------------------|
+| `memory_search(query)` | Local memory files only (OpenClaw's default corpus) |
+| `memory_search(query, corpus="all")` | Local memory files **and** MemoryRelay, merged by score; MemoryRelay hits have paths `memoryrelay:<id>` |
+| `memory_get(path="memoryrelay:<id>", corpus="all")` | One MemoryRelay memory, with `from`/`lines` paging |
+
+A line in the memory section of the system prompt tells the agent this. Auto-recall and auto-capture keep working as before. Sandboxed sessions are not given MemoryRelay. Turn it off with `memorySupplement: false`.
+
+## Features -- 41 Tools by Category
 
 Tool groups are selected with `enabledTools` (default: all). The `icm` group has the same 22 names, arguments and behaviour as `@memoryrelay/mcp-server` and the remote endpoint at `api.memoryrelay.net/mcp`.
 
@@ -115,7 +135,7 @@ Pinned context workspaces (`/v2/icm`). Start with `icm_context_for`; a `no_bindi
 | `icm_draft_write` | Write files into the draft (never published) |
 | `icm_draft_propose` | Open or update the pull request a person merges, or point at the review page |
 
-### Memory (9 tools) -- group: `memory`
+### Memory (8 tools) -- group: `memory`
 
 | Tool | Description |
 |------|-------------|
@@ -123,7 +143,6 @@ Pinned context workspaces (`/v2/icm`). Start with `icm_context_for`; a `no_bindi
 | `memory_recall` | Semantic search across memories with tier, importance and scope filters |
 | `memory_forget` | Delete a memory by ID or search query |
 | `memory_list` | List recent memories with pagination (up to 50 per page) |
-| `memory_get` | Retrieve a specific memory by ID |
 | `memory_update` | Update content of an existing memory |
 | `memory_batch_store` | Store multiple memories in one call |
 | `memory_context` | Build a token-budget-aware context window from relevant memories |
