@@ -342,11 +342,19 @@ All data in transit is encrypted via HTTPS. The plugin communicates with `api.me
 
 ### Lifecycle Hooks
 
+On OpenClaw 2026.9 and later, conversation hooks (`before_prompt_build`, `agent_end`) only run for a non-bundled plugin once you allow it to read conversations:
+
+```bash
+openclaw config set plugins.entries.plugin-memoryrelay-ai.hooks.allowConversationAccess true
+```
+
+Without it the tools still work, but pinned ICM context, auto-recall and auto-capture do not run.
+
 The plugin registers 12 lifecycle hooks:
 
 | Hook | Purpose |
 |------|---------|
-| `before_agent_start` | Pinned ICM context (the bound route, built on the server) and workflow injection |
+| `before_prompt_build` | Pinned ICM context (the bound route, built on the server) and workflow injection, then auto-recall |
 | `agent_end` | Auto-capture from completed conversations |
 | `before_tool_call` | Reserved for future tool blocking/audit |
 | `after_tool_call` | Metrics |

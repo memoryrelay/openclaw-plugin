@@ -83,7 +83,12 @@ export function registerBeforeAgentStart(
   isToolEnabled: (name: string) => boolean,
   _agentId: string,
 ): void {
-  api.on("before_agent_start", async (event) => {
+  // OpenClaw 2026.9 removed before_agent_start (registering it is "unknown typed
+  // hook ... ignored"). before_prompt_build carries the same prompt/channel and
+  // merges prependContext across handlers in registration order; this one is
+  // registered before the recall hook so pinned context stays first. Like every
+  // conversation hook it runs only with hooks.allowConversationAccess=true.
+  api.on("before_prompt_build", async (event) => {
     if (!event.prompt || event.prompt.length < 10) {
       return;
     }

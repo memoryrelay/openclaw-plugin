@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-10-05
+
+### Fixed
+- **Pinned ICM context runs on OpenClaw 2026.9.** 2026.9 removed the `before_agent_start` hook and ignores a plugin that registers it (`unknown typed hook "before_agent_start" ignored`), so the pinned-context and workflow block never reached the agent. It is registered on `before_prompt_build` now, ahead of the recall handler; OpenClaw concatenates `prependContext` in that order, so pinned context still comes first. `tests/openclaw-hooks.test.ts` fails if the plugin registers any hook 2026.9 does not dispatch, or if recall gets ahead of pinned context.
+
+### Changed
+- **README: conversation access.** On 2026.9 conversation hooks (`before_prompt_build`, `agent_end`) only run for a non-bundled plugin with `plugins.entries.plugin-memoryrelay-ai.hooks.allowConversationAccess=true`; without it the tools work but pinned context, recall and capture do not.
+
 ## [0.25.2] - 2026-10-05
 
 ### Fixed
