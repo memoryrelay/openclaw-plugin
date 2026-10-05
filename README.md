@@ -92,15 +92,25 @@ Auto-recall and smart auto-capture are enabled by default. The plugin injects re
 
 ## OpenClaw Memory Integration (OpenClaw 2026.9+)
 
-MemoryRelay joins OpenClaw's own memory as a **corpus supplement**: `memory-core` keeps its `MEMORY.md`, its memory files and its dreaming, and MemoryRelay's long-term memories are searched and read through the same tools.
+MemoryRelay joins OpenClaw's own memory as a **corpus supplement**: `memory-core` keeps its `MEMORY.md`, its memory files and its dreaming, and MemoryRelay's long-term memories and the files of your ICM workspaces are searched and read through the same tools.
 
 | Call | Searches / reads |
 |------|------------------|
 | `memory_search(query)` | Local memory files only (OpenClaw's default corpus) |
-| `memory_search(query, corpus="all")` | Local memory files **and** MemoryRelay, merged by score; MemoryRelay hits have paths `memoryrelay:<id>` |
+| `memory_search(query, corpus="all")` | Local memory files, MemoryRelay **and** ICM workspace files, merged by score; MemoryRelay hits have paths `memoryrelay:<id>`, ICM hits `icm:<workspace>/<file>` with a line range |
 | `memory_get(path="memoryrelay:<id>", corpus="all")` | One MemoryRelay memory, with `from`/`lines` paging |
+| `memory_get(path="icm:<workspace>/<file>", corpus="all")` | One file of a workspace's live release, with `from`/`lines` paging |
 
-A line in the memory section of the system prompt tells the agent this. Auto-recall and auto-capture keep working as before. Sandboxed sessions are not given MemoryRelay. Turn it off with `memorySupplement: false`.
+A line in the memory section of the system prompt tells the agent this. Auto-recall and auto-capture keep working as before. Sandboxed sessions are given neither. Turn it all off with `memorySupplement: false`.
+
+**ICM files.** The API has no full-text search over ICM files, so the plugin searches them itself: it downloads each workspace's live release once as a zip, caches it under `~/.openclaw/memoryrelay/icm-cache/<release id>.json` (a release id names immutable content, so the cache is never stale), and ranks heading-bounded sections by keyword (BM25). It re-reads the live channels at most every 10 minutes and fetches a release only when a workspace's live release moved, removing the old one. Every workspace the key can read is included unless you narrow it, and a workspace with no live release is skipped:
+
+```bash
+openclaw config set plugins.entries.plugin-memoryrelay-ai.config.icm.corpus.workspaces '["memoryrelay-api","painlessmesh"]'
+openclaw config set plugins.entries.plugin-memoryrelay-ai.config.icm.corpus.enabled false   # ICM files out, memories stay
+```
+
+These are the files as people last published them, not pinned context: pinned context (`icm_context_for`, the bound route before each turn) is still how a step gets its instructions.
 
 ## Features -- 41 Tools by Category
 

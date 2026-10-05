@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-05
+
+### Added
+- **ICM workspace files join OpenClaw's memory.** `memory_search(query, corpus="all")` now also finds sections of the files of every ICM workspace the key can read, as hits with paths `icm:<workspace>/<file>`, a line range and an `ICM <workspace>` provenance label; `memory_get(path="icm:<workspace>/<file>", from, lines, corpus="all")` reads one. The API has no full-text search over ICM files, so the plugin downloads each workspace's live release once (`GET /v2/icm/workspaces/{id}/releases/{rid}/export`), caches it on disk by release id (`~/.openclaw/memoryrelay/icm-cache`, files 0600), and ranks heading-bounded sections with BM25. Live channels are re-read at most every 10 minutes; a moved release is fetched and the old cache file removed. Workspaces without a live release are skipped. `icm.corpus.workspaces` narrows the set; `icm.corpus.enabled: false` turns it off. The prompt line says ICM hits are the maintained answer where they disagree with a memory, and that pinned context is still the instruction set.
+
+### Changed
+- MemoryRelay and ICM are registered as one combined supplement (`combineCorpusSupplements`), because OpenClaw keeps one per plugin: search asks both in parallel and keeps the best by score, `memory_get` routes by path prefix, and one failing source does not hide the other.
+
 ## [0.26.0] - 2026-10-05
 
 ### Added

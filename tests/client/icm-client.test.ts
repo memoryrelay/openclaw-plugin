@@ -107,6 +107,20 @@ describe("ICM routes (/v2/icm)", () => {
     expect(sent(1).target).toEqual({ kind: "repository", alias: "api", route: "fix" });
   });
 
+  test("release export returns the zip bytes and raises IcmApiError when refused", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return url.includes("/releases/r-1/")
+        ? new Response(new Uint8Array([0x50, 0x4b, 5, 6]), { status: 200, headers: { "Content-Type": "application/zip" } })
+        : new Response(JSON.stringify({ detail: "No such release" }), { status: 404 });
+    }));
+    const bytes = await make().icmExportRelease("ws-1", "r-1");
+    expect(Array.from(bytes)).toEqual([0x50, 0x4b, 5, 6]);
+    expect(calls[0].url).toBe(`${API}/v2/icm/workspaces/ws-1/releases/r-1/export`);
+    expect((calls[0].init.headers as Record<string, string>).Authorization).toBe("Bearer mem_test");
+    await expect(make().icmExportRelease("ws-1", "r-2")).rejects.toBeInstanceOf(IcmApiError);
+  });
+
   test("artifact paths refuse traversal", async () => {
     await expect(make().icmGetArtifact("ws", "run", "../etc/passwd")).rejects.toThrow(/relative path/);
   });

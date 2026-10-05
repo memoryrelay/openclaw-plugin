@@ -105,6 +105,15 @@ describe("memory prompt lines", () => {
     expect(memoryRelayPromptLines({ availableTools: new Set(["memory_get"]) })).toEqual([]);
     expect(memoryRelayPromptLines({ availableTools: new Set(["memory_search"]), sandboxed: true })).toEqual([]);
   });
+
+  test("name the ICM files and how to open one when the ICM corpus is on", () => {
+    const off = memoryRelayPromptLines({ availableTools: new Set(["memory_search", "memory_get"]) }).join("\n");
+    expect(off).not.toContain("icm:");
+    const on = memoryRelayPromptLines({ availableTools: new Set(["memory_search", "memory_get"]), icm: true }).join("\n");
+    expect(on).toContain("icm:<workspace>/<file>");
+    expect(on).toContain('memory_get(path="icm:<workspace>/<file>"');
+    expect(on).toContain("the file is the current answer");
+  });
 });
 
 describe("plugin wiring", () => {
@@ -151,6 +160,21 @@ describe("plugin wiring", () => {
     expect(calls.tools).toContain("memory_recall");
   });
 
+  test("the ICM corpus joins by default and says so in the prompt", () => {
+    const calls = register({});
+    const lines = (calls.prompt[0] as (p: unknown) => string[])({ availableTools: new Set(["memory_search", "memory_get"]) });
+    expect(lines.join("\n")).toContain("icm:<workspace>/<file>");
+  });
+
+  test("icm.corpus.enabled: false (or icm off) keeps ICM files out of memory", () => {
+    for (const config of [{ icm: { corpus: { enabled: false } } }, { icm: { enabled: false } }]) {
+      const calls = register(config);
+      expect(calls.corpus).toHaveLength(1);
+      const lines = (calls.prompt[0] as (p: unknown) => string[])({ availableTools: new Set(["memory_search", "memory_get"]) });
+      expect(lines.join("\n")).not.toContain("icm:");
+    }
+  });
+
   test("memorySupplement: false leaves OpenClaw's memory alone", () => {
     const calls = register({ memorySupplement: false });
     expect(calls.corpus).toHaveLength(0);
@@ -161,5 +185,6 @@ describe("plugin wiring", () => {
     const manifest = JSON.parse(readFileSync(join(__dirname, "..", "..", "openclaw.plugin.json"), "utf8"));
     expect(manifest.kind).toBeUndefined();
     expect(manifest.configSchema.properties.memorySupplement.default).toBe(true);
+    expect(manifest.configSchema.properties.icm.properties.corpus.properties.enabled.default).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.26.0
+ * Version: 0.27.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -81,7 +81,13 @@ import { registerAgentTools } from "./src/tools/agent-tools.js";
 import { registerV2Tools } from "./src/tools/v2-tools.js";
 import { registerHealthTools } from "./src/tools/health-tools.js";
 import { registerIcmTools, ICM_TOOL_NAMES } from "./src/tools/icm-tools.js";
-import { createMemoryRelayCorpusSupplement, memoryRelayPromptLines } from "./src/memory/corpus-supplement.js";
+import {
+  combineCorpusSupplements,
+  createMemoryRelayCorpusSupplement,
+  memoryRelayPromptLines,
+  type MemoryCorpusSupplement,
+} from "./src/memory/corpus-supplement.js";
+import { IcmCorpus } from "./src/memory/icm-corpus.js";
 
 // --- Heartbeat / Onboarding / CLI ---
 import {
@@ -366,6 +372,7 @@ export default function plugin(api: OpenClawPluginApi): void {
       step: cfg?.icm?.step || process.env.MEMORYRELAY_ICM_STEP || undefined,
       tokenBudget: cfg?.icm?.tokenBudget,
       runtime: cfg?.icm?.runtime,
+      corpus: cfg?.icm?.corpus,
     },
     debug: cfg?.debug,
     verbose: cfg?.verbose,
@@ -520,18 +527,34 @@ export default function plugin(api: OpenClawPluginApi): void {
   // memory_get(path="memoryrelay:<id>", corpus="all"), plus a line in the
   // memory section of the prompt saying so. Older OpenClaw has neither
   // registrar, and then this is a no-op.
+  // ICM workspace files join the same way (icm:<workspace>/<file>): each
+  // workspace's live release is fetched once, cached on disk by release id and
+  // searched locally, since the API has no full-text search over ICM files.
   if (cfg?.memorySupplement !== false) {
     const sdk = api as unknown as {
       registerMemoryCorpusSupplement?: (supplement: unknown) => void;
       registerMemoryPromptSupplement?: (builder: (params: { availableTools: Set<string>; sandboxed?: boolean }) => string[]) => void;
     };
-    sdk.registerMemoryCorpusSupplement?.(
+    const sources: MemoryCorpusSupplement[] = [
       createMemoryRelayCorpusSupplement(client, {
         threshold: pluginConfig.recallThreshold ?? 0.65,
         log: api.logger,
       }),
-    );
-    sdk.registerMemoryPromptSupplement?.(memoryRelayPromptLines);
+    ];
+    const icmCorpusOn = pluginConfig.icm?.enabled !== false && pluginConfig.icm?.corpus?.enabled !== false;
+    if (icmCorpusOn && sdk.registerMemoryCorpusSupplement) {
+      const icmCorpus = new IcmCorpus(client, {
+        workspaces: pluginConfig.icm?.corpus?.workspaces,
+        cacheDir: join(homedir(), ".openclaw", "memoryrelay", "icm-cache"),
+        log: api.logger,
+      });
+      sources.push(icmCorpus);
+      // Warm the cache in the background; unref'd so a short CLI run exits
+      // without waiting for it.
+      setTimeout(() => void icmCorpus.refresh(), 2000).unref?.();
+    }
+    sdk.registerMemoryCorpusSupplement?.(sources.length === 1 ? sources[0] : combineCorpusSupplements(sources));
+    sdk.registerMemoryPromptSupplement?.((params) => memoryRelayPromptLines({ ...params, icm: sources.length > 1 }));
   }
 
   // ========================================================================
