@@ -227,7 +227,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.26.0",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.27.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -649,7 +649,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.26.0",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.27.0",
             ...headers,
           },
           body: body ? JSON.stringify(body) : undefined,
@@ -722,6 +722,30 @@ export class MemoryRelayClient implements IMemoryRelayClient {
 
   async icmGetReceipt(workspaceId: string, receiptId: string): Promise<Record<string, unknown>> {
     return this.icmRequest("GET", `/workspaces/${encodeURIComponent(workspaceId)}/receipts/${encodeURIComponent(receiptId)}`);
+  }
+
+  /**
+   * A release as one zip: every file at its path plus manifest.json. A release
+   * id names immutable content, so callers cache by it.
+   */
+  async icmExportRelease(workspaceId: string, releaseId: string): Promise<Uint8Array> {
+    const path = `/v2/icm/workspaces/${encodeURIComponent(workspaceId)}/releases/${encodeURIComponent(releaseId)}/export`;
+    const response = await fetchWithTimeout(
+      `${this.apiUrl}${path}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "User-Agent": "openclaw-plugin-memoryrelay-ai/0.27.0",
+        },
+      },
+      REQUEST_TIMEOUT_MS,
+    );
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as { code?: string; detail?: string };
+      throw new IcmApiError(response.status, problem.code ?? "http_error", problem.detail ?? response.statusText);
+    }
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   async icmGetChannel(workspaceId: string, channel: string): Promise<{ channel: string; release_id: string; revision: number }> {

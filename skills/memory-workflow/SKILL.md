@@ -23,6 +23,7 @@ Memory holds what was learned: preferences, facts, findings. It is recalled by s
 | Delete | `memory_forget(id_or_query)` | By ID or fuzzy search |
 | Browse | `memory_list(limit, offset)` | Chronological listing, 50 per page at most |
 | Read one | `memory_get(path="memoryrelay:<id>", corpus="all")` | Fetch by exact ID (OpenClaw's memory_get, served by MemoryRelay) |
+| Search team files | `memory_search(query, corpus="all")` | Also finds ICM workspace files (`icm:<workspace>/<file>`); open one with `memory_get(path, from, lines, corpus="all")`. Where a file and a memory disagree, the file wins |
 | Edit | `memory_update(id, content)` | Correct or expand existing |
 | Bulk save | `memory_batch_store(memories[])` | Efficient for multiple items |
 | Build prompt | `memory_context(query, max_tokens)` | Token-aware context window from memories (see `entity-and-context` skill) |

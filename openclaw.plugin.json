@@ -1,8 +1,8 @@
 {
   "id": "plugin-memoryrelay-ai",
   "name": "MemoryRelay AI",
-  "description": "MemoryRelay v0.26.0 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
-  "version": "0.26.0",
+  "description": "MemoryRelay v0.27.0 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
+  "version": "0.27.0",
   "contracts": {
     "tools": [
       "agent_create",
@@ -146,6 +146,15 @@
       "placeholder": "8000",
       "advanced": true,
       "help": "Estimated-token budget for the pinned context (default: the route's own)"
+    },
+    "icm.corpus.enabled": {
+      "label": "Search ICM files from memory",
+      "help": "Make the live files of your ICM workspaces searchable through memory_search(corpus=\"all\") (default: on)"
+    },
+    "icm.corpus.workspaces": {
+      "label": "ICM workspaces to search",
+      "advanced": true,
+      "help": "Workspace slugs or ids; empty means every workspace the key can read"
     },
     "memorySupplement": {
       "label": "Add to OpenClaw memory",
@@ -424,6 +433,23 @@
               "codex_cli"
             ],
             "description": "Consuming runtime named in the receipt"
+          },
+          "corpus": {
+            "type": "object",
+            "description": "ICM workspace files as a corpus of memory-core's memory_search/memory_get (corpus=\"all\"), paths icm:<workspace>/<file>. Needs memorySupplement.",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Search the live release of each workspace's files"
+              },
+              "workspaces": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Workspace slugs or ids to include (default: every workspace the key can read)"
+              }
+            }
           }
         }
       },

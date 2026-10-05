@@ -86,7 +86,8 @@ export interface PluginConfig {
  * ICM: pinned context workspaces (/v2/icm). `repo` and `step` name the binding
  * a person made in MemoryRelay for this agent; when unset the server resolves
  * from the key alone. `autoContext` injects the bound route's context before
- * each agent turn (default true).
+ * each agent turn (default true). `corpus` makes the live files of the
+ * workspaces searchable through OpenClaw's memory_search (default true).
  */
 export interface IcmConfig {
   enabled?: boolean;
@@ -95,6 +96,15 @@ export interface IcmConfig {
   step?: string;
   tokenBudget?: number;
   runtime?: string;
+  /** ICM files as a corpus of memory_search/memory_get (needs memorySupplement). */
+  corpus?: IcmCorpusConfig;
+}
+
+export interface IcmCorpusConfig {
+  /** Default true. */
+  enabled?: boolean;
+  /** Workspace slugs or ids to include; every workspace the key can read when empty. */
+  workspaces?: string[];
 }
 
 export interface StoreOptions {

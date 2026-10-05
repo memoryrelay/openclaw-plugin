@@ -2,7 +2,7 @@
 
 ## Current Version
 
-- **Stable**: v0.25.0 (rebuilt on the current MemoryRelay API: ICM plus memory)
+- **Stable**: v0.27.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
 
 ## Important Notes
 
@@ -37,7 +37,8 @@ npm run test:coverage # Coverage report (v8)
 - `src/client/memoryrelay-client.ts` — API client: memory, entities, agents, V2 async, and the `/v2/icm` methods (`icm*`, `IcmApiError`)
 - `src/tools/icm-tools.ts` — The 22 ICM tools: catalogue (`ICM_TOOLS`), dispatch (`callIcmTool`), registration with the `icm_unsupported` guard
 - `src/tools/` — memory, entity, agent, v2, health tool modules
-- `src/memory/corpus-supplement.ts` — MemoryRelay as a corpus of OpenClaw's own memory: `registerMemoryCorpusSupplement` (search + `memoryrelay:<id>` reads behind memory-core's `memory_search`/`memory_get` with `corpus="all"`) and `registerMemoryPromptSupplement`
+- `src/memory/corpus-supplement.ts` — MemoryRelay as a corpus of OpenClaw's own memory: `registerMemoryCorpusSupplement` (search + `memoryrelay:<id>` reads behind memory-core's `memory_search`/`memory_get` with `corpus="all"`), `combineCorpusSupplements`, and `registerMemoryPromptSupplement`
+- `src/memory/icm-corpus.ts` — ICM workspace files as a corpus (`icm:<workspace>/<file>`): live release fetched as a zip (`src/memory/zip.ts`), cached on disk by release id, searched locally (BM25 over heading sections)
 - `src/hooks/before-agent-start.ts` — Pinned context: `icm_context_for` for the configured repo/step, prepended with its receipt; then the workflow block
 - `src/hooks/before-prompt-build.ts` — Delegates to the recall pipeline (memory as evidence)
 - `src/hooks/agent-end.ts` — Delegates to the capture pipeline
@@ -72,6 +73,8 @@ icm (22), memory (8), entity (4), agent (3), v2 async (3), health (1)
 - API calls to `api.memoryrelay.net` with bearer token auth, 30s timeout, 3 retries with exponential backoff
 
 ## Gotchas
+
+- OpenClaw keeps **one corpus supplement per plugin** (a later registration replaces the earlier by plugin id). Every source goes through `combineCorpusSupplements`; never call `registerMemoryCorpusSupplement` twice.
 
 - The manifest has no `kind`: a single-kind `memory` plugin is disabled whenever another plugin holds the memory slot, and this one never registered a memory capability, so claiming the slot only pushed memory-core aside. memory-core keeps the slot; this plugin supplements it. `memory_get` is memory-core's (OpenClaw keeps the first registration of a tool name).
 - Plugin ID is `plugin-memoryrelay-ai` (not `memory-memoryrelay`) — wrong ID causes "No install record" errors
