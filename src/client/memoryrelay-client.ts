@@ -42,6 +42,26 @@ export interface Stats {
  * required_context_over_budget, ...); 404 on /capabilities means the server
  * has no ICM at all.
  */
+export interface IcmSearchHit {
+  workspace_id: string;
+  workspace_slug: string;
+  workspace_name: string;
+  release_id: string;
+  path: string;
+  heading: string;
+  start_line: number;
+  end_line: number;
+  snippet: string;
+  score: number;
+}
+
+export interface IcmSearchResponse {
+  query: string;
+  results: IcmSearchHit[];
+  searched: Array<{ workspace_id: string; release_id: string }>;
+  skipped: Array<{ workspace_id: string; reason: string }>;
+}
+
 export class IcmApiError extends Error {
   constructor(
     public readonly status: number,
@@ -227,7 +247,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.27.0",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.28.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -649,7 +669,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.27.0",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.28.0",
             ...headers,
           },
           body: body ? JSON.stringify(body) : undefined,
@@ -736,7 +756,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
         method: "GET",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          "User-Agent": "openclaw-plugin-memoryrelay-ai/0.27.0",
+          "User-Agent": "openclaw-plugin-memoryrelay-ai/0.28.0",
         },
       },
       REQUEST_TIMEOUT_MS,
@@ -746,6 +766,20 @@ export class MemoryRelayClient implements IMemoryRelayClient {
       throw new IcmApiError(response.status, problem.code ?? "http_error", problem.detail ?? response.statusText);
     }
     return new Uint8Array(await response.arrayBuffer());
+  }
+
+  /** Ranked sections of release files matching `query` (GET /v2/icm/search; API 2026-10-05+). */
+  async icmSearch(params: {
+    query: string;
+    workspaceIds?: string[];
+    releaseId?: string;
+    limit?: number;
+  }): Promise<IcmSearchResponse> {
+    const q = new URLSearchParams({ q: params.query });
+    for (const id of params.workspaceIds ?? []) q.append("workspace_id", id);
+    if (params.releaseId) q.set("release_id", params.releaseId);
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    return this.icmRequest("GET", `/search?${q.toString()}`);
   }
 
   async icmGetChannel(workspaceId: string, channel: string): Promise<{ channel: string; release_id: string; revision: number }> {

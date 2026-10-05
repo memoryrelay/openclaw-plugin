@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { readZipText } from "../../src/memory/zip.js";
 import { IcmCorpus, sectionsOf } from "../../src/memory/icm-corpus.js";
 import { combineCorpusSupplements, type MemoryCorpusSupplement } from "../../src/memory/corpus-supplement.js";
+import { IcmApiError, type IcmSearchResponse } from "../../src/client/memoryrelay-client.js";
 import { makeZip } from "./zip-fixture.js";
 
 const R1 = "a".repeat(64);
@@ -52,6 +53,10 @@ function fakeClient(state: { release: string; files: Record<string, string> }) {
       return { channel: "live", release_id: state.release, revision: 1 };
     }),
     icmExportRelease: vi.fn(async () => makeZip({ ...state.files, "manifest.json": "{}" }, { deflate: true })),
+    // A server from before GET /v2/icm/search: the corpus searches its own copy.
+    icmSearch: vi.fn(async (): Promise<IcmSearchResponse> => {
+      throw new IcmApiError(404, "not_found", "Not Found");
+    }),
   };
 }
 
@@ -183,6 +188,83 @@ describe("IcmCorpus", () => {
     const client = fakeClient({ release: R1, files: FILES });
     client.icmListWorkspaces.mockRejectedValue(new Error("down"));
     expect(await corpus(client).search({ query: "deploy" })).toEqual([]);
+  });
+});
+
+describe("IcmCorpus with server-side search", () => {
+  let cacheDir: string;
+  const log = { debug: vi.fn(), warn: vi.fn() };
+  beforeEach(() => {
+    cacheDir = join(mkdtempSync(join(tmpdir(), "icm-remote-")), "cache");
+    log.warn.mockClear();
+  });
+  const HIT = {
+    workspace_id: "ws-1",
+    workspace_slug: "api",
+    workspace_name: "MemoryRelay API",
+    release_id: R1,
+    path: "_shared/deploy.md",
+    heading: "Deploy",
+    start_line: 1,
+    end_line: 38,
+    snippet: "A merge to main   deploys production",
+    score: 0.61,
+  };
+  const answer = (results = [HIT]): IcmSearchResponse => ({ query: "q", results, searched: [], skipped: [] });
+
+  test("asks the API and maps its hits to citable icm: paths, without downloading anything", async () => {
+    const client = fakeClient({ release: R1, files: FILES });
+    client.icmSearch.mockResolvedValue(answer());
+    const hits = await new IcmCorpus(client, { cacheDir, log }).search({ query: "how is it deployed", maxResults: 50 });
+    expect(hits).toEqual([
+      {
+        corpus: "icm",
+        path: "icm:api/_shared/deploy.md",
+        title: "Deploy",
+        kind: "icm-file",
+        score: 0.61,
+        snippet: "A merge to main deploys production",
+        citation: "icm:api/_shared/deploy.md#L1-L38",
+        provenanceLabel: "ICM MemoryRelay API",
+        sourceType: "icm",
+        startLine: 1,
+        endLine: 38,
+      },
+    ]);
+    expect(client.icmSearch).toHaveBeenCalledWith({ query: "how is it deployed", workspaceIds: undefined, limit: 20 });
+  });
+
+  test("configured workspaces become ids; none readable means no call", async () => {
+    const client = fakeClient({ release: R1, files: FILES });
+    client.icmSearch.mockResolvedValue(answer([]));
+    await new IcmCorpus(client, { cacheDir, log, workspaces: ["api", "ws-3"] }).search({ query: "deploy" });
+    expect((client.icmSearch.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0]).toMatchObject({ workspaceIds: ["ws-1", "ws-3"] });
+    const none = fakeClient({ release: R1, files: FILES });
+    expect(await new IcmCorpus(none, { cacheDir, log, workspaces: ["nope"] }).search({ query: "deploy" })).toEqual([]);
+    expect(none.icmSearch).not.toHaveBeenCalled();
+  });
+
+  test("a 404 switches to the local copy for good; another failure only for that call", async () => {
+    const client = fakeClient({ release: R1, files: FILES });
+    const corpus = new IcmCorpus(client, { cacheDir, log });
+    expect((await corpus.search({ query: "rollback" }))[0].path).toBe("icm:api/_shared/deploy.md");
+    await corpus.search({ query: "rollback" });
+    expect(client.icmSearch).toHaveBeenCalledTimes(1);
+
+    const flaky = fakeClient({ release: R1, files: FILES });
+    flaky.icmSearch.mockRejectedValueOnce(new IcmApiError(503, "unavailable", "down")).mockResolvedValue(answer());
+    const c2 = new IcmCorpus(flaky, { cacheDir, log });
+    expect((await c2.search({ query: "rollback" }))[0].citation).toBe("icm:api/_shared/deploy.md#L3-L5");
+    expect(log.warn).toHaveBeenCalled();
+    expect((await c2.search({ query: "rollback" }))[0].citation).toBe("icm:api/_shared/deploy.md#L1-L38");
+  });
+
+  test("a sandboxed session or an empty query asks nothing", async () => {
+    const client = fakeClient({ release: R1, files: FILES });
+    const corpus = new IcmCorpus(client, { cacheDir, log });
+    expect(await corpus.search({ query: "deploy", sandboxed: true })).toEqual([]);
+    expect(await corpus.search({ query: "  the  " })).toEqual([]);
+    expect(client.icmSearch).not.toHaveBeenCalled();
   });
 });
 

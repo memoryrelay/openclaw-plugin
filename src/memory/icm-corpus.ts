@@ -4,16 +4,19 @@
 // "all") finds sections of the files of each workspace this key can read, and
 // memory_get(path="icm:<workspace>/<file>", corpus="all") reads one.
 //
-// The API has no full-text search over ICM files, so the plugin searches them
-// itself. Each workspace's live release is fetched once as a zip (one request)
-// and cached on disk under its release id; a release id names immutable
-// content, so a cached release is never stale. The live channel is re-read at
-// most every `refreshMs`; when it moves, the new release is fetched in the
-// background and the old cache file is removed.
+// Search goes to the API (`GET /v2/icm/search`, full-text over sections of
+// each live release, ranked on the server). Against a server without that
+// route (404) or when a call fails, the plugin searches its own copy instead.
+//
+// That copy is also what memory_get reads: each workspace's live release is
+// fetched once as a zip (one request) and cached on disk under its release id;
+// a release id names immutable content, so a cached release is never stale.
+// The live channel is re-read at most every `refreshMs`; when it moves, the
+// new release is fetched in the background and the old cache file is removed.
 
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { MemoryRelayClient } from "../client/memoryrelay-client.js";
+import { IcmApiError, type IcmSearchHit, type MemoryRelayClient } from "../client/memoryrelay-client.js";
 import { readZipText } from "./zip.js";
 import type { CorpusGetParams, CorpusGetResult, CorpusSearchParams, CorpusSearchResult } from "./corpus-supplement.js";
 
@@ -30,7 +33,7 @@ const STOPWORDS = new Set([
   "who", "why", "does", "into", "about", "your", "you", "our", "its", "not", "can", "use", "any", "all",
 ]);
 
-type Client = Pick<MemoryRelayClient, "icmListWorkspaces" | "icmGetChannel" | "icmExportRelease">;
+type Client = Pick<MemoryRelayClient, "icmListWorkspaces" | "icmGetChannel" | "icmExportRelease" | "icmSearch">;
 type Log = { debug?: (msg: string) => void; warn?: (msg: string) => void };
 
 interface Section {
@@ -109,6 +112,9 @@ function snippetOf(text: string): string {
 
 export class IcmCorpus {
   private readonly workspaces = new Map<string, LoadedWorkspace>();
+  /** false once the server answered 404 for /v2/icm/search: search locally from then on. */
+  private remoteSearch = true;
+  private wantedIdsCache: { at: number; ids: string[] } | null = null;
   private lastRefresh = 0;
   private refreshing: Promise<void> | null = null;
   private readonly refreshMs: number;
@@ -209,8 +215,65 @@ export class IcmCorpus {
     if (first) await Promise.race([pending, new Promise((r) => setTimeout(r, FIRST_LOAD_WAIT_MS))]);
   }
 
+  /** Ids of the configured workspaces; undefined when every readable one is wanted. */
+  private async wantedIds(): Promise<string[] | undefined> {
+    const only = this.opts.workspaces?.filter(Boolean) ?? [];
+    if (only.length === 0) return undefined;
+    const cached = this.wantedIdsCache;
+    if (cached && this.now() - cached.at < this.refreshMs) return cached.ids;
+    const listed = (await this.client.icmListWorkspaces()) as {
+      workspaces?: Array<{ id: string; slug: string; enabled?: boolean }>;
+    };
+    const ids = (listed.workspaces ?? []).filter((w) => w.enabled !== false && this.wanted(w)).map((w) => w.id);
+    this.wantedIdsCache = { at: this.now(), ids };
+    return ids;
+  }
+
+  private fromHit(hit: IcmSearchHit): CorpusSearchResult {
+    const path = `${ICM_PATH_PREFIX}${hit.workspace_slug}/${hit.path}`;
+    return {
+      corpus: ICM_CORPUS,
+      path,
+      title: hit.heading,
+      kind: "icm-file",
+      score: hit.score,
+      snippet: snippetOf(hit.snippet),
+      citation: `${path}#L${hit.start_line}-L${hit.end_line}`,
+      provenanceLabel: `ICM ${hit.workspace_name}`,
+      sourceType: ICM_CORPUS,
+      startLine: hit.start_line,
+      endLine: hit.end_line,
+    };
+  }
+
   async search(params: CorpusSearchParams): Promise<CorpusSearchResult[]> {
     if (params.sandboxed) return [];
+    const query = (params.query ?? "").trim();
+    if (tokenize(query).length === 0) return [];
+    const limit = Math.min(Math.max(params.maxResults ?? 10, 1), 20);
+    if (this.remoteSearch) {
+      let ids: string[] | undefined;
+      try {
+        ids = await this.wantedIds();
+        if (ids && ids.length === 0) return [];
+        const answer = await this.client.icmSearch({ query: query.slice(0, 500), workspaceIds: ids, limit });
+        // Keep the local copy warm for memory_get, without waiting for it.
+        void this.refresh();
+        return answer.results.map((hit) => this.fromHit(hit));
+      } catch (error) {
+        if (error instanceof IcmApiError && error.status === 404 && !ids?.length) {
+          this.remoteSearch = false;
+          this.opts.log.debug?.("memory-memoryrelay: server has no ICM search; searching the local copy");
+        } else {
+          this.opts.log.warn?.(`memory-memoryrelay: ICM search failed, using the local copy: ${String(error)}`);
+        }
+      }
+    }
+    return this.localSearch(params);
+  }
+
+  /** BM25 over the cached releases: the fallback when the server cannot search. */
+  private async localSearch(params: CorpusSearchParams): Promise<CorpusSearchResult[]> {
     const queryTerms = [...new Set(tokenize(params.query ?? ""))];
     if (queryTerms.length === 0) return [];
     await this.ready();

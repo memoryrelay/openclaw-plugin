@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-10-05
+
+### Changed
+- **ICM files are searched on the server.** `memory_search(corpus="all")` asks `GET /v2/icm/search` (MemoryRelay API from 2026-10-05): PostgreSQL full-text search over heading-bounded sections of each live release, with English stemming and headings weighted above the body, ranked there. The plugin's own keyword ranking had put the deploy runbook fourth for a deploy question on Jarvis. Hits keep their `icm:<workspace>/<file>` paths, line ranges and citations; `icm.corpus.workspaces` is sent as workspace ids. The downloaded copy of each release stays for `memory_get` and is the fallback: against a server without the route (404) the plugin searches it locally from then on, and a failed call falls back for that call only.
+
 ## [0.27.0] - 2026-10-05
 
 ### Added

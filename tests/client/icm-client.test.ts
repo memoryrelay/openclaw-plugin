@@ -121,6 +121,16 @@ describe("ICM routes (/v2/icm)", () => {
     await expect(make().icmExportRelease("ws-1", "r-2")).rejects.toBeInstanceOf(IcmApiError);
   });
 
+  test("search sends the query, repeated workspace ids and the limit to /v2/icm/search", async () => {
+    responder = () => ({ status: 200, body: { query: "deploy", results: [], searched: [], skipped: [] } });
+    await make().icmSearch({ query: "how is it deployed", workspaceIds: ["ws-1", "ws-2"], limit: 5 });
+    const url = new URL(calls[0].url);
+    expect(url.pathname).toBe("/v2/icm/search");
+    expect(url.searchParams.get("q")).toBe("how is it deployed");
+    expect(url.searchParams.getAll("workspace_id")).toEqual(["ws-1", "ws-2"]);
+    expect(url.searchParams.get("limit")).toBe("5");
+  });
+
   test("artifact paths refuse traversal", async () => {
     await expect(make().icmGetArtifact("ws", "run", "../etc/passwd")).rejects.toThrow(/relative path/);
   });
