@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.28.0
+ * Version: 0.29.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -14,7 +14,7 @@
  * Docs: https://memoryrelay.ai
  */
 
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,6 +88,7 @@ import {
   type MemoryCorpusSupplement,
 } from "./src/memory/corpus-supplement.js";
 import { IcmCorpus } from "./src/memory/icm-corpus.js";
+import { MemoryMdSync, resolveMemoryMdPath } from "./src/memory/memory-md-sync.js";
 
 // --- Heartbeat / Onboarding / CLI ---
 import {
@@ -135,7 +136,15 @@ interface MemoryRelayConfig {
   maxLogEntries?: number;
   localCache?: Partial<LocalCacheConfig>;
   memorySupplement?: boolean;
+  memoryMdSync?: { enabled?: boolean; path?: string; intervalMinutes?: number };
 }
+
+/**
+ * One MEMORY.md mirror per file per process: OpenClaw can register a plugin
+ * more than once in the same gateway, and two mirrors would race to store the
+ * same sections.
+ */
+const memoryMdMirrors = new Map<string, { sync: MemoryMdSync; timer?: ReturnType<typeof setInterval> }>();
 
 // ============================================================================
 // Auto-Capture Configuration Helpers
@@ -555,6 +564,43 @@ export default function plugin(api: OpenClawPluginApi): void {
     }
     sdk.registerMemoryCorpusSupplement?.(sources.length === 1 ? sources[0] : combineCorpusSupplements(sources));
     sdk.registerMemoryPromptSupplement?.((params) => memoryRelayPromptLines({ ...params, icm: sources.length > 1 }));
+  }
+
+  // ========================================================================
+  // MEMORY.md write-back (opt-in)
+  // ========================================================================
+  // memory-core's MEMORY.md (hand-curated, and where dreaming promotes) is
+  // mirrored into MemoryRelay section by section, so other agents can recall
+  // it. Started by the gateway only: a CLI run that loads the plugin does not
+  // sync.
+  if (cfg?.memoryMdSync?.enabled === true) {
+    api.on("gateway_start" as never, (() => {
+      const openclawHome = process.env.OPENCLAW_HOME || join(homedir(), ".openclaw");
+      const path = resolveMemoryMdPath({
+        configuredPath: cfg.memoryMdSync?.path,
+        openclawConfig: (api as unknown as { config?: unknown }).config,
+        agentId,
+        openclawHome,
+        exists: existsSync,
+      });
+      if (!path) {
+        api.logger.warn?.("memory-memoryrelay: memoryMdSync is on but no MEMORY.md was found for this agent");
+        return;
+      }
+      if (memoryMdMirrors.has(path)) return;
+      const sync = new MemoryMdSync(client, {
+        path,
+        statePath: join(openclawHome, "memoryrelay", "memory-md-sync.json"),
+        blocklist,
+        log: api.logger,
+      });
+      const minutes = Math.max(cfg.memoryMdSync?.intervalMinutes ?? 15, 1);
+      const timer = setInterval(() => void sync.sync(), minutes * 60_000);
+      timer.unref?.();
+      memoryMdMirrors.set(path, { sync, timer });
+      setTimeout(() => void sync.sync(), 5000).unref?.();
+      api.logger.info?.(`memory-memoryrelay: mirroring ${path} to MemoryRelay every ${minutes} min`);
+    }) as never);
   }
 
   // ========================================================================

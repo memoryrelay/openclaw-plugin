@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-10-05
+
+### Added
+- **MEMORY.md write-back (opt-in, `memoryMdSync.enabled`).** The agent's `MEMORY.md`, which memory-core keeps and dreaming promotes into, is mirrored into MemoryRelay so other agents and machines can recall it: one memory per heading section (keyed by heading path) and one per dreaming promotion (keyed by memory-core's `openclaw-memory-promotion` marker), tagged `source: memory-md` / `dreaming`. A local state file (0600) maps keys to content hashes and memory ids, so only new, edited and removed sections cause a request; memories the sync did not create are never touched, and an emptied file deletes nothing. Secrets are redacted before sending (private keys, API and bot tokens, JWTs, bearer tokens, credential assignments, plus the capture blocklist). It runs in the gateway only (`gateway_start`, then every 15 minutes), single-flight and behind a lock file. The file is resolved from the agent's workspace config. Why all of MEMORY.md and not only dreaming's promotions: promotions need memory-core's own `memory_search` to have recalled a candidate 3+ times, and on Jarvis dreaming has promoted 0 entries in 35 nights.
+
 ## [0.28.0] - 2026-10-05
 
 ### Changed

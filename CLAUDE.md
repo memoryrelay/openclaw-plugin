@@ -2,7 +2,7 @@
 
 ## Current Version
 
-- **Stable**: v0.28.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
+- **Stable**: v0.29.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
 
 ## Important Notes
 
@@ -39,6 +39,7 @@ npm run test:coverage # Coverage report (v8)
 - `src/tools/` — memory, entity, agent, v2, health tool modules
 - `src/memory/corpus-supplement.ts` — MemoryRelay as a corpus of OpenClaw's own memory: `registerMemoryCorpusSupplement` (search + `memoryrelay:<id>` reads behind memory-core's `memory_search`/`memory_get` with `corpus="all"`), `combineCorpusSupplements`, and `registerMemoryPromptSupplement`
 - `src/memory/icm-corpus.ts` — ICM workspace files as a corpus (`icm:<workspace>/<file>`): search on the server (`GET /v2/icm/search`); reads from the live release fetched as a zip (`src/memory/zip.ts`) and cached on disk by release id, which is also the local BM25 fallback when the server has no search route (404) or a call fails
+- `src/memory/memory-md-sync.ts` — MEMORY.md write-back (opt-in `memoryMdSync`): one MemoryRelay memory per heading section and per dreaming promotion, hash-diffed against a local state file, secrets redacted (`redactSecrets`); started on `gateway_start`, one mirror per file per process
 - `src/hooks/before-agent-start.ts` — Pinned context: `icm_context_for` for the configured repo/step, prepended with its receipt; then the workflow block
 - `src/hooks/before-prompt-build.ts` — Delegates to the recall pipeline (memory as evidence)
 - `src/hooks/agent-end.ts` — Delegates to the capture pipeline
@@ -74,6 +75,7 @@ icm (22), memory (8), entity (4), agent (3), v2 async (3), health (1)
 
 ## Gotchas
 
+- Dreaming promotes into MEMORY.md only what memory-core's own `memory_search` recalled 3+ times from 3+ queries. With auto-recall injecting MemoryRelay context, agents rarely call it, so promotions can stay at zero for weeks (Jarvis: 35 nights, 0 promoted). That is why the write-back mirrors all of MEMORY.md, not only promotions.
 - OpenClaw keeps **one corpus supplement per plugin** (a later registration replaces the earlier by plugin id). Every source goes through `combineCorpusSupplements`; never call `registerMemoryCorpusSupplement` twice.
 
 - The manifest has no `kind`: a single-kind `memory` plugin is disabled whenever another plugin holds the memory slot, and this one never registered a memory capability, so claiming the slot only pushed memory-core aside. memory-core keeps the slot; this plugin supplements it. `memory_get` is memory-core's (OpenClaw keeps the first registration of a tool name).

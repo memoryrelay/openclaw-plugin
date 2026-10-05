@@ -247,7 +247,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.28.0",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.29.0",
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -669,7 +669,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.28.0",
+            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.29.0",
             ...headers,
           },
           body: body ? JSON.stringify(body) : undefined,
@@ -756,7 +756,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
         method: "GET",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          "User-Agent": "openclaw-plugin-memoryrelay-ai/0.28.0",
+          "User-Agent": "openclaw-plugin-memoryrelay-ai/0.29.0",
         },
       },
       REQUEST_TIMEOUT_MS,

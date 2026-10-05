@@ -1,8 +1,8 @@
 {
   "id": "plugin-memoryrelay-ai",
   "name": "MemoryRelay AI",
-  "description": "MemoryRelay v0.28.0 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
-  "version": "0.28.0",
+  "description": "MemoryRelay v0.29.0 - Pinned ICM context for the repository and step a person bound, plus long-term memory, entities, agents and V2 async storage (api.memoryrelay.net)",
+  "version": "0.29.0",
   "contracts": {
     "tools": [
       "agent_create",
@@ -159,6 +159,15 @@
     "memorySupplement": {
       "label": "Add to OpenClaw memory",
       "help": "Make MemoryRelay a corpus of memory-core's memory_search and memory_get, alongside the local memory files"
+    },
+    "memoryMdSync.enabled": {
+      "label": "Mirror MEMORY.md to MemoryRelay",
+      "help": "Send each section of the agent's MEMORY.md (and each entry dreaming promotes) to MemoryRelay so other agents can recall it; only changed sections are re-sent (default: off)"
+    },
+    "memoryMdSync.path": {
+      "label": "MEMORY.md path",
+      "advanced": true,
+      "help": "Defaults to the agent's workspace"
     }
   },
   "configSchema": {
@@ -446,7 +455,9 @@
               },
               "workspaces": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Workspace slugs or ids to include (default: every workspace the key can read)"
               }
             }
@@ -457,6 +468,29 @@
         "type": "boolean",
         "default": true,
         "description": "Add MemoryRelay to OpenClaw's own memory: memory_search(corpus=\"all\") and memory_get(path=\"memoryrelay:<id>\", corpus=\"all\") reach it (OpenClaw 2026.9+)"
+      },
+      "memoryMdSync": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Mirror memory-core's MEMORY.md into MemoryRelay, one memory per heading section (and per dreaming promotion), so other agents can recall it. Off by default: it sends a local file to the API. Secrets are redacted first.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Mirror MEMORY.md (runs in the gateway, not in CLI commands)"
+          },
+          "path": {
+            "type": "string",
+            "description": "MEMORY.md to mirror (default: the agent's workspace, then the default workspace, then ~/.openclaw/workspace)"
+          },
+          "intervalMinutes": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1440,
+            "default": 15,
+            "description": "How often to check the file for changes"
+          }
+        }
       }
     },
     "required": []

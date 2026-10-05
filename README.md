@@ -112,6 +112,19 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config.icm.corpus.enab
 
 These are the files as people last published them, not pinned context: pinned context (`icm_context_for`, the bound route before each turn) is still how a step gets its instructions.
 
+### MEMORY.md write-back (opt-in)
+
+The other direction: the agent's own `MEMORY.md` (hand-curated, and where dreaming promotes entries) mirrored into MemoryRelay, so other agents and machines can recall what this one knows.
+
+```bash
+openclaw config set plugins.entries.plugin-memoryrelay-ai.config.memoryMdSync.enabled true
+```
+
+- One memory per heading section, keyed by its heading path (`Infrastructure › NorthRelay Production`), and one per entry dreaming promotes, keyed by memory-core's promotion marker. Metadata: `source` (`memory-md` or `dreaming`), `memory_md_key`, `memory_md_file`.
+- Only what changed is sent: a local state file (`~/.openclaw/memoryrelay/memory-md-sync.json`, 0600) maps each key to its content hash and memory id. A new section is stored, an edited one updated in place, a removed one deleted. Memories the sync did not create are never touched. An emptied file deletes nothing.
+- **Secrets are redacted before anything is sent**: private keys, `mem_`/`imk_`, GitHub, OpenAI/Anthropic, Slack, AWS and Telegram tokens, JWTs, bearer tokens, `password`/`token`/`api_key`-style assignments, and your `autoCapture.blocklist`.
+- It runs in the gateway (at start, then every `memoryMdSync.intervalMinutes`, default 15), never in a CLI command, with a lock so two processes do not sync at once. The file is found in the agent's workspace (`agents.entries.<agentId>.workspace`), then `agents.defaults.workspace`, then `~/.openclaw/workspace`; `memoryMdSync.path` overrides.
+
 ## Features -- 41 Tools by Category
 
 Tool groups are selected with `enabledTools` (default: all). The `icm` group has the same 22 names, arguments and behaviour as `@memoryrelay/mcp-server` and the remote endpoint at `api.memoryrelay.net/mcp`.
