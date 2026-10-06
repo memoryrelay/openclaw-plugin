@@ -96,6 +96,29 @@ describe("redactSecrets", () => {
     expect(out).toContain("The API listens on port 3000 and the password policy is strict.");
   });
 
+  test("the shapes found in a real MEMORY.md (dry run on Jarvis, 0.29.0)", () => {
+    const hex = "f3c1".repeat(16);
+    const pw = "da5e".repeat(16);
+    const text = [
+      `- **API Key**: ${hex} (Jarvis Scanner)`,
+      `- **Stalwart admin**: \`curl -sk 'https://127.0.0.1:8443/api' -u 'admin:${pw}'\``,
+      "- **Client Secret** = abcdefgh12345678",
+      "- DB: postgresql://memrelay:s3cretPassw0rd@db:5432/memory",
+      "- **Server**: 51.161.10.58:2222 (ubuntu, key: ~/.ssh/id_northrelay)",
+      "- **Agent ID**: a9200000-0000-4000-8000-000000000000",
+    ].join("\n");
+    const out = redactSecrets(text);
+    expect(out).not.toContain(hex);
+    expect(out).not.toContain(pw);
+    expect(out).not.toContain("abcdefgh12345678");
+    expect(out).not.toContain("s3cretPassw0rd");
+    expect(out).toContain("-u 'admin:[REDACTED]'");
+    expect(out).toContain("postgresql://memrelay:[REDACTED]@db:5432/memory");
+    // Not secrets: addresses, key file names and ids stay.
+    expect(out).toContain("51.161.10.58:2222 (ubuntu, key: ~/.ssh/id_northrelay)");
+    expect(out).toContain("a9200000-0000-4000-8000-000000000000");
+  });
+
   test("applies the capture blocklist too", () => {
     expect(redactSecrets("my ssn: 123", ["ssn\\s*[:=]"])).toBe("my [REDACTED] 123");
   });

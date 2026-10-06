@@ -2,7 +2,7 @@
 
 ## Current Version
 
-- **Stable**: v0.29.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
+- **Stable**: v0.29.1 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
 
 ## Important Notes
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-10-06
+
+### Fixed
+- **MEMORY.md write-back redacts the credentials a real knowledge base holds.** A dry run of 0.29.0's parser and redaction against Jarvis's `MEMORY.md` (with the sync still off, so nothing was sent) found three shapes that passed through: a key written as `**API Key**: <64 hex>` (the label pattern expected `api_key`/`api-key`, not a space), a `curl -u 'admin:<password>'` basic-auth flag, and long hex values in general. Redaction now also covers label variants with spaces (`API Key`, `Client Secret`, `credentials`), `-u`/`--user` basic auth, `scheme://user:pass@` URLs and any bare hex run of 32+ characters (a commit SHA is redacted too; that is the cheaper mistake). Addresses, key file names and ids are kept. The shapes are pinned in `tests/memory/memory-md-sync.test.ts`.
+
 ## [0.29.0] - 2026-10-05
 
 ### Added

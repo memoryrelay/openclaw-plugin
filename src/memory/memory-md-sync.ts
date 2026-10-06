@@ -44,10 +44,17 @@ const SECRET_PATTERNS: RegExp[] = [
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g,
   /\b\d{8,10}:[A-Za-z0-9_-]{30,}/g, // Telegram bot token
   /\b(Bearer)\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
+  // Bare hex of 32+ characters: API keys, admin passwords and hashes written as
+  // values. A commit SHA goes too; losing it is the cheaper mistake.
+  /\b[0-9a-f]{32,}\b/gi,
 ];
+/** `curl -u 'user:pass'` / `--user user:pass`: keep the user, drop the password. */
+const BASIC_AUTH_FLAG = /(\s(?:-u|--user)\s+(['"]?)[^\s'":]+:)([^\s'"]+)\2/g;
+/** `scheme://user:pass@host`: keep the user, drop the password. */
+const URL_CREDENTIALS = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)([^\s@/]+)@/gi;
 /** `password: x`, `api_key=x`, `token → x`: keep the label, drop the value. */
 const SECRET_ASSIGNMENT =
-  /\b((?:pass(?:word)?|passwd|secret|api[_-]?key|access[_-]?key|private[_-]?key|token|auth)\b[^\n:=]{0,20}?\s*(?::|=|→|->)\s*)(`?)([^\s`'",;]{6,})\2/gi;
+  /\b((?:pass(?:word)?|passwd|secret|client[\s_-]?secret|api[\s_-]?key|access[\s_-]?key|private[\s_-]?key|token|auth|credentials?)\b[^\n:=]{0,20}?\s*(?::|=|→|->)\s*)(`?)([^\s`'",;]{6,})\2/gi;
 
 export function redactSecrets(text: string, blocklist: string[] = []): string {
   let out = text;
@@ -56,6 +63,8 @@ export function redactSecrets(text: string, blocklist: string[] = []): string {
       typeof label === "string" && /^bearer$/i.test(label) ? `${label} [REDACTED]` : "[REDACTED]",
     );
   }
+  out = out.replace(BASIC_AUTH_FLAG, (_m, head: string, quote: string) => `${head}[REDACTED]${quote}`);
+  out = out.replace(URL_CREDENTIALS, (_m, head: string) => `${head}[REDACTED]@`);
   out = out.replace(SECRET_ASSIGNMENT, (_m, label: string, quote: string) => `${label}${quote}[REDACTED]${quote}`);
   for (const pattern of blocklist) {
     try {
