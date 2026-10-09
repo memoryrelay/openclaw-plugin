@@ -1,5 +1,5 @@
 // src/hooks/subagent.ts
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import type { PluginConfig, MemoryRelayClient } from "../pipelines/types.js";
 
 export interface AutoCaptureConfig {

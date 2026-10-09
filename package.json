@@ -1,6 +1,6 @@
 {
   "name": "@memoryrelay/plugin-memoryrelay-ai",
-  "version": "0.29.1",
+  "version": "0.30.0",
   "description": "OpenClaw memory plugin for MemoryRelay - pinned ICM context (22 tools) plus persistent memory, entities, agents and V2 async storage",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,9 +40,10 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.5",
-    "@vitest/coverage-v8": "^1.2.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "openclaw": "^2026.9.9",
     "typescript": "^5.9.3",
-    "vitest": "^1.2.0"
+    "vitest": "^5.0.3"
   },
   "openclaw": {
     "extensions": [
@@ -66,10 +67,9 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "dependencies": {},
   "optionalDependencies": {
-    "sqlite-vec": "^0.1.0",
-    "better-sqlite3": "^12.8.0"
+    "better-sqlite3": "^12.8.0",
+    "sqlite-vec": "^0.1.0"
   },
   "peerDependenciesMeta": {
     "openclaw": {
@@ -82,5 +82,6 @@
         "install": "echo \"skipping native build (postinstall handles this)\""
       }
     }
-  }
+  },
+  "dependencies": {}
 }

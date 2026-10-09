@@ -1,5 +1,5 @@
 // src/hooks/activity.ts
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 
 export interface DebugLoggerLike {
   log(entry: {

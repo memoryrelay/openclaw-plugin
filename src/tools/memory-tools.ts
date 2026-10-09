@@ -1,4 +1,4 @@
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import type { PluginConfig } from "../pipelines/types.js";
 import type { MemoryRelayClient } from "../client/memoryrelay-client.js";
 

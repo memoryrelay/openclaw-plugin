@@ -9,7 +9,7 @@
  * memory search is never a substitute for pinned context.
  */
 import { createHash, randomUUID } from "node:crypto";
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import type { PluginConfig } from "../pipelines/types.js";
 import { IcmApiError, type IcmBuildRequest, type IcmRun, type IcmRunStage, type MemoryRelayClient } from "../client/memoryrelay-client.js";
 

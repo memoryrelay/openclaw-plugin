@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -126,6 +126,7 @@ interface MemoryRelayConfig {
   autoRecall?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
+  recallFormat?: "saliency" | "flat";
   excludeChannels?: string[];
   enabledTools?: string;
   icm?: IcmConfig;
@@ -368,6 +369,7 @@ export default function plugin(api: OpenClawPluginApi): void {
     autoRecall: cfg?.autoRecall ?? true,
     recallLimit: cfg?.recallLimit ?? 3,
     recallThreshold: cfg?.recallThreshold ?? 0.65,
+    recallFormat: cfg?.recallFormat,
     excludeChannels: cfg?.excludeChannels ?? [],
     autoCapture: autoCaptureConfig,
     vectorSearch: {

@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import type { PluginConfig } from "../../src/pipelines/types.js";
 
 // We test the cooldown/gate logic by importing the module and checking behavior

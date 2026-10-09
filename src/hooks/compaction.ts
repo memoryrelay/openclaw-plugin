@@ -1,5 +1,5 @@
 // src/hooks/compaction.ts
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import type { MemoryRelayClient } from "../pipelines/types.js";
 
 export function registerCompactionHooks(

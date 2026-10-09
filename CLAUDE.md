@@ -2,7 +2,7 @@
 
 ## Current Version
 
-- **Stable**: v0.29.1 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
+- **Stable**: v0.30.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
 
 ## Important Notes
 
@@ -59,7 +59,7 @@ icm (22), memory (8), entity (4), agent (3), v2 async (3), health (1)
 
 ## Testing
 
-- Framework: Vitest with `@vitest/coverage-v8`
+- Framework: Vitest 5 with `@vitest/coverage-v8` (Node 22.12+ to run; Node 24+ to install the tree, see Gotchas)
 - Tests mock the OpenClaw Plugin SDK (`openclaw/plugin-sdk`) — no real API calls; the client tests stub `fetch`
 - Pipeline stages are pure functions — each has independent unit tests
 - Cache tests use in-memory SQLite (`:memory:`); they need the `better-sqlite3` binding, which `postinstall` installs
@@ -75,7 +75,8 @@ icm (22), memory (8), entity (4), agent (3), v2 async (3), health (1)
 
 ## Gotchas
 
-- Dreaming promotes into MEMORY.md only what memory-core's own `memory_search` recalled 3+ times from 3+ queries. With auto-recall injecting MemoryRelay context, agents rarely call it, so promotions can stay at zero for weeks (Jarvis: 35 nights, 0 promoted). That is why the write-back mirrors all of MEMORY.md, not only promotions.
+- Dreaming promotes a candidate into MEMORY.md only once `signalCount >= minRecallCount` (3) **and** `userQueryHashes.length >= dreaming.phases.deep.minUniqueQueries` (3). Daily notes and session transcripts give signals (`__dreaming_daily__`, `__dreaming_sessions__`) but only an agent-made `memory_search` (signal type `recall`) adds a user query hash — and with auto-recall injecting MemoryRelay context, agents rarely call it (Jarvis: 35 nights, 0 promoted). There is no supported plugin API to record a recall in 2026.9.9 (`recordShortTermRecalls` lives in a hashed dist chunk; `openclaw/plugin-sdk/memory-host-search` only exposes search), so the fix is config on the host: `plugins.entries.memory-core.config.dreaming.phases.deep.minUniqueQueries: 0`. That is also why the write-back mirrors all of MEMORY.md, not only promotions.
+- `openclaw` is a dev dependency (2026.9.9, what the fleet runs) so `npm audit --omit=dev` audits the host the plugin actually loads into and `npm run typecheck` sees the real SDK. OpenClaw 2026.9 refuses to install on Node < 24.16, so the dev tree needs Node 24+ (CI runs 24.x); the published package has no runtime dependencies and runs wherever its host does. Import SDK types from `openclaw/plugin-sdk/core` — the bare `openclaw/plugin-sdk` subpath is gone — and keep them `import type`.
 - OpenClaw keeps **one corpus supplement per plugin** (a later registration replaces the earlier by plugin id). Every source goes through `combineCorpusSupplements`; never call `registerMemoryCorpusSupplement` twice.
 
 - The manifest has no `kind`: a single-kind `memory` plugin is disabled whenever another plugin holds the memory slot, and this one never registered a memory capability, so claiming the slot only pushed memory-core aside. memory-core keeps the slot; this plugin supplements it. `memory_get` is memory-core's (OpenClaw keeps the first registration of a tool name).
