@@ -95,6 +95,11 @@
       "placeholder": "0.65",
       "help": "Minimum similarity score for auto-recall (0-1, higher = stricter matching)"
     },
+    "recallFormat": {
+      "label": "Recall layout",
+      "advanced": true,
+      "help": "saliency (default): grouped and tagged with a hint tied to the prompt; flat: a plain bullet list"
+    },
     "debug": {
       "label": "Debug Logging",
       "help": "Enable debug logging of API calls",
@@ -279,6 +284,15 @@
         "default": 0.65,
         "minimum": 0,
         "maximum": 1
+      },
+      "recallFormat": {
+        "type": "string",
+        "enum": [
+          "saliency",
+          "flat"
+        ],
+        "default": "saliency",
+        "description": "How recalled memories are laid out in the prompt: saliency groups them by entity/category/knowledge-base section, tags each line [ Category | Entity ] and ends with a hint tied to the prompt; flat is one bullet per memory"
       },
       "excludeChannels": {
         "type": "array",

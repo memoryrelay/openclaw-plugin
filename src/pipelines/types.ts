@@ -41,6 +41,8 @@ export interface PluginConfig {
   autoRecall?: boolean;
   recallLimit?: number;
   recallThreshold?: number;
+  /** "saliency" (default): grouped, tagged, with a hint tied to the prompt; "flat": one bullet per memory. */
+  recallFormat?: "saliency" | "flat";
   excludeChannels?: string[];
   autoCapture?: {
     enabled: boolean;

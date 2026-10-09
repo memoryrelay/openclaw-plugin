@@ -1,5 +1,5 @@
 // src/hooks/agent-end.ts
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import type { PluginConfig, MemoryRelayClient, ConversationMessage, LocalCacheLike, SyncDaemonLike } from "../pipelines/types.js";
 import { buildRequestContext } from "../context/request-context.js";
 import { runPipeline } from "../pipelines/runner.js";
