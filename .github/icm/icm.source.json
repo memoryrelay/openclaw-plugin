@@ -1,0 +1,1483 @@
+{
+  "workspace_root": "",
+  "schema_version": 2,
+  "access": "workspace",
+  "entrypoint": "CLAUDE.md",
+  "runtimes": [
+    "claude_code",
+    "codex_cli"
+  ],
+  "projects": [
+    "openclaw-plugin"
+  ],
+  "nodes": [
+    {
+      "id": "CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L0",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        "CLAUDE.md"
+      ]
+    },
+    {
+      "id": "AGENTS.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L0",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "id": "doc-CHANGELOG.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "doc-README.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        "README.md"
+      ]
+    },
+    {
+      "id": "doc-RELEASING.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        "RELEASING.md"
+      ]
+    },
+    {
+      "id": "01-fix-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/01-fix/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "01-fix-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/01-fix/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "01-fix-stages-01_reproduce-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/01-fix/stages/01_reproduce/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "01-fix-stages-02_fix-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/01-fix/stages/02_fix/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "01-fix-stages-03_verify-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/01-fix/stages/03_verify/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/02-feature/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "02-feature-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/02-feature/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-stages-01_spec-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/02-feature/stages/01_spec/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-stages-02_implement-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/02-feature/stages/02_implement/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-stages-03_test-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/02-feature/stages/03_test/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-stages-04_docs-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/02-feature/stages/04_docs/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/03-release/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "03-release-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/03-release/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-stages-01_plan-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/03-release/stages/01_plan/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-stages-02_prepare-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/03-release/stages/02_prepare/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-stages-03_publish-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/03-release/stages/03_publish/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "04-deps-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/04-deps/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "04-deps-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/04-deps/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "04-deps-stages-01_review-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/04-deps/stages/01_review/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "05-docs-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/05-docs/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "05-docs-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/05-docs/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "05-docs-stages-01_locate-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/05-docs/stages/01_locate/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "05-docs-stages-02_edit-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/05-docs/stages/02_edit/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "shared-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "shared-api-alignment.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/api-alignment.md"
+      ],
+      "evidence": [
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/ci-cd.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/ci.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/dependency-graph.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/publish.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "CHANGELOG.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "README.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "openclaw.plugin.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "skills/icm-context/SKILL.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/client/memoryrelay-client.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/entity-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/icm-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/client/icm-client.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/manifest-contracts.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        }
+      ]
+    },
+    {
+      "id": "shared-architecture.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/architecture.md"
+      ],
+      "evidence": [
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "dist/index.js",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "openclaw.plugin.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "package.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "scripts/build.mjs",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "scripts/postinstall.cjs",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "scripts/preinstall.cjs",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "skills/entity-and-context/SKILL.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "skills/icm-context/SKILL.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "skills/memory-workflow/SKILL.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/cache/local-cache.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/cache/nomic-embedding-service.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/cache/sync-daemon.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/cache/vector.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/cli/stats-command.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/client/memoryrelay-client.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/debug-logger.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/heartbeat/daily-stats.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/activity.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/agent-end.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/before-agent-start.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/before-prompt-build.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/compaction.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/privacy.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/subagent.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/memory/corpus-supplement.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/memory/icm-corpus.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/memory/memory-md-sync.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/memory/zip.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/onboarding/first-run.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/pipelines/capture/index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/pipelines/recall/index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/pipelines/runner.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/pipelines/types.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/saliency/scorer.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/status-reporter.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/agent-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/entity-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/health-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/icm-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/memory-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/tools/v2-tools.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        }
+      ]
+    },
+    {
+      "id": "shared-build-and-test.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/build-and-test.md"
+      ],
+      "evidence": [
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/ci-cd.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/ci.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/icm-check.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".gitignore",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "dist/index.js",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "package.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "scripts/build.mjs",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "scripts/postinstall.cjs",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/cache/local-cache.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/client/icm-client.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/memory/icm-corpus.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/memory/memory-md-sync.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/packaging.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tsconfig.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        }
+      ]
+    },
+    {
+      "id": "shared-conventions.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/conventions.md"
+      ],
+      "evidence": [
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "CHANGELOG.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "openclaw.plugin.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "skills/icm-context/SKILL.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/client/memoryrelay-client.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/context/namespace-router.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/context/request-context.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/before-agent-start.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/privacy.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/memory/memory-md-sync.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/pipelines/runner.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/pipelines/types.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/hooks/before-agent-start.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        }
+      ]
+    },
+    {
+      "id": "shared-documents.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/documents.md"
+      ],
+      "evidence": [
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/ci-cd.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/publish.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "CHANGELOG.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "README.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "RELEASING.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "VALIDATION_REPORT_v0.12.12.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "docs/v017-implementation-plan.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "openclaw.plugin.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "package.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/pipelines/recall/embed-query.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        }
+      ]
+    },
+    {
+      "id": "shared-gotchas.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/gotchas.md"
+      ],
+      "evidence": [
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "CHANGELOG.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "README.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "openclaw.plugin.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/debug-logger.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/hooks/before-agent-start.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/memory/corpus-supplement.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/onboarding/first-run.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/manifest-contracts.test.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        }
+      ]
+    },
+    {
+      "id": "shared-release.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "openclaw-plugin",
+      "verified_at": "2026-10-14",
+      "review_after": "2027-01-12",
+      "files": [
+        ".github/icm/_shared/release.md"
+      ],
+      "evidence": [
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/ci-cd.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/ci.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": ".github/workflows/publish.yml",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "CHANGELOG.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "README.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "RELEASING.md",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "dist/index.js",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "index.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "openclaw.plugin.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "package-lock.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "package.json",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "src/client/memoryrelay-client.ts",
+          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+        }
+      ]
+    }
+  ],
+  "forms": [
+    {
+      "form": "umbrella",
+      "root": "",
+      "pipelines": [
+        ".github/icm/01-fix",
+        ".github/icm/02-feature",
+        ".github/icm/03-release",
+        ".github/icm/04-deps",
+        ".github/icm/05-docs"
+      ],
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/01-fix",
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/02-feature",
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/03-release",
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/04-deps",
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/05-docs",
+      "unit": "run"
+    }
+  ],
+  "stages": {
+    "fix-reproduce": {
+      "order": 1,
+      "contract": ".github/icm/01-fix/stages/01_reproduce/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/architecture.md",
+          ".github/icm/_shared/build-and-test.md",
+          ".github/icm/_shared/gotchas.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/release.md"
+      ],
+      "outputs": [
+        ".github/icm/01-fix/stages/01_reproduce/output/reproduction.md"
+      ],
+      "human_check": "A person runs the test, or reads its output, and confirms it fails for the reported reason and not a neighbouring one.",
+      "required": [
+        "01-fix-stages-01_reproduce-CONTEXT.md"
+      ],
+      "optional": [
+        "shared-api-alignment.md"
+      ]
+    },
+    "fix-fix": {
+      "order": 2,
+      "contract": ".github/icm/01-fix/stages/02_fix/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/01-fix/stages/01_reproduce/output/reproduction.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/conventions.md",
+          ".github/icm/_shared/gotchas.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/documents.md"
+      ],
+      "outputs": [
+        ".github/icm/01-fix/stages/02_fix/output/change.md"
+      ],
+      "human_check": "A person reads the diff beside the reproduction and confirms it removes the cause and changes no tool name, option or manifest contract. Edit `change.md` if the explanation is wrong; stage 03 reads it.",
+      "required": [
+        "01-fix-stages-02_fix-CONTEXT.md"
+      ],
+      "optional": [
+        "shared-api-alignment.md",
+        "shared-build-and-test.md"
+      ]
+    },
+    "fix-verify": {
+      "order": 3,
+      "contract": ".github/icm/01-fix/stages/03_verify/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/01-fix/stages/02_fix/output/change.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/build-and-test.md",
+          ".github/icm/_shared/release.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/api-alignment.md"
+      ],
+      "outputs": [
+        ".github/icm/01-fix/stages/03_verify/output/pull-request.md"
+      ],
+      "human_check": "A reviewer reads `pull-request.md` and the CI results and merges or sends it back; after a merge, the person decides whether to start `03-release` to publish.",
+      "required": [
+        "01-fix-stages-03_verify-CONTEXT.md"
+      ]
+    },
+    "feature-spec": {
+      "order": 1,
+      "contract": ".github/icm/02-feature/stages/01_spec/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/architecture.md",
+          ".github/icm/_shared/api-alignment.md",
+          ".github/icm/_shared/conventions.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/release.md"
+      ],
+      "outputs": [
+        ".github/icm/02-feature/stages/01_spec/output/spec.md"
+      ],
+      "human_check": "A person approves the spec, in particular the tool names and routes against memoryrelay/api and whether it is breaking.",
+      "required": [
+        "02-feature-stages-01_spec-CONTEXT.md"
+      ]
+    },
+    "feature-implement": {
+      "order": 2,
+      "contract": ".github/icm/02-feature/stages/02_implement/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/02-feature/stages/01_spec/output/spec.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/architecture.md",
+          ".github/icm/_shared/conventions.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/documents.md"
+      ],
+      "outputs": [
+        ".github/icm/02-feature/stages/02_implement/output/implementation.md"
+      ],
+      "human_check": "A person reads the diff against the spec: every surface named is built, nothing else is, and the manifest lists every new tool.",
+      "required": [
+        "02-feature-stages-02_implement-CONTEXT.md"
+      ],
+      "optional": [
+        "shared-api-alignment.md",
+        "shared-gotchas.md",
+        "shared-build-and-test.md"
+      ]
+    },
+    "feature-test": {
+      "order": 3,
+      "contract": ".github/icm/02-feature/stages/03_test/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/02-feature/stages/02_implement/output/implementation.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/build-and-test.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/release.md"
+      ],
+      "outputs": [
+        ".github/icm/02-feature/stages/03_test/output/tests.md"
+      ],
+      "human_check": "A person reads `tests.md` and confirms each spec line has a test that would fail without the change.",
+      "required": [
+        "02-feature-stages-03_test-CONTEXT.md"
+      ],
+      "optional": [
+        "shared-api-alignment.md"
+      ]
+    },
+    "feature-docs": {
+      "order": 4,
+      "contract": ".github/icm/02-feature/stages/04_docs/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/02-feature/stages/03_test/output/tests.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/release.md",
+          ".github/icm/_shared/documents.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/gotchas.md"
+      ],
+      "outputs": [
+        ".github/icm/02-feature/stages/04_docs/output/pull-request.md"
+      ],
+      "human_check": "A reviewer reads `pull-request.md`, the README diff and CI, then merges or sends it back; after a merge, the person decides whether to start `03-release`.",
+      "required": [
+        "02-feature-stages-04_docs-CONTEXT.md"
+      ]
+    },
+    "release-plan": {
+      "order": 1,
+      "contract": ".github/icm/03-release/stages/01_plan/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/release.md",
+          ".github/icm/_shared/conventions.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/api-alignment.md"
+      ],
+      "outputs": [
+        ".github/icm/03-release/stages/01_plan/output/plan.md"
+      ],
+      "human_check": "A person approves the version number and the list of changes.",
+      "required": [
+        "03-release-stages-01_plan-CONTEXT.md"
+      ]
+    },
+    "release-prepare": {
+      "order": 2,
+      "contract": ".github/icm/03-release/stages/02_prepare/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/03-release/stages/01_plan/output/plan.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/release.md",
+          ".github/icm/_shared/build-and-test.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/architecture.md"
+      ],
+      "outputs": [
+        ".github/icm/03-release/stages/02_prepare/output/prepared.md"
+      ],
+      "human_check": "A person confirms every version place agrees on `main`, merging the release pull request if there is one.",
+      "required": [
+        "03-release-stages-02_prepare-CONTEXT.md"
+      ]
+    },
+    "release-publish": {
+      "order": 3,
+      "contract": ".github/icm/03-release/stages/03_publish/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/03-release/stages/02_prepare/output/prepared.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/release.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/",
+        ".github/icm/04-deps/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/conventions.md"
+      ],
+      "outputs": [
+        ".github/icm/03-release/stages/03_publish/output/published.md"
+      ],
+      "human_check": "A person sees the new version on npm and reads the upgrade note before announcing it.",
+      "required": [
+        "03-release-stages-03_publish-CONTEXT.md"
+      ]
+    },
+    "deps-review": {
+      "order": 1,
+      "contract": ".github/icm/04-deps/stages/01_review/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/build-and-test.md",
+          ".github/icm/_shared/gotchas.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/05-docs/",
+        ".github/icm/_shared/api-alignment.md"
+      ],
+      "outputs": [
+        ".github/icm/04-deps/stages/01_review/output/review.md"
+      ],
+      "human_check": "A person decides to merge, close or supersede the pull request.",
+      "required": [
+        "04-deps-stages-01_review-CONTEXT.md"
+      ]
+    },
+    "docs-locate": {
+      "order": 1,
+      "contract": ".github/icm/05-docs/stages/01_locate/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/documents.md",
+          ".github/icm/_shared/architecture.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/_shared/gotchas.md"
+      ],
+      "outputs": [
+        ".github/icm/05-docs/stages/01_locate/output/locations.md"
+      ],
+      "human_check": "A person confirms each owning file before any edit.",
+      "required": [
+        "05-docs-stages-01_locate-CONTEXT.md"
+      ],
+      "optional": [
+        "shared-api-alignment.md",
+        "shared-release.md"
+      ]
+    },
+    "docs-edit": {
+      "order": 2,
+      "contract": ".github/icm/05-docs/stages/02_edit/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/05-docs/stages/01_locate/output/locations.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/documents.md",
+          ".github/icm/_shared/conventions.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/04-deps/",
+        ".github/icm/_shared/api-alignment.md"
+      ],
+      "outputs": [
+        ".github/icm/05-docs/stages/02_edit/output/pull-request.md"
+      ],
+      "human_check": "A reviewer reads the diff beside `locations.md` and merges or sends it back.",
+      "required": [
+        "05-docs-stages-02_edit-CONTEXT.md"
+      ]
+    }
+  }
+}

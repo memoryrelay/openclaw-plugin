@@ -1,86 +1,54 @@
-# OpenClaw MemoryRelay Plugin
+# OpenClaw MemoryRelay plugin
 
-## Current Version
+The OpenClaw plugin for MemoryRelay, published on npm as `@memoryrelay/plugin-memoryrelay-ai`: pinned ICM context before each turn, memory as evidence (recall and capture pipelines, a local SQLite cache), entities and agents, and MemoryRelay plus ICM files as corpora of OpenClaw's own memory. It follows the API in memoryrelay/api; what leaves this repository is a reviewed pull request, and a version a person publishes to npm.
 
-- **Stable**: v0.30.0 (ICM pinned context and memory; MemoryRelay and ICM files as corpora of OpenClaw's own memory)
+## Where things live
 
-## Important Notes
+| Path | What it holds |
+|---|---|
+| `index.ts`, `openclaw.plugin.json`, `src/` | the entry (wiring), the manifest, the client, tools, hooks, pipelines, corpora and cache — mapped in [architecture.md](.github/icm/_shared/architecture.md) |
+| `tests/`, `index.test.ts` | vitest, SDK mocked and `fetch` stubbed — [build-and-test.md](.github/icm/_shared/build-and-test.md) |
+| `skills/` | the three OpenClaw skills shipped to the end user's agent |
+| `scripts/` | the transpile-only build and the install hooks |
+| `.github/workflows/` | CI, CI/CD, the manual npm publish, the dependency graph, the ICM check |
+| `README.md`, `CHANGELOG.md`, `RELEASING.md` | the user guide, every version, the release checklist — [documents.md](.github/icm/_shared/documents.md) |
+| [`.github/icm/_shared/`](.github/icm/_shared/CONTEXT.md) | what every job below draws on, one file per question |
+| [`.github/icm/01-fix/`](.github/icm/01-fix/CLAUDE.md) | fix a defect |
+| [`.github/icm/02-feature/`](.github/icm/02-feature/CLAUDE.md) | add a capability: a tool, an option, a hook behaviour, an API catch-up |
+| [`.github/icm/03-release/`](.github/icm/03-release/CLAUDE.md) | publish a version to npm |
+| [`.github/icm/04-deps/`](.github/icm/04-deps/CLAUDE.md) | review a dependency bump |
+| [`.github/icm/05-docs/`](.github/icm/05-docs/CLAUDE.md) | correct a document that disagrees with the code |
 
-- `memoryrelay/api` is the source of truth for what the API serves. Its `tests/test_client_contract.py` asserts every path the in-repo clients call exists; this plugin's `tests/client/icm-client.test.ts` asserts the paths and payloads this client sends. When the API changes, both move.
-- The `icm` tool group (22 tools) mirrors `@memoryrelay/mcp-server` (`mcp/src/server.ts` and `mcp/src/icm-agent.ts` in memoryrelay/api) name for name. Change a tool there first, then here.
-- The API has no sessions, decisions, patterns, projects, `/v1/embed` or `/v1/quota`. Do not add a tool that calls them; `scope` and `session_id` are memory metadata, filtered with `metadata_filter`.
-- `agentId` is an agent **name** (e.g. `iris`), the API resolves it; `GET /v1/memories` caps `limit` at 50.
+## Route by what just happened
 
-## Commands
+| Route | If | Go to | Then stop at |
+|---|---|---|---|
+| triage | an issue or report arrives and its kind is unclear | read it whole (`gh issue view <n> --comments`), then take the row below that fits | the row chosen, said to the person |
+| fix | a defect is reported (issue, failing test, a gateway log line, a tool that answers wrong) | [01_reproduce](.github/icm/01-fix/stages/01_reproduce/CONTEXT.md) | a person has seen the reproduction fail |
+| ci-red | `CI` or `CI/CD` is red on `main` | [01_reproduce](.github/icm/01-fix/stages/01_reproduce/CONTEXT.md), with the run log as the report | a person has seen the reproduction fail |
+| host-break | a new OpenClaw release stops the plugin loading, registering tools or pinning context | [01_reproduce](.github/icm/01-fix/stages/01_reproduce/CONTEXT.md), host traps in [gotchas.md](.github/icm/_shared/gotchas.md) first | a person has seen the reproduction fail |
+| feature | a new tool, option or behaviour is asked for | [01_spec](.github/icm/02-feature/stages/01_spec/CONTEXT.md) | a person approves the spec |
+| api-drift | memoryrelay/api added, renamed or retired a route or tool, or the alignment items are taken up | [01_spec](.github/icm/02-feature/stages/01_spec/CONTEXT.md), with the open list in [api-alignment.md](.github/icm/_shared/api-alignment.md) as the request | a person approves the spec |
+| fix-to-feature | a fix turns out to need a new tool, option or API route | [01_spec](.github/icm/02-feature/stages/01_spec/CONTEXT.md), with the fix run's `reproduction.md` as the request | a person approves the spec |
+| release | a version is to be published, or a merged version is missing from npm | [01_plan](.github/icm/03-release/stages/01_plan/CONTEXT.md) | a person approves the version number |
+| deps | Dependabot opened a pull request, or `openclaw` is to be bumped | [01_review](.github/icm/04-deps/stages/01_review/CONTEXT.md) | a person decides to merge it or not |
+| docs | a document is wrong or missing and no code has to change | [01_locate](.github/icm/05-docs/stages/01_locate/CONTEXT.md) | a person confirms each owning file |
+| maintain | a fact here is past review or its evidence moved (the weekly `ICM check` is red) | [_shared/CONTEXT.md](.github/icm/_shared/CONTEXT.md): re-read each fact's evidence, fix the pointer, bump `verified_at` and `verified_commit`, run `python .github/icm/_system/generate.py` | a pull request re-verifying each fact, read by a person |
+| next | a stage's output was approved | the next numbered stage of the same job | a person reads that stage's output |
+| status | asked for status | scan `.github/icm/*/stages/*/output/` | report what exists |
 
-```bash
-npm install          # Install dependencies
-npm run build        # Transpile index.ts + src/ to dist/ (ESM)
-npm run typecheck    # tsc --noEmit (not CI-enforced yet — known SDK type errors)
-npm test             # Run tests (vitest run)
-npm run test:watch   # Watch mode
-npm run test:coverage # Coverage report (v8)
-```
+## Agents connecting remotely
 
-## Build & Packaging
+This repository has no MemoryRelay workspace of its own: the memoryrelay hub workspace `memoryrelay-hub` (memoryrelay/agent-knowledge) includes it, and the hub's mirror compiles and serves these files from `main`. An agent on a clone needs nothing: this file is the entry and the table above is the route. An agent that is not on a clone reaches the same files over MCP at `https://api.memoryrelay.net/mcp` through `memoryrelay-hub` (Claude Code and Codex with a key in `MEMORYRELAY_API_KEY`, claude.ai and Claude Desktop as a connector that signs in). None of it holds a secret.
 
-- The package **must** ship compiled JS. OpenClaw >= 2026.7.1 refuses to install a plugin whose entry point is a `.ts` file and aborts the whole gateway startup migration — see #138.
-- `main` and `openclaw.extensions` point at `./dist/index.js`; `dist/` is in `files` and gitignored.
-- `scripts/build.mjs` is transpile-only (`ts.transpileModule`) and mirrors the source tree: `index.ts` → `dist/index.js`, `src/x.ts` → `dist/src/x.js`. It does **not** type check, so `npm run build` stays green while the SDK type errors are worked through.
-- Relative imports must carry an explicit `.js` extension — Node's ESM resolver rejects extensionless specifiers in the compiled output even though vitest tolerates them in source.
-- Anything resolved from `import.meta.url` must work both from the package root (source) and from `dist/` (compiled).
+- Start with `icm_context_build` for the route that fits, not with the whole repository.
+- Report what you read with `icm_report_reads` when a stage ends, and what the task came to with `icm_report_outcome`.
+- Never write through MCP: a change is a branch and a pull request here, read and merged by a person.
 
-## Architecture
+## Rules
 
-- `index.ts` — Plugin entry point: wiring only. Imports modules, registers hooks/tools, keeps gateway methods and CLI commands inline
-- `openclaw.plugin.json` — Plugin manifest with config schema and UI hints
-- `src/client/memoryrelay-client.ts` — API client: memory, entities, agents, V2 async, and the `/v2/icm` methods (`icm*`, `IcmApiError`)
-- `src/tools/icm-tools.ts` — The 22 ICM tools: catalogue (`ICM_TOOLS`), dispatch (`callIcmTool`), registration with the `icm_unsupported` guard
-- `src/tools/` — memory, entity, agent, v2, health tool modules
-- `src/memory/corpus-supplement.ts` — MemoryRelay as a corpus of OpenClaw's own memory: `registerMemoryCorpusSupplement` (search + `memoryrelay:<id>` reads behind memory-core's `memory_search`/`memory_get` with `corpus="all"`), `combineCorpusSupplements`, and `registerMemoryPromptSupplement`
-- `src/memory/icm-corpus.ts` — ICM workspace files as a corpus (`icm:<workspace>/<file>`): search on the server (`GET /v2/icm/search`); reads from the live release fetched as a zip (`src/memory/zip.ts`) and cached on disk by release id, which is also the local BM25 fallback when the server has no search route (404) or a call fails
-- `src/memory/memory-md-sync.ts` — MEMORY.md write-back (opt-in `memoryMdSync`): one MemoryRelay memory per heading section and per dreaming promotion, hash-diffed against a local state file, secrets redacted (`redactSecrets`); started on `gateway_start`, one mirror per file per process
-- `src/hooks/before-agent-start.ts` — Pinned context: `icm_context_for` for the configured repo/step, prepended with its receipt; then the workflow block
-- `src/hooks/before-prompt-build.ts` — Delegates to the recall pipeline (memory as evidence)
-- `src/hooks/agent-end.ts` — Delegates to the capture pipeline
-- `src/pipelines/types.ts` — Shared type definitions (Memory, PluginConfig, IcmConfig, RecallStage, CaptureStage, etc.)
-- `src/pipelines/runner.ts` — Generic pipeline executor (stages run in order, short-circuit on `skip`)
-- `src/pipelines/recall/` — Recall pipeline (6 stages): trigger-gate → scope-resolver → embed-query → search → rank → format
-- `src/pipelines/capture/` — Capture pipeline (6 stages): trigger-gate → message-filter → content-strip → truncate → dedup → store
-- `src/filters/` — Shared filter library: `non-interactive.ts` (trigger detection), `noise-patterns.ts`, `content-patterns.ts` (XML stripping, scope resolution)
-- `src/context/` — `request-context.ts` (immutable per-invocation context), `namespace-router.ts` (agent isolation)
-- `src/cache/` — Local SQLite cache (better-sqlite3, FTS5, optional sqlite-vec), sync daemon, nomic local embeddings
-- `src/status-reporter.ts`, `src/debug-logger.ts`, `src/heartbeat/daily-stats.ts`, `src/onboarding/first-run.ts`, `src/cli/stats-command.ts`
-- `skills/` — 3 SKILL.md files: `icm-context`, `memory-workflow`, `entity-and-context`
-
-## Tool Groups (41 total)
-
-icm (22), memory (8), entity (4), agent (3), v2 async (3), health (1)
-
-## Testing
-
-- Framework: Vitest 5 with `@vitest/coverage-v8` (Node 22.12+ to run; Node 24+ to install the tree, see Gotchas)
-- Tests mock the OpenClaw Plugin SDK (`openclaw/plugin-sdk`) — no real API calls; the client tests stub `fetch`
-- Pipeline stages are pure functions — each has independent unit tests
-- Cache tests use in-memory SQLite (`:memory:`); they need the `better-sqlite3` binding, which `postinstall` installs
-
-## Key Patterns
-
-- Pinned context first, memory as evidence: the agent-start hook never substitutes recall for a missing binding, and a blocked build pins nothing
-- Recall and capture are pipelines of discrete stages, each a pure function with `(input, ctx) → continue | skip`
-- `RequestContext` (immutable, per-invocation); the OpenClaw session key is the session id
-- Namespace routing: configurable agent isolation + 3 subagent policies (inherit/isolate/skip)
-- Config resolution: env vars (`MEMORYRELAY_API_KEY`, `MEMORYRELAY_ICM_REPO`, ...) override `openclaw.plugin.json` config values
-- API calls to `api.memoryrelay.net` with bearer token auth, 30s timeout, 3 retries with exponential backoff
-
-## Gotchas
-
-- Dreaming promotes a candidate into MEMORY.md only once `signalCount >= minRecallCount` (3) **and** `userQueryHashes.length >= dreaming.phases.deep.minUniqueQueries` (3). Daily notes and session transcripts give signals (`__dreaming_daily__`, `__dreaming_sessions__`) but only an agent-made `memory_search` (signal type `recall`) adds a user query hash — and with auto-recall injecting MemoryRelay context, agents rarely call it (Jarvis: 35 nights, 0 promoted). There is no supported plugin API to record a recall in 2026.9.9 (`recordShortTermRecalls` lives in a hashed dist chunk; `openclaw/plugin-sdk/memory-host-search` only exposes search), so the fix is config on the host: `plugins.entries.memory-core.config.dreaming.phases.deep.minUniqueQueries: 0`. That is also why the write-back mirrors all of MEMORY.md, not only promotions.
-- `openclaw` is a dev dependency (2026.9.9, what the fleet runs) so `npm audit --omit=dev` audits the host the plugin actually loads into and `npm run typecheck` sees the real SDK. OpenClaw 2026.9 refuses to install on Node < 24.16, so the dev tree needs Node 24+ (CI runs 24.x); the published package has no runtime dependencies and runs wherever its host does. Import SDK types from `openclaw/plugin-sdk/core` — the bare `openclaw/plugin-sdk` subpath is gone — and keep them `import type`.
-- OpenClaw keeps **one corpus supplement per plugin** (a later registration replaces the earlier by plugin id). Every source goes through `combineCorpusSupplements`; never call `registerMemoryCorpusSupplement` twice.
-
-- The manifest has no `kind`: a single-kind `memory` plugin is disabled whenever another plugin holds the memory slot, and this one never registered a memory capability, so claiming the slot only pushed memory-core aside. memory-core keeps the slot; this plugin supplements it. `memory_get` is memory-core's (OpenClaw keeps the first registration of a tool name).
-- Plugin ID is `plugin-memoryrelay-ai` (not `memory-memoryrelay`) — wrong ID causes "No install record" errors
-- `memory_batch_store` may return 500 on large batches — use individual `memory_store` as workaround
-- `logFile` config option is deprecated and ignored since v0.8.4 (security compliance)
-- Onboarding state persists at `~/.openclaw/memoryrelay-onboarding.json` — not project-scoped
+- Nothing moves to the next stage until a person has read the output of the last one.
+- A stage writes to its own `output/`, which is not committed: one run per worktree or branch, and clear that job's `stages/*/output/` when its pull request merges or is abandoned.
+- A job reads only its own run's output; moving to another job is a route above, started by the person.
+- `.github/icm/` points at the files that own each fact. When they disagree, the owning file is right: correct `.github/icm/` in the same pull request, and bump its `verified_commit`.
+- A merge to `main` publishes nothing; a version reaches npm only when a person dispatches the publish.
