@@ -475,7 +475,7 @@
     },
     {
       "id": "shared-architecture.md",
-      "revision": 1,
+      "revision": 2,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
@@ -486,11 +486,6 @@
         ".github/icm/_shared/architecture.md"
       ],
       "evidence": [
-        {
-          "repo": "memoryrelay/openclaw-plugin",
-          "path": "dist/index.js",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
-        },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "index.ts",
@@ -700,7 +695,7 @@
     },
     {
       "id": "shared-build-and-test.md",
-      "revision": 1,
+      "revision": 2,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
@@ -729,11 +724,6 @@
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".gitignore",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
-        },
-        {
-          "repo": "memoryrelay/openclaw-plugin",
-          "path": "dist/index.js",
           "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
         },
         {
@@ -1005,7 +995,7 @@
     },
     {
       "id": "shared-release.md",
-      "revision": 1,
+      "revision": 2,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
@@ -1044,11 +1034,6 @@
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "RELEASING.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
-        },
-        {
-          "repo": "memoryrelay/openclaw-plugin",
-          "path": "dist/index.js",
           "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
         },
         {
