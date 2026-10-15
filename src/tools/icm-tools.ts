@@ -1,5 +1,5 @@
 /**
- * ICM tools: pinned context workspaces (/v2/icm). Same 22 names, arguments and
+ * ICM tools: pinned context workspaces (/v2/icm). Same 24 names, arguments and
  * behaviour as @memoryrelay/mcp-server and the remote endpoint (/mcp), so an
  * agent reads one description of ICM whichever client it holds.
  *
@@ -57,6 +57,20 @@ export const ICM_TOOLS: IcmToolSpec[] = [
       type: "object",
       properties: { workspace_id: WS, release_id: { type: "string", description: "64-hex release ID", pattern: "^[0-9a-f]{64}$" } },
       required: ["workspace_id", "release_id"],
+    },
+  },
+  {
+    name: "icm_search",
+    description: "ICM: find the sections of workspace files that answer a question, ranked (full-text: any of the words, headings weigh more). Searches the live release of every workspace this key can read unless workspace_id narrows it; release_id with one workspace searches that version. Each hit names the workspace, path and line range to read next with the file routes.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", minLength: 2, maxLength: 500 },
+        workspace_id: { oneOf: [WS, { type: "array", items: WS, maxItems: 50 }], description: "Workspace UUID, or a list of them" },
+        release_id: { type: "string", pattern: "^[0-9a-f]{64}$" },
+        limit: { type: "integer", minimum: 1, maximum: 50 },
+      },
+      required: ["query"],
     },
   },
   {
@@ -222,6 +236,22 @@ export const ICM_TOOLS: IcmToolSpec[] = [
     },
   },
   {
+    name: "icm_report_outcome",
+    description: "ICM: report what the task came to for a context receipt (success, partial, failed or abandoned), with a short note and a URL of evidence (a pull request, a run, a log) when there is one, so the workspace's usage shows results beside supply and reads. This is the agent's own account; a runner's report of the same receipt outranks it. Repeating the same event_id is acknowledged, not re-recorded. Needs icm:observe.",
+    parameters: {
+      type: "object",
+      properties: {
+        workspace_id: WS,
+        receipt_id: { type: "string", description: "From the build (receipt_id)" },
+        result: { type: "string", enum: ["success", "partial", "failed", "abandoned"] },
+        note: { type: "string", maxLength: 500 },
+        evidence: { type: "string", maxLength: 512, description: "A URL" },
+        event_id: { type: "string", maxLength: 128 },
+      },
+      required: ["workspace_id", "receipt_id", "result"],
+    },
+  },
+  {
     name: "icm_draft_get",
     description: "ICM: the workspace's draft: its changed files, the digest a proposal must name, and the pull request it was proposed as (Git workspaces). Also says whether the workspace is Git (changes become a pull request a person merges) or service (a person publishes the draft).",
     parameters: { type: "object", properties: { workspace_id: WS }, required: ["workspace_id"] },
@@ -338,6 +368,17 @@ export async function callIcmTool(
 
     case "icm_release_get":
       return client.icmGetRelease(need(args, "workspace_id", UUID_RE, "a UUID"), need(args, "release_id", RELEASE_RE, "a 64-hex release id"));
+
+    case "icm_search": {
+      const query = text(args, "query")!;
+      const raw = args.workspace_id;
+      const ids = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
+      const workspaceIds = ids.map((id) => need({ workspace_id: id }, "workspace_id", UUID_RE, "a UUID"));
+      const releaseId = maybe(args, "release_id", RELEASE_RE, "a 64-hex release id");
+      const limit = int(args, "limit", 1);
+      if (limit !== undefined && limit > 50) throw new Error("limit must be an integer between 1 and 50");
+      return { ...(await client.icmSearch({ query, workspaceIds, releaseId, limit })) };
+    }
 
     case "icm_route_list": {
       const wid = need(args, "workspace_id", UUID_RE, "a UUID");
@@ -526,6 +567,28 @@ export async function callIcmTool(
         kind,
         method: "self_report",
         payload: { paths: [...new Set(paths as string[])].sort() },
+        observed_at: new Date().toISOString(),
+      });
+    }
+
+    case "icm_report_outcome": {
+      const wid = need(args, "workspace_id", UUID_RE, "a UUID");
+      const receipt = need(args, "receipt_id", UUID_RE, "a UUID");
+      const result = args.result;
+      if (result !== "success" && result !== "partial" && result !== "failed" && result !== "abandoned") {
+        throw new Error("result must be success, partial, failed or abandoned");
+      }
+      const payload: Record<string, string> = { result };
+      const note = text(args, "note", false);
+      if (note) payload.note = note;
+      const evidence = text(args, "evidence", false);
+      if (evidence) payload.evidence = evidence;
+      return client.icmAddObservation(wid, receipt, {
+        event_id: text(args, "event_id", false) ?? randomUUID(),
+        kind: "outcome",
+        // The agent reports on itself; the server records who vouched for it.
+        method: "self_report",
+        payload,
         observed_at: new Date().toISOString(),
       });
     }

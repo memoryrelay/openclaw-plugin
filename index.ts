@@ -518,7 +518,7 @@ export default function plugin(api: OpenClawPluginApi): void {
   registerPrivacyHooks(api, blocklist, isBlocklisted, redactSensitive);
 
   // ========================================================================
-  // Register Tools (6 modules, 41 tools total)
+  // Register Tools (6 modules, 43 tools total)
   // ========================================================================
 
   registerMemoryTools(api, pluginConfig, client, isToolEnabled);
