@@ -442,11 +442,11 @@ describe("Plugin Integration", () => {
       "memory_store_async", "memory_status", "context_build",
       // Health (1)
       "memory_health",
-      // ICM (22)
+      // ICM (24)
       ...ICM_TOOL_NAMES,
     ];
-    expect(tools.length).toBe(42);
-    expect(new Set(tools).size).toBe(42);
+    expect(tools.length).toBe(44);
+    expect(new Set(tools).size).toBe(44);
   });
 
   test("should register all CLI commands", () => {
@@ -545,7 +545,7 @@ describe("Tool Groups", () => {
 
   test("should have correct total tool count across all groups", () => {
     const totalTools = Object.values(TOOL_GROUPS).flat();
-    expect(totalTools.length).toBe(42);
+    expect(totalTools.length).toBe(44);
   });
 
   test("should have no duplicate tool names", () => {
@@ -558,8 +558,8 @@ describe("Tool Groups", () => {
     expect(TOOL_GROUPS.memory.length).toBe(9);
   });
 
-  test("icm group should have the 22 tools @memoryrelay/mcp-server serves", () => {
-    expect(TOOL_GROUPS.icm.length).toBe(22);
+  test("icm group should have the 24 tools @memoryrelay/mcp-server serves", () => {
+    expect(TOOL_GROUPS.icm.length).toBe(24);
     for (const name of TOOL_GROUPS.icm) expect(name.startsWith("icm_")).toBe(true);
   });
 

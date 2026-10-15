@@ -2,13 +2,13 @@
 
 Before tagging vX.Y.Z:
 
-- [ ] Update version in ALL 6 locations:
+- [ ] Update version in ALL 5 locations (tests/version-consistency.test.ts fails until they agree with package.json):
   - package.json → version
   - package-lock.json → version
-  - openclaw.plugin.json → version
+  - openclaw.plugin.json → version and the 'vX.Y.Z' in its description
   - index.ts → JSDoc header '* Version: X.Y.Z'
-  - index.ts → startup log string 'plugin vX.Y.Z loaded'
-  - src/client/memoryrelay-client.ts → User-Agent header
+  - src/client/memoryrelay-client.ts → USER_AGENT
+  (The startup log prints the package.json version itself.)
 - [ ] CHANGELOG.md → [X.Y.Z] - YYYY-MM-DD entry complete
 - [ ] npm test passes (all tests green)
 - [ ] git tag vX.Y.Z && git push origin vX.Y.Z (CI/CD auto-publishes to npm)

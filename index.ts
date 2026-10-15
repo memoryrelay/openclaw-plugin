@@ -1,6 +1,6 @@
 /**
  * OpenClaw Memory Plugin - MemoryRelay
- * Version: 0.29.1
+ * Version: 0.30.0
  *
  * Long-term memory with vector search using MemoryRelay API.
  * Provides auto-recall and auto-capture via lifecycle hooks.
@@ -518,7 +518,7 @@ export default function plugin(api: OpenClawPluginApi): void {
   registerPrivacyHooks(api, blocklist, isBlocklisted, redactSensitive);
 
   // ========================================================================
-  // Register Tools (6 modules, 41 tools total)
+  // Register Tools (6 modules, 43 tools total)
   // ========================================================================
 
   registerMemoryTools(api, pluginConfig, client, isToolEnabled);

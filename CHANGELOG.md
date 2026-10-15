@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`icm_search` and `icm_report_outcome`.** The `icm` group has the 24 tools of `@memoryrelay/mcp-server` and the remote endpoint again (it had 22): `icm_search` returns the ranked sections of workspace files that answer a question (`GET /v2/icm/search`, API 2026-10-05; the client already called it for the ICM memory corpus), and `icm_report_outcome` records what a task came to against a receipt (`POST /v2/icm/workspaces/{id}/receipts/{receipt}/observations` with `kind: "outcome"`, API 2026-10-10). Same names, arguments and validation as the npm server; both are declared in `contracts.tools`. This is the ICM tool alignment the 2026-10-04 plugin alignment review in memoryrelay/api asked for.
+
+### Fixed
+- **Version literals agree with `package.json`.** 0.30.0 shipped with `openclaw.plugin.json`, the `index.ts` header and the client's `User-Agent` still at 0.29.1. The `User-Agent` is now one constant, and `tests/version-consistency.test.ts` fails when any of them, or `package-lock.json`, differs from `package.json`.
+- **Release notes name the real package.** The tag workflow (`ci-cd.yml`) wrote `openclaw plugins install @memoryrelay/openclaw-plugin@X.Y.Z`, a package that does not exist; it now reads the name from `package.json`.
+
 ## [0.30.0] - 2026-10-09
 
 ### Added

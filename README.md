@@ -16,7 +16,7 @@ MemoryRelay separates two things other memory plugins blur together:
 
 | Feature | MemoryRelay | Mem0 | OpenClaw-Projects |
 |---------|------------|------|-------------------|
-| Pinned, versioned context per repository and step | Yes (22 ICM tools, receipts) | No | No |
+| Pinned, versioned context per repository and step | Yes (24 ICM tools, receipts) | No | No |
 | Semantic search | Yes (pgvector) | Yes | No |
 | Entities / knowledge graph | Yes (create, link, graph) | Yes | No |
 | Multi-agent collaboration | Yes (agent scoping, subagent tracking) | Limited | No |
@@ -24,7 +24,7 @@ MemoryRelay separates two things other memory plugins blur together:
 | V2 Async Storage | Yes | No | No |
 | Human-gated runs and drafts | Yes (an agent submits; a person approves, publishes or merges) | No | No |
 | Direct commands | 13 | ~5 | 0 |
-| Tools | 41 | ~10 | 0 |
+| Tools | 43 | ~10 | 0 |
 
 ## Quick Start
 
@@ -140,11 +140,11 @@ openclaw config set plugins.entries.plugin-memoryrelay-ai.config.memoryMdSync.en
 - **Secrets are redacted before anything is sent**: private keys, `mem_`/`imk_`, GitHub, OpenAI/Anthropic, Slack, AWS and Telegram tokens, JWTs, bearer tokens, `password`/`token`/`api_key`-style assignments, and your `autoCapture.blocklist`.
 - It runs in the gateway (at start, then every `memoryMdSync.intervalMinutes`, default 15), never in a CLI command, with a lock so two processes do not sync at once. The file is found in the agent's workspace (`agents.entries.<agentId>.workspace`), then `agents.defaults.workspace`, then `~/.openclaw/workspace`; `memoryMdSync.path` overrides.
 
-## Features -- 41 Tools by Category
+## Features -- 43 Tools by Category
 
-Tool groups are selected with `enabledTools` (default: all). The `icm` group has the same 22 names, arguments and behaviour as `@memoryrelay/mcp-server` and the remote endpoint at `api.memoryrelay.net/mcp`.
+Tool groups are selected with `enabledTools` (default: all). The `icm` group has the same 24 names, arguments and behaviour as `@memoryrelay/mcp-server` and the remote endpoint at `api.memoryrelay.net/mcp`.
 
-### ICM (22 tools) -- group: `icm`
+### ICM (24 tools) -- group: `icm`
 
 Pinned context workspaces (`/v2/icm`). Start with `icm_context_for`; a `no_binding` answer means a person has not bound this repository and step yet, and memory search is not a substitute. Nothing here approves, publishes or merges: a person does that at the `review_url` each tool returns.
 
@@ -154,6 +154,7 @@ Pinned context workspaces (`/v2/icm`). Start with `icm_context_for`; a `no_bindi
 | `icm_workspace_list` | The workspaces this key can read, with its role in each |
 | `icm_root` | One row per repository the workspaces include, with the route bound to a step |
 | `icm_release_get` | An immutable release: manifest, pinned files, walk report |
+| `icm_search` | Ranked sections of workspace files that answer a question, with the path and lines to read next |
 | `icm_route_list` | The routes compiled from a workspace's entry file |
 | `icm_context_build` | Build context for a target (entry, route, stage, record, notes, nodes, impact, repository) within a budget; records a receipt |
 | `icm_resolve` | Which workspace and route a repository and step are bound to |
@@ -169,6 +170,7 @@ Pinned context workspaces (`/v2/icm`). Start with `icm_context_for`; a `no_bindi
 | `icm_stage_submit` | Hand a stage to a person for review |
 | `icm_run_status` | Per-stage state of a run |
 | `icm_report_reads` | Report which supplied files were read, against a receipt |
+| `icm_report_outcome` | Report what the task came to (success, partial, failed, abandoned), against a receipt |
 | `icm_draft_get` | The workspace draft: changed files, digest, pull request |
 | `icm_draft_write` | Write files into the draft (never published) |
 | `icm_draft_propose` | Open or update the pull request a person merges, or point at the review page |

@@ -6,15 +6,15 @@ const WS = "11111111-1111-4111-8111-111111111111";
 const RUN = "22222222-2222-4222-8222-222222222222";
 
 describe("ICM tool catalogue", () => {
-  test("the 22 names @memoryrelay/mcp-server and /mcp serve, no duplicates", () => {
+  test("the 24 names @memoryrelay/mcp-server and /mcp serve, no duplicates", () => {
     expect(ICM_TOOL_NAMES).toEqual([
-      "icm_capabilities", "icm_workspace_list", "icm_root", "icm_release_get", "icm_route_list",
+      "icm_capabilities", "icm_workspace_list", "icm_root", "icm_release_get", "icm_search", "icm_route_list",
       "icm_context_build", "icm_resolve", "icm_context_for", "icm_receipt_get", "icm_source_scan",
       "icm_score", "icm_maintenance", "icm_pull", "icm_run_start", "icm_stage_context",
-      "icm_stage_write", "icm_stage_submit", "icm_run_status", "icm_report_reads",
+      "icm_stage_write", "icm_stage_submit", "icm_run_status", "icm_report_reads", "icm_report_outcome",
       "icm_draft_get", "icm_draft_write", "icm_draft_propose",
     ]);
-    expect(new Set(ICM_TOOL_NAMES).size).toBe(22);
+    expect(new Set(ICM_TOOL_NAMES).size).toBe(24);
     for (const t of ICM_TOOLS) {
       expect(t.description.startsWith("ICM:")).toBe(true);
       expect((t.parameters as { type: string }).type).toBe("object");
@@ -25,6 +25,17 @@ describe("ICM tool catalogue", () => {
     const build = ICM_TOOLS.find((t) => t.name === "icm_context_build")!;
     const kind = (build.parameters as any).properties.target.properties.kind.enum as string[];
     expect(kind).toContain("repository");
+  });
+
+  test("icm_search and icm_report_outcome take the npm server's arguments", () => {
+    const search = ICM_TOOLS.find((t) => t.name === "icm_search")!.parameters as any;
+    expect(search.required).toEqual(["query"]);
+    expect(Object.keys(search.properties)).toEqual(["query", "workspace_id", "release_id", "limit"]);
+    expect(search.properties.limit).toEqual({ type: "integer", minimum: 1, maximum: 50 });
+    const outcome = ICM_TOOLS.find((t) => t.name === "icm_report_outcome")!.parameters as any;
+    expect(outcome.required).toEqual(["workspace_id", "receipt_id", "result"]);
+    expect(outcome.properties.result.enum).toEqual(["success", "partial", "failed", "abandoned"]);
+    expect(Object.keys(outcome.properties)).toEqual(["workspace_id", "receipt_id", "result", "note", "evidence", "event_id"]);
   });
 });
 
@@ -76,6 +87,45 @@ describe("callIcmTool", () => {
     expect(body.payload.paths).toEqual(["a.md", "b.md"]);
     expect(body.method).toBe("self_report");
   });
+
+  test("icm_search sends one or many workspace ids, the release and the limit", async () => {
+    const client = { icmSearch: vi.fn(async () => ({ query: "deploy", results: [], searched: [], skipped: [] })) } as any;
+    const out = await callIcmTool(client, "icm_search", { query: "deploy", workspace_id: WS });
+    expect(client.icmSearch).toHaveBeenLastCalledWith({ query: "deploy", workspaceIds: [WS], releaseId: undefined, limit: undefined });
+    expect(out.results).toEqual([]);
+    await callIcmTool(client, "icm_search", { query: "deploy", workspace_id: [WS, RUN], release_id: "a".repeat(64), limit: 5 });
+    expect(client.icmSearch).toHaveBeenLastCalledWith({ query: "deploy", workspaceIds: [WS, RUN], releaseId: "a".repeat(64), limit: 5 });
+    await callIcmTool(client, "icm_search", { query: "deploy" });
+    expect(client.icmSearch).toHaveBeenLastCalledWith({ query: "deploy", workspaceIds: [], releaseId: undefined, limit: undefined });
+  });
+
+  test("icm_search refuses a bad id, a bad limit or no query before calling the server", async () => {
+    const client = { icmSearch: vi.fn() } as any;
+    await expect(callIcmTool(client, "icm_search", { query: "x", workspace_id: [WS, "nope"] })).rejects.toThrow(/workspace_id/);
+    await expect(callIcmTool(client, "icm_search", { query: "x", limit: 51 })).rejects.toThrow(/limit/);
+    await expect(callIcmTool(client, "icm_search", { query: "x", limit: 0 })).rejects.toThrow(/limit/);
+    await expect(callIcmTool(client, "icm_search", {})).rejects.toThrow(/query/);
+    expect(client.icmSearch).not.toHaveBeenCalled();
+  });
+
+  test("icm_report_outcome self-reports the result, note and evidence as an outcome", async () => {
+    const client = { icmAddObservation: vi.fn(async () => ({ recorded: true })) } as any;
+    await callIcmTool(client, "icm_report_outcome", { workspace_id: WS, receipt_id: RUN, result: "success", note: "merged", evidence: "https://github.com/o/r/pull/1", event_id: "ev-1" });
+    const [wid, receipt, body] = client.icmAddObservation.mock.calls[0];
+    expect([wid, receipt]).toEqual([WS, RUN]);
+    expect(body).toMatchObject({ event_id: "ev-1", kind: "outcome", method: "self_report", payload: { result: "success", note: "merged", evidence: "https://github.com/o/r/pull/1" } });
+    expect(typeof body.observed_at).toBe("string");
+    await callIcmTool(client, "icm_report_outcome", { workspace_id: WS, receipt_id: RUN, result: "abandoned" });
+    const [, , bare] = client.icmAddObservation.mock.calls[1];
+    expect(bare.payload).toEqual({ result: "abandoned" });
+    expect(bare.event_id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  test("icm_report_outcome refuses an unknown result", async () => {
+    const client = { icmAddObservation: vi.fn() } as any;
+    await expect(callIcmTool(client, "icm_report_outcome", { workspace_id: WS, receipt_id: RUN, result: "done" })).rejects.toThrow(/result must be/);
+    expect(client.icmAddObservation).not.toHaveBeenCalled();
+  });
 });
 
 describe("registerIcmTools", () => {
@@ -87,11 +137,11 @@ describe("registerIcmTools", () => {
     };
   }
 
-  test("registers the 22 tools and answers icm_unsupported against a server without ICM", async () => {
+  test("registers the 24 tools and answers icm_unsupported against a server without ICM", async () => {
     const { api, tools } = fakeApi();
     const client = { icmCapabilities: vi.fn(async () => ({ supported: false })), icmListWorkspaces: vi.fn() } as any;
     registerIcmTools(api, {} as any, client, () => true);
-    expect(Object.keys(tools)).toHaveLength(22);
+    expect(Object.keys(tools)).toHaveLength(24);
     const result = await tools.icm_workspace_list.execute("id", {});
     expect(result.details.error).toBe("icm_unsupported");
     expect(client.icmListWorkspaces).not.toHaveBeenCalled();

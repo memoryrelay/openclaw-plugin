@@ -18,6 +18,8 @@ export const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
 export const MAX_RETRIES = 3;
 export const INITIAL_RETRY_DELAY_MS = 1000; // 1 second
 export const VALID_HEALTH_STATUSES = ["ok", "healthy", "up"];
+/** Sent on every request. Equals the package.json version: tests/version-consistency.test.ts fails otherwise. */
+export const USER_AGENT = "openclaw-plugin-memoryrelay-ai/0.30.0";
 
 // ============================================================================
 // Types
@@ -247,7 +249,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.29.1",
+            "User-Agent": USER_AGENT,
           },
           body: body ? JSON.stringify(body) : undefined,
         },
@@ -669,7 +671,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.apiKey}`,
-            "User-Agent": "openclaw-plugin-memoryrelay-ai/0.29.1",
+            "User-Agent": USER_AGENT,
             ...headers,
           },
           body: body ? JSON.stringify(body) : undefined,
@@ -756,7 +758,7 @@ export class MemoryRelayClient implements IMemoryRelayClient {
         method: "GET",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          "User-Agent": "openclaw-plugin-memoryrelay-ai/0.29.1",
+          "User-Agent": USER_AGENT,
         },
       },
       REQUEST_TIMEOUT_MS,
