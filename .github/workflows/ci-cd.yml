@@ -90,7 +90,9 @@ jobs:
 
     - name: Extract version from tag
       id: version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      run: |
+        echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        echo "NAME=$(node -p "require('./package.json').name")" >> $GITHUB_OUTPUT
 
     - name: Verify version matches package.json
       run: |
@@ -114,7 +116,7 @@ jobs:
           
           ### Installation
           ```bash
-          openclaw plugins install @memoryrelay/openclaw-plugin@${{ steps.version.outputs.VERSION }}
+          openclaw plugins install ${{ steps.version.outputs.NAME }}@${{ steps.version.outputs.VERSION }}
           ```
           
           ### What's New
