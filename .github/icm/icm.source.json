@@ -390,13 +390,13 @@
     },
     {
       "id": "shared-api-alignment.md",
-      "revision": 1,
+      "revision": 2,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
       "project_id": "openclaw-plugin",
-      "verified_at": "2026-10-14",
-      "review_after": "2027-01-12",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
       "files": [
         ".github/icm/_shared/api-alignment.md"
       ],
@@ -404,84 +404,74 @@
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/ci-cd.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/ci.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/dependency-graph.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/publish.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "CHANGELOG.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
-        },
-        {
-          "repo": "memoryrelay/openclaw-plugin",
-          "path": "README.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "openclaw.plugin.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
-        },
-        {
-          "repo": "memoryrelay/openclaw-plugin",
-          "path": "skills/icm-context/SKILL.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/client/memoryrelay-client.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/entity-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/icm-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "tests/client/icm-client.test.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "tests/manifest-contracts.test.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         }
       ]
     },
     {
       "id": "shared-architecture.md",
-      "revision": 2,
+      "revision": 4,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
       "project_id": "openclaw-plugin",
-      "verified_at": "2026-10-14",
-      "review_after": "2027-01-12",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
       "files": [
         ".github/icm/_shared/architecture.md"
       ],
@@ -489,213 +479,213 @@
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "openclaw.plugin.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "package.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "scripts/build.mjs",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "scripts/postinstall.cjs",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "scripts/preinstall.cjs",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "skills/entity-and-context/SKILL.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "skills/icm-context/SKILL.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "skills/memory-workflow/SKILL.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/cache/local-cache.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/cache/nomic-embedding-service.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/cache/sync-daemon.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/cache/vector.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/cli/stats-command.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/client/memoryrelay-client.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/debug-logger.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/heartbeat/daily-stats.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/activity.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/agent-end.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/before-agent-start.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/before-prompt-build.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/compaction.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/privacy.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/subagent.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/memory/corpus-supplement.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/memory/icm-corpus.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/memory/memory-md-sync.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/memory/zip.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/onboarding/first-run.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/pipelines/capture/index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/pipelines/recall/index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/pipelines/runner.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/pipelines/types.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/saliency/scorer.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/status-reporter.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/agent-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/entity-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/health-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/icm-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/memory-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/tools/v2-tools.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         }
       ]
     },
     {
       "id": "shared-build-and-test.md",
-      "revision": 2,
+      "revision": 4,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
@@ -785,13 +775,13 @@
     },
     {
       "id": "shared-conventions.md",
-      "revision": 1,
+      "revision": 2,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
       "project_id": "openclaw-plugin",
-      "verified_at": "2026-10-14",
-      "review_after": "2027-01-12",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
       "files": [
         ".github/icm/_shared/conventions.md"
       ],
@@ -799,149 +789,144 @@
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "CHANGELOG.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "openclaw.plugin.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "skills/icm-context/SKILL.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/client/memoryrelay-client.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/context/namespace-router.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/context/request-context.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/before-agent-start.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/privacy.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/memory/memory-md-sync.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/pipelines/runner.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/pipelines/types.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "tests/hooks/before-agent-start.test.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         }
       ]
     },
     {
       "id": "shared-documents.md",
-      "revision": 1,
+      "revision": 2,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
       "project_id": "openclaw-plugin",
-      "verified_at": "2026-10-14",
-      "review_after": "2027-01-12",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
       "files": [
         ".github/icm/_shared/documents.md"
       ],
       "evidence": [
         {
           "repo": "memoryrelay/openclaw-plugin",
-          "path": ".github/workflows/ci-cd.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
-        },
-        {
-          "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/publish.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "CHANGELOG.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "README.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "RELEASING.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "VALIDATION_REPORT_v0.12.12.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "docs/v017-implementation-plan.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "openclaw.plugin.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "package.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/pipelines/recall/embed-query.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         }
       ]
     },
     {
       "id": "shared-gotchas.md",
-      "revision": 1,
+      "revision": 2,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
       "project_id": "openclaw-plugin",
-      "verified_at": "2026-10-14",
-      "review_after": "2027-01-12",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
       "files": [
         ".github/icm/_shared/gotchas.md"
       ],
@@ -949,59 +934,69 @@
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "CHANGELOG.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "README.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "openclaw.plugin.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "package.json",
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/debug-logger.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/hooks/before-agent-start.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/memory/corpus-supplement.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/onboarding/first-run.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "tests/manifest-contracts.test.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/version-consistency.test.ts",
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         }
       ]
     },
     {
       "id": "shared-release.md",
-      "revision": 2,
+      "revision": 4,
       "kind": "fact",
       "layer": "L3",
       "state": "accepted",
       "project_id": "openclaw-plugin",
-      "verified_at": "2026-10-14",
-      "review_after": "2027-01-12",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
       "files": [
         ".github/icm/_shared/release.md"
       ],
@@ -1009,57 +1004,62 @@
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/ci-cd.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/ci.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": ".github/workflows/publish.yml",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "CHANGELOG.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "README.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "RELEASING.md",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "index.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "openclaw.plugin.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "package-lock.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "package.json",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         },
         {
           "repo": "memoryrelay/openclaw-plugin",
           "path": "src/client/memoryrelay-client.ts",
-          "commit": "a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7"
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
+        },
+        {
+          "repo": "memoryrelay/openclaw-plugin",
+          "path": "tests/version-consistency.test.ts",
+          "commit": "889029f7ac3e335f3a462cf9671ed9efeb4ecd79"
         }
       ]
     }

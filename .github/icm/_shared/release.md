@@ -1,6 +1,6 @@
 ---
-verified_at: 2026-10-14
-verified_commit: a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7
+verified_at: 2026-10-15
+verified_commit: 889029f7ac3e335f3a462cf9671ed9efeb4ecd79
 ---
 
 # Release — how a version reaches npm
@@ -9,7 +9,7 @@ The package is `@memoryrelay/plugin-memoryrelay-ai` on npm; its version is `pack
 
 ## Where the version lives
 
-`RELEASING.md` lists the places to bump. At this commit they disagree: `package.json` and `package-lock.json` say 0.30.0, `openclaw.plugin.json:5`, the `index.ts` JSDoc header (`index.ts:3`) and the client's `User-Agent` (`src/client/memoryrelay-client.ts:250`) still say 0.29.1. The startup log no longer has a literal: it prints `PLUGIN_VERSION`, read from `package.json` (`index.ts:49`, `index.ts:613`), so `RELEASING.md`'s line about the log string is out of date. A release bumps every literal that remains.
+`RELEASING.md` lists the places to bump: `package.json` and `package-lock.json`, `openclaw.plugin.json:5` (and the `vX.Y.Z` in its description, `openclaw.plugin.json:4`), the `index.ts` JSDoc header (`index.ts:3`) and the client's `USER_AGENT` (`src/client/memoryrelay-client.ts:22`), which every request sends. `tests/version-consistency.test.ts` fails when any of them differs from `package.json`. The startup log has no literal: it prints `PLUGIN_VERSION`, read from `package.json` (`index.ts:49`, `index.ts:613`). A release bumps every literal.
 
 ## How a version is published (what has happened since 0.19)
 
@@ -18,8 +18,8 @@ The package is `@memoryrelay/plugin-memoryrelay-ai` on npm; its version is `pack
 3. A person runs **Manual Publish to NPM** (`publish.yml`, `workflow_dispatch` with the version): it runs the tests, builds, checks `dist/index.js` exists and that the input equals `package.json`, then `npm publish --provenance` with the `NPM_TOKEN` secret. Every version from 0.25.0 to 0.30.0 went out this way.
 4. Confirm with `npm view @memoryrelay/plugin-memoryrelay-ai version`.
 
-The tag path in `ci-cd.yml` (push `vX.Y.Z`, publish, create a GitHub release) is what `RELEASING.md` describes, but the last tag and GitHub release are `v0.18.5`; its release notes also name a package that does not exist (`@memoryrelay/openclaw-plugin`, `.github/workflows/ci-cd.yml:117`). Which path is canonical is a person's decision; until then the manual dispatch is what works.
+The tag path in `ci-cd.yml` (push `vX.Y.Z`, publish, create a GitHub release) is what `RELEASING.md` describes, but the last tag and GitHub release are `v0.18.5`; its release notes take the package name from `package.json` (`.github/workflows/ci-cd.yml:91-95`). Which path is canonical is a person's decision; until then the manual dispatch is what works.
 
 ## Installing an update (for the release notes)
 
-`openclaw plugins install` does not overwrite an existing extension; the workaround is in `RELEASING.md:16-20` and the README's "Updating" section. Config moves (for example "run `openclaw config set plugins.slots.memory memory-core`") go in the changelog entry, as 0.26.0 did (`CHANGELOG.md:45`).
+`openclaw plugins install` does not overwrite an existing extension; the workaround is in `RELEASING.md:16-20` and the README's "Updating" section. Config moves (for example "run `openclaw config set plugins.slots.memory memory-core`") go in the changelog entry, as 0.26.0 did (`CHANGELOG.md:52`).

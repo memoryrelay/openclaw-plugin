@@ -1,6 +1,6 @@
 ---
-verified_at: 2026-10-14
-verified_commit: a9cb4d0f2f69bc260e7797c622e4dda7c55bd2b7
+verified_at: 2026-10-15
+verified_commit: 889029f7ac3e335f3a462cf9671ed9efeb4ecd79
 ---
 
 # Architecture — the map of the plugin
@@ -13,16 +13,16 @@ What each part is and which file owns it. Follow the pointer for the detail; whe
 - `openclaw.plugin.json` — the manifest: `id`, config schema and UI hints, and `contracts.tools` (`openclaw.plugin.json:6`), which must name every tool the plugin registers.
 - `package.json` — `main` and `openclaw.extensions` point at the compiled `dist/index.js`; build and test scripts in [build-and-test.md](build-and-test.md).
 
-## Tools: 41 in six groups
+## Tools: 43 in six groups
 
-The groups and their names are `TOOL_GROUPS` (`index.ts:234-245`): memory 8, entity 4, agent 3, health 1, v2 async 3, icm 22. One module per group under `src/tools/`:
+The groups and their names are `TOOL_GROUPS` (`index.ts:234-245`): memory 8, entity 4, agent 3, health 1, v2 async 3, icm 24. One module per group under `src/tools/`:
 
-- `src/tools/icm-tools.ts` — the ICM catalogue `ICM_TOOLS` (`src/tools/icm-tools.ts:37`), dispatch `callIcmTool` (`:323`), registration with the `icm_unsupported` guard (`:592`). Which names it must carry: [api-alignment.md](api-alignment.md).
+- `src/tools/icm-tools.ts` — the ICM catalogue `ICM_TOOLS` (`src/tools/icm-tools.ts:37`), dispatch `callIcmTool` (`:353`), registration with the `icm_unsupported` guard (`:655`). Which names it must carry: [api-alignment.md](api-alignment.md).
 - `src/tools/memory-tools.ts`, `src/tools/entity-tools.ts`, `src/tools/agent-tools.ts`, `src/tools/v2-tools.ts`, `src/tools/health-tools.ts`.
 
 ## The API client
 
-`src/client/memoryrelay-client.ts` is the only HTTP client: memory, entities, agents, v2 async, and the `/v2/icm` methods (`icm*`, `IcmApiError`). Base URL, timeout and retries at `src/client/memoryrelay-client.ts:16-18`; the request loop at `:232`.
+`src/client/memoryrelay-client.ts` is the only HTTP client: memory, entities, agents, v2 async, and the `/v2/icm` methods (`icm*`, `IcmApiError`). Base URL, timeout and retries at `src/client/memoryrelay-client.ts:16-18`; the request loop at `:234`; the `User-Agent` every request sends is `USER_AGENT` (`:22`).
 
 ## Hooks (OpenClaw lifecycle)
 
