@@ -41,7 +41,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.5",
     "@vitest/coverage-v8": "^5.0.3",
-    "openclaw": "^2026.9.9",
+    "openclaw": "^2026.10.5",
     "typescript": "^5.9.3",
     "vitest": "^5.0.3"
   },
